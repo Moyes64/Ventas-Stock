@@ -1,8 +1,12 @@
 import crypto from 'crypto'
 import { getDb } from './db'
 
+const SCRYPT_PARAMS = { N: 16384, r: 8, p: 1, dkLen: 64 } as const
+
 function hashPassword(plain: string): string {
-  return crypto.createHash('sha256').update(plain).digest('hex')
+  const salt = crypto.randomBytes(16).toString('hex')
+  const hash = crypto.scryptSync(plain, salt, SCRYPT_PARAMS.dkLen, SCRYPT_PARAMS).toString('hex')
+  return `${salt}$${hash}`
 }
 
 /**

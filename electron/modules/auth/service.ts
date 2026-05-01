@@ -3,8 +3,28 @@ import type { Database } from 'better-sqlite3'
 import { UserRepository, RoleRepository } from './repository'
 import type { AuthenticatedUser, LoginRequest, LoginResult, Permission } from './types'
 
+const SCRYPT_PARAMS = { N: 16384, r: 8, p: 1, dkLen: 64 } as const
+
+/** Returns a `salt$hash` string using scrypt. */
 function hashPassword(plain: string): string {
-  return crypto.createHash('sha256').update(plain).digest('hex')
+  const salt = crypto.randomBytes(16).toString('hex')
+  const hash = crypto.scryptSync(plain, salt, SCRYPT_PARAMS.dkLen, SCRYPT_PARAMS).toString('hex')
+  return `${salt}$${hash}`
+}
+
+/**
+ * Verifies a password against a stored hash.
+ * Supports both scrypt (`salt$hash`) and legacy SHA-256 (plain hex, 64 chars).
+ */
+function verifyPassword(plain: string, stored: string): boolean {
+  if (stored.includes('$')) {
+    const [salt, expected] = stored.split('$')
+    const actual = crypto.scryptSync(plain, salt, SCRYPT_PARAMS.dkLen, SCRYPT_PARAMS).toString('hex')
+    return crypto.timingSafeEqual(Buffer.from(actual, 'hex'), Buffer.from(expected, 'hex'))
+  }
+  // Legacy SHA-256 fallback (allows migration without forcing re-registration)
+  const legacy = crypto.createHash('sha256').update(plain).digest('hex')
+  return crypto.timingSafeEqual(Buffer.from(legacy), Buffer.from(stored))
 }
 
 export class AuthService {
@@ -22,8 +42,7 @@ export class AuthService {
       return { success: false, error: 'Usuario no encontrado' }
     }
 
-    const hash = hashPassword(req.password)
-    if (hash !== user.passwordHash) {
+    if (!verifyPassword(req.password, user.passwordHash)) {
       return { success: false, error: 'Contraseña incorrecta' }
     }
 
