@@ -12,7 +12,7 @@ Aplicación de escritorio construida con **Electron + TypeScript + React + Vite*
 |------|-----------|
 | UI | React 18 + TypeScript + React Router |
 | Build | Vite + electron-vite |
-| Desktop | Electron 29 |
+| Desktop | Electron 39 |
 | Base de datos | SQLite (better-sqlite3) |
 | Facturación AFIP | WSAA + WSFEv1 (SOAP) |
 | Certificados | node-forge (PKCS#7) |
