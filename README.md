@@ -103,7 +103,7 @@ Ventas-Stock/
 
 ### Auth
 Gestión de usuarios y roles. Tres roles por defecto: `admin`, `vendedor`, `deposito`.
-Contraseñas hasheadas con SHA-256.
+Contraseñas hasheadas con **scrypt** (N=16384, r=8, p=1) con salt aleatorio por usuario.
 
 ### Catálogo
 Productos con SKU, código de barras, categoría, precio, costo y tasas de IVA AFIP (0%, 10.5%, 21%).

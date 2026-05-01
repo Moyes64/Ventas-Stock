@@ -4,6 +4,8 @@ import { UserRepository, RoleRepository } from './repository'
 import type { AuthenticatedUser, LoginRequest, LoginResult, Permission } from './types'
 
 const SCRYPT_PARAMS = { N: 16384, r: 8, p: 1, dkLen: 64 } as const
+// N=16384 (CPU/memory cost), r=8 (block size), p=1 (parallelism), dkLen=64 bytes output
+// These are the RFC 7914 recommended values for interactive logins.
 
 /** Returns a `salt$hash` string using scrypt. */
 function hashPassword(plain: string): string {
@@ -13,18 +15,17 @@ function hashPassword(plain: string): string {
 }
 
 /**
- * Verifies a password against a stored hash.
- * Supports both scrypt (`salt$hash`) and legacy SHA-256 (plain hex, 64 chars).
+ * Verifies a password against a stored scrypt hash (`salt$hash`).
+ * Uses timing-safe comparison to prevent timing attacks.
  */
 function verifyPassword(plain: string, stored: string): boolean {
-  if (stored.includes('$')) {
-    const [salt, expected] = stored.split('$')
-    const actual = crypto.scryptSync(plain, salt, SCRYPT_PARAMS.dkLen, SCRYPT_PARAMS).toString('hex')
-    return crypto.timingSafeEqual(Buffer.from(actual, 'hex'), Buffer.from(expected, 'hex'))
-  }
-  // Legacy SHA-256 fallback (allows migration without forcing re-registration)
-  const legacy = crypto.createHash('sha256').update(plain).digest('hex')
-  return crypto.timingSafeEqual(Buffer.from(legacy), Buffer.from(stored))
+  const separatorIdx = stored.indexOf('$')
+  if (separatorIdx === -1) return false
+  const salt = stored.slice(0, separatorIdx)
+  const expected = stored.slice(separatorIdx + 1)
+  const actual = crypto.scryptSync(plain, salt, SCRYPT_PARAMS.dkLen, SCRYPT_PARAMS).toString('hex')
+  if (actual.length !== expected.length) return false
+  return crypto.timingSafeEqual(Buffer.from(actual, 'hex'), Buffer.from(expected, 'hex'))
 }
 
 export class AuthService {
