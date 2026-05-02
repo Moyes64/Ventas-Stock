@@ -157,7 +157,6 @@ function ProductForm({
     taxRateId: product?.taxRateId ?? 0,
     gainPercent: product?.gainPercent ?? 0,
     stockMin: product?.stockMin ?? 0,
-    initialStock: 0,
   })
 
   const [saving, setSaving] = useState(false)
@@ -225,7 +224,6 @@ function ProductForm({
           taxRateId: Number(form.taxRateId),
           gainPercent: form.gainPercent,
           stockMin: form.stockMin,
-          initialStock: form.initialStock,
         })
       }
       onSaved()
@@ -389,22 +387,6 @@ function ProductForm({
                 placeholder="0"
               />
             </div>
-
-            {/* Stock inicial – solo en alta */}
-            {isNew && (
-              <div className="form-row">
-                <label className="label">Stock inicial</label>
-                <input
-                  type="number"
-                  value={form.initialStock}
-                  onChange={e => setForm({ ...form, initialStock: Number.isNaN(parseInt(e.target.value, 10)) ? form.initialStock : parseInt(e.target.value, 10) })}
-                  min="0"
-                  className="input"
-                  placeholder="0"
-                />
-                <small className="hint">Genera un movimiento de entrada en el historial de stock.</small>
-              </div>
-            )}
 
             {error && <p className="error">{error}</p>}
             <div className="form-actions">

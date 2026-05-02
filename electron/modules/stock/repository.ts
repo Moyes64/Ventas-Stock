@@ -12,6 +12,11 @@ interface MovementRow {
   user_id: number | null
   created_at: string
   product_name?: string
+  voucher_type: string | null
+  voucher_number: string | null
+  voucher_date: string | null
+  supplier_id: number | null
+  supplier_name: string | null
 }
 
 export class StockRepository {
@@ -52,9 +57,11 @@ export class StockRepository {
     // Run in transaction: insert movement + update product stock
     const insertMovement = this.db.prepare(
       `INSERT INTO stock_movements
-         (product_id, type, quantity, reference_type, reference_id, notes, user_id)
+         (product_id, type, quantity, reference_type, reference_id, notes, user_id,
+          voucher_type, voucher_number, voucher_date, supplier_id)
        VALUES
-         (@productId, @type, @quantity, @referenceType, @referenceId, @notes, @userId)`
+         (@productId, @type, @quantity, @referenceType, @referenceId, @notes, @userId,
+          @voucherType, @voucherNumber, @voucherDate, @supplierId)`
     )
 
     const updateStock = this.db.prepare(
@@ -70,6 +77,10 @@ export class StockRepository {
         referenceId: data.referenceId ?? null,
         notes: data.notes ?? '',
         userId: data.userId ?? null,
+        voucherType: data.voucherType ?? null,
+        voucherNumber: data.voucherNumber ?? null,
+        voucherDate: data.voucherDate ?? null,
+        supplierId: data.supplierId ?? null,
       })
 
       // EXIT and SALE are negative stock changes; ENTRY and PURCHASE_RETURN are positive
@@ -139,9 +150,11 @@ export class StockRepository {
 
     const rows = this.db
       .prepare(
-        `SELECT sm.*, p.name AS product_name
+        `SELECT sm.*, p.name AS product_name,
+                s.name AS supplier_name
          FROM stock_movements sm
          JOIN products p ON p.id = sm.product_id
+         LEFT JOIN suppliers s ON s.id = sm.supplier_id
          ${where}
          ORDER BY sm.created_at DESC
          LIMIT ${limit}`
@@ -159,6 +172,11 @@ export class StockRepository {
       notes: r.notes,
       userId: r.user_id,
       createdAt: r.created_at,
+      voucherType: r.voucher_type,
+      voucherNumber: r.voucher_number,
+      voucherDate: r.voucher_date,
+      supplierId: r.supplier_id,
+      supplierName: r.supplier_name,
     }))
   }
 }
