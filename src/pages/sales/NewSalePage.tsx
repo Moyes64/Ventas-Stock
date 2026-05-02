@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { catalog, customers, sales, printing } from '../../lib/ipc'
 import type { Product, Customer, Sale } from '../../types/ipc'
+import { useHiddenOptions } from '../../context/HiddenOptionsContext'
 
 interface CartItem {
   product: Product
@@ -19,14 +20,21 @@ export default function NewSalePage() {
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null)
   const [cart, setCart] = useState<CartItem[]>([])
   const [processing, setProcessing] = useState(false)
+  const [isBlackSale, setIsBlackSale] = useState(false)
   const [result, setResult] = useState<Sale | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [printError, setPrintError] = useState<string | null>(null)
   const [isPrinting, setIsPrinting] = useState(false)
+  const { isHiddenOptionsVisible } = useHiddenOptions()
 
   useEffect(() => {
     customers.list().then(setCustomerList).catch(console.error)
   }, [])
+
+  // Reset black sale mode when hidden options become invisible
+  useEffect(() => {
+    if (!isHiddenOptionsVisible) setIsBlackSale(false)
+  }, [isHiddenOptionsVisible])
 
   async function handleSearch(query: string) {
     setSearchQuery(query)
@@ -98,6 +106,8 @@ export default function NewSalePage() {
     const base = item.subtotal / (1 + item.taxRate / 100)
     return sum + (item.subtotal - base)
   }, 0)
+  // For black sales, the total is the base price (no IVA)
+  const cartTotalBlack = cartTotal - cartTax
 
   async function handleCheckout() {
     if (cart.length === 0) {
@@ -110,6 +120,7 @@ export default function NewSalePage() {
       const saleResult = await sales.create({
         customerId: selectedCustomerId ?? undefined,
         invoiceType: 11, // Factura C por defecto
+        isBlackSale,
         items: cart.map(item => ({
           productId: item.product.id,
           quantity: item.quantity,
@@ -160,7 +171,14 @@ export default function NewSalePage() {
     return (
       <div className="page">
         <div className="sale-result">
-          {result.status === 'AUTHORIZED' ? (
+          {result.isBlackSale ? (
+            <div className="sale-result--black">
+              <h2>📄 Venta N — Comprobante Interno</h2>
+              <p>Venta en negro registrada como comprobante interno (sin IVA).</p>
+              <p><strong>Remito Interno N°:</strong> {result.id}</p>
+              <p><strong>Total (sin IVA):</strong> {currency(result.total)}</p>
+            </div>
+          ) : result.status === 'AUTHORIZED' ? (
             <div className="sale-result--success">
               <h2>✅ Factura Autorizada por AFIP</h2>
               <p><strong>Venta N°:</strong> {result.id}</p>
@@ -263,7 +281,19 @@ export default function NewSalePage() {
 
         {/* Right: Cart */}
         <div className="sale-cart">
-          <h2>Carrito</h2>
+          <div className="cart-header">
+            <h2>Carrito</h2>
+            {isHiddenOptionsVisible && (
+              <label className="black-sale-toggle">
+                <input
+                  type="checkbox"
+                  checked={isBlackSale}
+                  onChange={e => setIsBlackSale(e.target.checked)}
+                />
+                <span className="black-sale-toggle__label">🅽 Venta N (sin IVA)</span>
+              </label>
+            )}
+          </div>
           {cart.length === 0 ? (
             <p className="empty-cart">No hay productos. Busque y agregue productos.</p>
           ) : (
@@ -305,28 +335,51 @@ export default function NewSalePage() {
               </table>
 
               <div className="cart-totals">
-                <div className="cart-total-row">
-                  <span>Subtotal (sin IVA):</span>
-                  <span>{currency(cartTotal - cartTax)}</span>
-                </div>
-                <div className="cart-total-row">
-                  <span>IVA:</span>
-                  <span>{currency(cartTax)}</span>
-                </div>
-                <div className="cart-total-row cart-total-row--total">
-                  <span>TOTAL:</span>
-                  <span>{currency(cartTotal)}</span>
-                </div>
+                {isBlackSale ? (
+                  <>
+                    <div className="cart-total-row">
+                      <span>Subtotal (sin IVA):</span>
+                      <span>{currency(cartTotalBlack)}</span>
+                    </div>
+                    <div className="cart-total-row">
+                      <span>IVA:</span>
+                      <span>{currency(0)}</span>
+                    </div>
+                    <div className="cart-total-row cart-total-row--total cart-total-row--black">
+                      <span>TOTAL N:</span>
+                      <span>{currency(cartTotalBlack)}</span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="cart-total-row">
+                      <span>Subtotal (sin IVA):</span>
+                      <span>{currency(cartTotal - cartTax)}</span>
+                    </div>
+                    <div className="cart-total-row">
+                      <span>IVA:</span>
+                      <span>{currency(cartTax)}</span>
+                    </div>
+                    <div className="cart-total-row cart-total-row--total">
+                      <span>TOTAL:</span>
+                      <span>{currency(cartTotal)}</span>
+                    </div>
+                  </>
+                )}
               </div>
 
               {error && <p className="error">{error}</p>}
 
               <button
-                className="btn btn-primary btn-lg btn-block"
+                className={`btn btn-lg btn-block ${isBlackSale ? 'btn-black-sale' : 'btn-primary'}`}
                 onClick={handleCheckout}
                 disabled={processing}
               >
-                {processing ? '⏳ Procesando...' : `💳 Confirmar Venta ${currency(cartTotal)}`}
+                {processing
+                  ? '⏳ Procesando...'
+                  : isBlackSale
+                    ? `💵 Confirmar Venta N ${currency(cartTotalBlack)}`
+                    : `💳 Confirmar Venta ${currency(cartTotal)}`}
               </button>
             </>
           )}

@@ -153,6 +153,7 @@ export interface Sale {
   cae: string | null
   caeVto: string | null
   afipError: string | null
+  isBlackSale: boolean
   createdAt: string
   updatedAt: string
   items?: SaleItem[]
@@ -173,6 +174,7 @@ export interface DailySummaryReport {
   totalGross: number
   totalTax: number
   totalNet: number
+  blackSalesTotal: number
 }
 
 export interface SalesSummary {

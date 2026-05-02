@@ -11,27 +11,30 @@ import InvoicingPage from './pages/invoicing/InvoicingPage'
 import ReportingPage from './pages/reporting/ReportingPage'
 import BackupPage from './pages/backup/BackupPage'
 import UsersPage from './pages/auth/UsersPage'
+import { HiddenOptionsProvider } from './context/HiddenOptionsContext'
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Layout />}>
-          <Route index element={<Navigate to="/dashboard" replace />} />
-          <Route path="dashboard" element={<Dashboard />} />
-          <Route path="sales" element={<SalesPage />} />
-          <Route path="sales/new" element={<NewSalePage />} />
-          <Route path="catalog" element={<ProductsPage />} />
-          <Route path="customers" element={<CustomersPage />} />
-          <Route path="suppliers" element={<SuppliersPage />} />
-          <Route path="stock" element={<StockPage />} />
-          <Route path="invoicing" element={<InvoicingPage />} />
-          <Route path="reporting" element={<ReportingPage />} />
-          <Route path="backup" element={<BackupPage />} />
-          <Route path="users" element={<UsersPage />} />
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
+    <HiddenOptionsProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Layout />}>
+            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="sales" element={<SalesPage />} />
+            <Route path="sales/new" element={<NewSalePage />} />
+            <Route path="catalog" element={<ProductsPage />} />
+            <Route path="customers" element={<CustomersPage />} />
+            <Route path="suppliers" element={<SuppliersPage />} />
+            <Route path="stock" element={<StockPage />} />
+            <Route path="invoicing" element={<InvoicingPage />} />
+            <Route path="reporting" element={<ReportingPage />} />
+            <Route path="backup" element={<BackupPage />} />
+            <Route path="users" element={<UsersPage />} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </HiddenOptionsProvider>
   )
 }

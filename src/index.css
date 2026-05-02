@@ -554,3 +554,110 @@ code {
   padding: 1px 5px;
   border-radius: 3px;
 }
+
+/* =============================================================================
+   Hidden Options (Ventas N / sin IVA) — Ctrl+Shift+N
+   ============================================================================= */
+
+/* Dashboard: black sale stat card */
+.stat-card--black {
+  border-color: #1e293b;
+  background: #1e293b;
+  color: #f8fafc;
+}
+.stat-card--black .stat-value { color: #f8fafc; }
+.stat-card--black .stat-label { color: #94a3b8; }
+
+/* NewSalePage: cart header with toggle */
+.cart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  gap: 12px;
+}
+.cart-header h2 { margin-bottom: 0; }
+
+/* Black sale toggle */
+.black-sale-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+  padding: 6px 10px;
+  background: #1e293b;
+  border-radius: var(--radius-sm);
+  color: #f8fafc;
+  font-size: 13px;
+  font-weight: 600;
+}
+.black-sale-toggle input[type="checkbox"] { cursor: pointer; }
+.black-sale-toggle__label { white-space: nowrap; }
+
+/* Cart: black sale total row */
+.cart-total-row--black {
+  color: #1e293b;
+  border-top-color: #1e293b;
+}
+
+/* Checkout button for black sales */
+.btn-black-sale {
+  background: #1e293b;
+  color: #f8fafc;
+  border: none;
+  padding: 12px 24px;
+  border-radius: var(--radius);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-black-sale:hover { background: #0f172a; }
+.btn-black-sale:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* Sale result: black sale */
+.sale-result--black {
+  background: var(--color-surface);
+  border: 2px solid #1e293b;
+  border-radius: var(--radius);
+  padding: 32px;
+  margin-bottom: 24px;
+}
+.sale-result--black h2 { color: #1e293b; }
+
+/* InvoicingPage: black sale badge */
+.badge--black {
+  display: inline-block;
+  background: #1e293b;
+  color: #f8fafc;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  margin-left: 5px;
+  vertical-align: middle;
+  letter-spacing: 0.5px;
+}
+
+/* InvoicingPage: black sale table row */
+.row--black-sale {
+  background: #f8fafc;
+}
+.row--black-sale:hover { background: #f1f5f9; }
+
+/* ReportingPage: hidden options section */
+.hidden-options-section {
+  margin-top: 24px;
+  padding: 16px 20px;
+  background: #1e293b;
+  border-radius: var(--radius);
+  color: #f8fafc;
+}
+.hidden-options-section__title {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: #f8fafc;
+}
+.hidden-options-section .page-subtitle { color: #94a3b8; }

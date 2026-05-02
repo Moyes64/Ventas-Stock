@@ -16,6 +16,7 @@ interface SaleRow {
   cae: string | null
   cae_vto: string | null
   afip_error: string | null
+  is_black_sale: number
   created_at: string
   updated_at: string
   customer_name?: string
@@ -90,8 +91,8 @@ export class SaleRepository {
 
   create(data: CreateSaleInput & { subtotal: number; taxAmount: number; total: number }): number {
     const insertSale = this.db.prepare(
-      `INSERT INTO sales (customer_id, user_id, invoice_type, subtotal, tax_amount, total)
-       VALUES (@customerId, @userId, @invoiceType, @subtotal, @taxAmount, @total)`
+      `INSERT INTO sales (customer_id, user_id, invoice_type, subtotal, tax_amount, total, is_black_sale)
+       VALUES (@customerId, @userId, @invoiceType, @subtotal, @taxAmount, @total, @isBlackSale)`
     )
 
     const insertItem = this.db.prepare(
@@ -107,6 +108,7 @@ export class SaleRepository {
         subtotal: data.subtotal,
         taxAmount: data.taxAmount,
         total: data.total,
+        isBlackSale: data.isBlackSale ? 1 : 0,
       })
       const id = r.lastInsertRowid as number
 
@@ -211,6 +213,7 @@ export class SaleRepository {
       cae: row.cae,
       caeVto: row.cae_vto,
       afipError: row.afip_error,
+      isBlackSale: Boolean(row.is_black_sale),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     }

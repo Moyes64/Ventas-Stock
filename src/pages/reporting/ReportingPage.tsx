@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { reporting } from '../../lib/ipc'
 import type { DailySummaryReport } from '../../types/ipc'
+import { useHiddenOptions } from '../../context/HiddenOptionsContext'
 
 export default function ReportingPage() {
   const [summary, setSummary] = useState<DailySummaryReport[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const { isHiddenOptionsVisible } = useHiddenOptions()
   const [dateFrom, setDateFrom] = useState(() => {
     const d = new Date()
     d.setDate(1)
@@ -131,6 +133,13 @@ export default function ReportingPage() {
 
       {activeReport === 'products' && <p className="page-subtitle">Próximamente: Reporte de productos más vendidos</p>}
       {activeReport === 'lowstock' && <p className="page-subtitle">Próximamente: Reporte de stock bajo</p>}
+
+      {isHiddenOptionsVisible && (
+        <div className="hidden-options-section">
+          <h3 className="hidden-options-section__title">🅽 Opciones N (ventas sin IVA)</h3>
+          <p className="page-subtitle">Reportes de ventas en negro — próximamente disponibles.</p>
+        </div>
+      )}
     </div>
   )
 }

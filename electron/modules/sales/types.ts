@@ -27,6 +27,7 @@ export interface Sale {
   cae: string | null
   caeVto: string | null
   afipError: string | null
+  isBlackSale: boolean // Venta en negro (sin IVA / comprobante interno siempre)
   createdAt: string
   updatedAt: string
   items?: SaleItem[]
@@ -36,6 +37,7 @@ export interface CreateSaleInput {
   customerId?: number
   userId?: number
   invoiceType?: number
+  isBlackSale?: boolean
   items: Array<{
     productId: number
     quantity: number

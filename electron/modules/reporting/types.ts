@@ -33,6 +33,7 @@ export interface DailySummaryReport {
   totalGross: number
   totalTax: number
   totalNet: number
+  blackSalesTotal: number
 }
 
 export interface ReportFilters {
