@@ -184,11 +184,12 @@ export class StockRepository {
    * Returns the signed stock delta that was applied when the movement was recorded.
    * - EXIT / SALE: stock was decreased  → delta = -abs(quantity)
    * - ADJUSTMENT: quantity IS the signed delta (may be negative)
-   * - ENTRY / PURCHASE_RETURN: stock was increased → delta = +abs(quantity)
+   * - ENTRY / PURCHASE_RETURN (and any future positive types): stock was increased → delta = +abs(quantity)
    */
   private movementEffectiveDelta(type: string, quantity: number): number {
     if (type === 'EXIT' || type === 'SALE') return -Math.abs(quantity)
     if (type === 'ADJUSTMENT') return quantity
+    // ENTRY, PURCHASE_RETURN — positive stock effect
     return Math.abs(quantity)
   }
 

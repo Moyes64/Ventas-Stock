@@ -298,7 +298,7 @@ function EditMovementForm({
               <input
                 type="number"
                 value={form.quantity}
-                onChange={e => setForm({ ...form, quantity: Math.max(1, parseInt(e.target.value, 10) || 1) })}
+                onChange={e => { const val = parseInt(e.target.value, 10); setForm({ ...form, quantity: isNaN(val) ? form.quantity : Math.max(1, val) }) }}
                 min="1"
                 required
                 className="input"
