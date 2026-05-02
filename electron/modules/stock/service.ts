@@ -60,4 +60,15 @@ export class StockService {
   addManualMovement(data: CreateMovementInput): number {
     return this.repo.addMovement(data)
   }
+
+  /**
+   * Sets the absolute stock quantity for a product by recording an ADJUSTMENT movement.
+   * The movement quantity is the signed delta (positive = added, negative = removed).
+   */
+  adjustStockAbsolute(productId: number, newQuantity: number, userId?: number): number {
+    if (newQuantity < 0) {
+      throw new Error('La cantidad de stock no puede ser negativa')
+    }
+    return this.repo.adjustStockAbsolute(productId, newQuantity, userId)
+  }
 }

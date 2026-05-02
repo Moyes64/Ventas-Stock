@@ -98,6 +98,8 @@ export const stock = {
     notes?: string
     userId?: number
   }) => electron.stock.addMovement(data) as Promise<number>,
+  adjustStock: (productId: number, newQuantity: number, userId?: number) =>
+    electron.stock.adjustStock(productId, newQuantity, userId) as Promise<number>,
 }
 
 // Sales

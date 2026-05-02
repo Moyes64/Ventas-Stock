@@ -524,6 +524,21 @@ html, body, #root {
 .qty-negative { color: var(--color-danger); font-weight: 600; }
 .filter-check { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; cursor: pointer; }
 
+/* Inline stock edit */
+.stock-edit-cell { display: flex; flex-direction: column; gap: 4px; }
+.input--stock-edit {
+  width: 90px;
+  padding: 4px 8px;
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  font-size: 13.5px;
+  color: var(--color-text);
+  background: var(--color-surface);
+}
+.input--stock-edit:focus { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+.stock-edit-error { font-size: 11.5px; color: var(--color-danger); }
+.action-group { display: flex; gap: 6px; flex-wrap: nowrap; }
+
 code {
   font-family: var(--font-mono);
   font-size: 12px;
