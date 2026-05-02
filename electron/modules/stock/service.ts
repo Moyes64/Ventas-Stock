@@ -1,6 +1,6 @@
 import type { Database } from 'better-sqlite3'
 import { StockRepository } from './repository'
-import type { StockItem, StockMovement, CreateMovementInput } from './types'
+import type { StockItem, StockMovement, CreateMovementInput, UpdateMovementInput } from './types'
 
 export class StockService {
   private readonly repo: StockRepository
@@ -59,6 +59,17 @@ export class StockService {
 
   addManualMovement(data: CreateMovementInput): number {
     return this.repo.addMovement(data)
+  }
+
+  updateMovement(id: number, data: UpdateMovementInput): void {
+    if (data.quantity !== undefined && data.quantity <= 0) {
+      throw new Error('La cantidad debe ser mayor a cero')
+    }
+    this.repo.updateMovement(id, data)
+  }
+
+  deleteMovement(id: number): void {
+    this.repo.deleteMovement(id)
   }
 
   /**
