@@ -12,6 +12,11 @@ export interface StockMovement {
   notes: string
   userId: number | null
   createdAt: string
+  voucherType: string | null
+  voucherNumber: string | null
+  voucherDate: string | null
+  supplierId: number | null
+  supplierName: string | null
 }
 
 export interface StockItem {
@@ -32,4 +37,8 @@ export interface CreateMovementInput {
   referenceId?: number
   notes?: string
   userId?: number
+  voucherType?: string
+  voucherNumber?: string
+  voucherDate?: string
+  supplierId?: number
 }

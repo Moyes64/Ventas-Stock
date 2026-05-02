@@ -122,6 +122,11 @@ export interface StockMovement {
   notes: string
   userId: number | null
   createdAt: string
+  voucherType: string | null
+  voucherNumber: string | null
+  voucherDate: string | null
+  supplierId: number | null
+  supplierName: string | null
 }
 
 export type SaleStatus = 'PENDING_CAE' | 'AUTHORIZED' | 'REJECTED' | 'INTERNAL_RECEIPT'
