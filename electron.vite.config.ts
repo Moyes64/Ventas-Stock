@@ -15,7 +15,7 @@ export default defineConfig({
       outDir: 'dist/main',
       rollupOptions: {
         input: {
-          index: resolve(__dirname, 'electron/main.ts'),
+          main: resolve(__dirname, 'electron/main.ts'),
         },
       },
     },

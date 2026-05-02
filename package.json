@@ -2,7 +2,7 @@
   "name": "ventas-stock",
   "version": "1.0.0",
   "description": "Desktop application for Sales and Stock management with Argentine AFIP electronic invoicing",
-  "main": "dist/main/index.js",
+  "main": "dist/main/main.js",
   "private": true,
   "scripts": {
     "dev": "electron-vite dev",
