@@ -299,7 +299,7 @@ export default function StockPage() {
       {showEntryForm && (
         <EntryForm
           onClose={() => setShowEntryForm(false)}
-          onSaved={() => { setShowEntryForm(false); void loadData() }}
+          onSaved={() => void loadData()}
         />
       )}
 
@@ -451,7 +451,10 @@ export default function StockPage() {
                   </td>
                   <td>
                     {m.voucherDate
-                      ? new Date(m.voucherDate + 'T00:00:00').toLocaleDateString('es-AR')
+                      ? (() => {
+                          const [y, mo, d] = m.voucherDate.split('-').map(Number)
+                          return new Date(y, mo - 1, d).toLocaleDateString('es-AR')
+                        })()
                       : '—'}
                   </td>
                   <td>{m.supplierName ?? '—'}</td>
