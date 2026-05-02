@@ -568,6 +568,15 @@ code {
 .stat-card--black .stat-value { color: #f8fafc; }
 .stat-card--black .stat-label { color: #94a3b8; }
 
+/* Dashboard: combined total stat card */
+.stat-card--total {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: #fff;
+}
+.stat-card--total .stat-value { color: #fff; }
+.stat-card--total .stat-label { color: rgba(255,255,255,0.75); }
+
 /* NewSalePage: cart header with toggle */
 .cart-header {
   display: flex;

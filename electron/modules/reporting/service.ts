@@ -156,6 +156,9 @@ export class ReportingService {
            SUM(total) AS totalGross,
            SUM(tax_amount) AS totalTax,
            SUM(subtotal) AS totalNet,
+           SUM(CASE WHEN is_black_sale = 0 THEN 1 ELSE 0 END) AS whiteSalesCount,
+           SUM(CASE WHEN is_black_sale = 0 THEN total ELSE 0 END) AS whiteSalesTotal,
+           SUM(CASE WHEN is_black_sale = 1 THEN 1 ELSE 0 END) AS blackSalesCount,
            SUM(CASE WHEN is_black_sale = 1 THEN total ELSE 0 END) AS blackSalesTotal
          FROM sales
          ${where}

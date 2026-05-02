@@ -43,28 +43,43 @@ export default function Dashboard() {
 
       <div className="stats-grid">
         <div className="stat-card">
-          <div className="stat-value">{todaySummary?.salesCount ?? 0}</div>
+          <div className="stat-value">{todaySummary?.whiteSalesCount ?? 0}</div>
           <div className="stat-label">Ventas hoy</div>
         </div>
         <div className="stat-card">
-          <div className="stat-value">{currency(todaySummary?.totalGross ?? 0)}</div>
+          <div className="stat-value">{currency(todaySummary?.whiteSalesTotal ?? 0)}</div>
           <div className="stat-label">Total hoy</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-value">{todaySummary?.authorizedInvoices ?? 0}</div>
-          <div className="stat-label">Facturas AFIP</div>
         </div>
         <div className={`stat-card ${lowStockCount > 0 ? 'stat-card--warning' : ''}`}>
           <div className="stat-value">{lowStockCount}</div>
           <div className="stat-label">Productos bajo stock</div>
         </div>
-        {isHiddenOptionsVisible && (
+      </div>
+
+      {isHiddenOptionsVisible && (
+        <div className="stats-grid">
+          <div className="stat-card stat-card--black">
+            <div className="stat-value">{todaySummary?.blackSalesCount ?? 0}</div>
+            <div className="stat-label">Ventas N hoy</div>
+          </div>
           <div className="stat-card stat-card--black">
             <div className="stat-value">{currency(todaySummary?.blackSalesTotal ?? 0)}</div>
             <div className="stat-label">Total N hoy</div>
           </div>
-        )}
-      </div>
+          <div className="stat-card stat-card--total">
+            <div className="stat-value">
+              {(todaySummary?.whiteSalesCount ?? 0) + (todaySummary?.blackSalesCount ?? 0)}
+            </div>
+            <div className="stat-label">Total ventas día</div>
+          </div>
+          <div className="stat-card stat-card--total">
+            <div className="stat-value">
+              {currency((todaySummary?.whiteSalesTotal ?? 0) + (todaySummary?.blackSalesTotal ?? 0))}
+            </div>
+            <div className="stat-label">Total general día</div>
+          </div>
+        </div>
+      )}
 
       <div className="quick-actions">
         <h2>Acciones rápidas</h2>
