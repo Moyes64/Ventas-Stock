@@ -12,8 +12,8 @@ const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 // Electron main process (e.g. for printing/company header in remito interno).
 // Must run before any module reads process.env.
 {
-  const envRoot = isDev ? process.cwd() : (process.resourcesPath ?? app.getAppPath())
-  const envPath = path.join(envRoot, '.env')
+  const appRoot = isDev ? process.cwd() : (process.resourcesPath ?? app.getAppPath())
+  const envPath = path.join(appRoot, '.env')
   const { error } = dotenvConfig({ path: envPath })
   if (error) {
     console.warn(`[main] .env not loaded from "${envPath}":`, error.message)
