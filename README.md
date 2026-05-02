@@ -58,6 +58,13 @@ pnpm dev
 > Los pasos 4–5 son necesarios sólo si querés poblar la DB antes del primer `pnpm dev`
 > o si necesitás el seed de datos iniciales.
 
+> **Variables de entorno:** Al iniciar, `electron/main.ts` carga el archivo `.env`
+> de forma explícita (usando `dotenv.config({ path: <appRoot>/.env })`), lo que garantiza
+> que `process.env.VITE_EMPRESA_*` esté disponible en el proceso principal para el
+> encabezado de impresión (remito interno, facturas). En desarrollo `appRoot` es el
+> directorio de trabajo (`process.cwd()`); en producción se usa `process.resourcesPath`.
+> Si `.env` no existe, la app muestra un warning en consola pero no se interrumpe.
+
 ### Credenciales por defecto (después de seed)
 - **Usuario:** `admin`
 - **Contraseña:** `admin123`

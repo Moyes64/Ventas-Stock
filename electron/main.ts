@@ -1,11 +1,26 @@
 import { app, BrowserWindow, shell } from 'electron'
 import path from 'path'
+import { config as dotenvConfig } from 'dotenv'
 import { getDb, closeDb } from '../database/db'
 import { runMigrations } from '../database/migrate'
 import { registerAllIpcHandlers } from './ipc/index'
 
 // Handle app lifecycle
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
+
+// Load .env explicitly so that process.env.VITE_EMPRESA_* is available in the
+// Electron main process (e.g. for printing/company header in remito interno).
+// Must run before any module reads process.env.
+{
+  const appRoot = isDev ? process.cwd() : (process.resourcesPath ?? app.getAppPath())
+  const envPath = path.join(appRoot, '.env')
+  const { error } = dotenvConfig({ path: envPath })
+  if (error) {
+    console.warn(`[main] .env not loaded from "${envPath}":`, error.message)
+  } else {
+    console.debug(`[main] .env loaded from "${envPath}"`)
+  }
+}
 
 async function createWindow(): Promise<void> {
   const mainWindow = new BrowserWindow({
