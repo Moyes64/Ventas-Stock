@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { catalog, customers, sales } from '../../lib/ipc'
+import { catalog, customers, sales, printing } from '../../lib/ipc'
 import type { Product, Customer, Sale } from '../../types/ipc'
 
 interface CartItem {
@@ -21,6 +21,8 @@ export default function NewSalePage() {
   const [processing, setProcessing] = useState(false)
   const [result, setResult] = useState<Sale | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [printError, setPrintError] = useState<string | null>(null)
+  const [printing_, setPrinting] = useState(false)
 
   useEffect(() => {
     customers.list().then(setCustomerList).catch(console.error)
@@ -127,6 +129,32 @@ export default function NewSalePage() {
   const currency = (n: number) =>
     new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(n)
 
+  async function handlePrintInvoice(saleId: number) {
+    setPrinting(true)
+    setPrintError(null)
+    try {
+      const res = await printing.printInvoiceSystem(saleId)
+      if (!res.success) setPrintError(res.error ?? 'Error al imprimir')
+    } catch (err) {
+      setPrintError(err instanceof Error ? err.message : 'Error al imprimir')
+    } finally {
+      setPrinting(false)
+    }
+  }
+
+  async function handlePrintDelivery(saleId: number) {
+    setPrinting(true)
+    setPrintError(null)
+    try {
+      const res = await printing.printDeliveryNoteSystem(saleId)
+      if (!res.success) setPrintError(res.error ?? 'Error al imprimir')
+    } catch (err) {
+      setPrintError(err instanceof Error ? err.message : 'Error al imprimir')
+    } finally {
+      setPrinting(false)
+    }
+  }
+
   // Show result screen after successful sale
   if (result) {
     return (
@@ -151,7 +179,25 @@ export default function NewSalePage() {
               <p><strong>Total:</strong> {currency(result.total)}</p>
             </div>
           )}
+          {printError && <p className="error">{printError}</p>}
           <div className="action-buttons">
+            {result.status === 'AUTHORIZED' ? (
+              <button
+                className="btn btn-secondary"
+                onClick={() => void handlePrintInvoice(result.id)}
+                disabled={printing_}
+              >
+                {printing_ ? '⏳' : '🖨️'} Imprimir Factura
+              </button>
+            ) : (
+              <button
+                className="btn btn-secondary"
+                onClick={() => void handlePrintDelivery(result.id)}
+                disabled={printing_}
+              >
+                {printing_ ? '⏳' : '🖨️'} Imprimir Remito
+              </button>
+            )}
             <button className="btn btn-primary" onClick={() => navigate('/sales')}>
               Ver Ventas
             </button>
