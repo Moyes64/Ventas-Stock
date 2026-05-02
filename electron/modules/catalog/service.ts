@@ -35,6 +35,7 @@ export class ProductService {
   create(data: CreateProductInput): Product {
     if (!data.sku.trim()) throw new Error('El SKU es obligatorio')
     if (!data.name.trim()) throw new Error('El nombre es obligatorio')
+    if (!data.supplierId) throw new Error('El proveedor es obligatorio')
     if (data.price < 0) throw new Error('El precio no puede ser negativo')
     if (data.cost < 0) throw new Error('El costo no puede ser negativo')
     if (data.gainPercent !== undefined && data.gainPercent < 0) {
@@ -54,7 +55,7 @@ export class ProductService {
 
     const id = this.repo.create(data)
 
-    if (data.initialStock && data.initialStock > 0) {
+    if (data.initialStock !== undefined && data.initialStock > 0) {
       this.stockRepo.addMovement({
         productId: id,
         type: 'ENTRY',
