@@ -8,9 +8,12 @@ interface ProductRow {
   name: string
   description: string
   category_id: number | null
+  supplier_id: number | null
+  supplier_code: string
   price: number
   cost: number
   tax_rate_id: number
+  gain_percent: number
   active: number
   stock_quantity: number
   stock_min: number
@@ -79,9 +82,11 @@ export class ProductRepository {
     const result = this.db
       .prepare(
         `INSERT INTO products
-           (sku, barcode, name, description, category_id, price, cost, tax_rate_id, stock_min)
+           (sku, barcode, name, description, category_id, supplier_id, supplier_code,
+            price, cost, tax_rate_id, gain_percent, stock_min)
          VALUES
-           (@sku, @barcode, @name, @description, @categoryId, @price, @cost, @taxRateId, @stockMin)`
+           (@sku, @barcode, @name, @description, @categoryId, @supplierId, @supplierCode,
+            @price, @cost, @taxRateId, @gainPercent, @stockMin)`
       )
       .run({
         sku: data.sku,
@@ -89,9 +94,12 @@ export class ProductRepository {
         name: data.name,
         description: data.description ?? '',
         categoryId: data.categoryId ?? null,
+        supplierId: data.supplierId ?? null,
+        supplierCode: data.supplierCode ?? '',
         price: data.price,
         cost: data.cost,
         taxRateId: data.taxRateId,
+        gainPercent: data.gainPercent ?? 0,
         stockMin: data.stockMin ?? 0,
       })
     return result.lastInsertRowid as number
@@ -106,9 +114,12 @@ export class ProductRepository {
     if (data.name !== undefined) { fields.push('name = @name'); params.name = data.name }
     if (data.description !== undefined) { fields.push('description = @description'); params.description = data.description }
     if (data.categoryId !== undefined) { fields.push('category_id = @categoryId'); params.categoryId = data.categoryId }
+    if (data.supplierId !== undefined) { fields.push('supplier_id = @supplierId'); params.supplierId = data.supplierId }
+    if (data.supplierCode !== undefined) { fields.push('supplier_code = @supplierCode'); params.supplierCode = data.supplierCode }
     if (data.price !== undefined) { fields.push('price = @price'); params.price = data.price }
     if (data.cost !== undefined) { fields.push('cost = @cost'); params.cost = data.cost }
     if (data.taxRateId !== undefined) { fields.push('tax_rate_id = @taxRateId'); params.taxRateId = data.taxRateId }
+    if (data.gainPercent !== undefined) { fields.push('gain_percent = @gainPercent'); params.gainPercent = data.gainPercent }
     if (data.active !== undefined) { fields.push('active = @active'); params.active = data.active ? 1 : 0 }
     if (data.stockMin !== undefined) { fields.push('stock_min = @stockMin'); params.stockMin = data.stockMin }
     if (data.stockQuantity !== undefined) { fields.push('stock_quantity = @stockQuantity'); params.stockQuantity = data.stockQuantity }
@@ -138,9 +149,12 @@ export class ProductRepository {
       name: row.name,
       description: row.description,
       categoryId: row.category_id,
+      supplierId: row.supplier_id,
+      supplierCode: row.supplier_code,
       price: row.price,
       cost: row.cost,
       taxRateId: row.tax_rate_id,
+      gainPercent: row.gain_percent,
       active: row.active === 1,
       stockQuantity: row.stock_quantity,
       stockMin: row.stock_min,
