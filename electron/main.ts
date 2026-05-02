@@ -5,13 +5,14 @@ import { getDb, closeDb } from '../database/db'
 import { runMigrations } from '../database/migrate'
 import { registerAllIpcHandlers } from './ipc/index'
 
+// Handle app lifecycle
+const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
+
 // Load .env explicitly so that process.env.VITE_EMPRESA_* is available in the
 // Electron main process (e.g. for printing/company header in remito interno).
 // Must run before any module reads process.env.
 {
-  const envRoot = app.isPackaged
-    ? (process.resourcesPath ?? app.getAppPath())
-    : process.cwd()
+  const envRoot = isDev ? process.cwd() : (process.resourcesPath ?? app.getAppPath())
   const envPath = path.join(envRoot, '.env')
   const { error } = dotenvConfig({ path: envPath })
   if (error) {
@@ -20,9 +21,6 @@ import { registerAllIpcHandlers } from './ipc/index'
     console.debug(`[main] .env loaded from "${envPath}"`)
   }
 }
-
-// Handle app lifecycle
-const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 
 async function createWindow(): Promise<void> {
   const mainWindow = new BrowserWindow({
