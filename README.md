@@ -13,7 +13,7 @@ Aplicación de escritorio construida con **Electron + TypeScript + React + Vite*
 | UI | React 18 + TypeScript + React Router |
 | Build | Vite + electron-vite |
 | Desktop | Electron 39 |
-| Base de datos | SQLite (better-sqlite3) |
+| Base de datos | SQLite (better-sqlite3 v12) |
 | Facturación AFIP | WSAA + WSFEv1 (SOAP) |
 | Certificados | node-forge (PKCS#7) |
 | QR AFIP | qrcode |
@@ -61,50 +61,42 @@ pnpm dev
 
 ## 🪟 Setup en Windows
 
-### `pnpm install` falla por `better-sqlite3` en el postinstall
+### Instalación sin herramientas de compilación C++
 
-El script `postinstall` intenta reconstruir `better-sqlite3` para la versión
-de Electron instalada usando `electron-builder install-app-deps`.  En Windows,
-si no hay un binario precompilado disponible para la versión de Electron y el
-paso de compilación desde fuentes falla (requiere Visual Studio Build Tools y
-Python), la instalación se corta.
-
-**Solución para desarrollo:** saltear el postinstall con la variable de entorno
-`PNPM_SKIP_POSTINSTALL`:
+A partir de la versión `better-sqlite3@12.9.0` (incluida en este proyecto),
+existen **binarios precompilados para Electron 39 (ABI v140)** en todas las
+plataformas, incluyendo Windows x64.  Esto significa que `pnpm install` ya
+no requiere Visual Studio Build Tools ni Python.
 
 ```powershell
-# PowerShell
-$env:PNPM_SKIP_POSTINSTALL=1; pnpm install
+# PowerShell — sin flags adicionales
+pnpm install
+pnpm db:migrate
+pnpm db:seed
+pnpm dev
 ```
 
-```cmd
-:: cmd.exe
-set PNPM_SKIP_POSTINSTALL=1 && pnpm install
-```
+El script `postinstall` detecta automáticamente la versión de Electron
+instalada y descarga el binario correcto de GitHub Releases usando
+`prebuild-install`.  **No es necesario compilar desde fuente.**
 
-```bash
-# Git Bash / WSL
-PNPM_SKIP_POSTINSTALL=1 pnpm install
-```
-
-> **Nota:** saltear el postinstall es seguro para desarrollo local porque
-> `better-sqlite3` ya se instala con el binario nativo para Node.js durante
-> `pnpm install`.  El paso de `electron-builder install-app-deps` sólo es
-> necesario para **empaquetar** la app (`pnpm package`).
+> **Nota:** la variable de entorno `PNPM_SKIP_POSTINSTALL` ya no es
+> necesaria para desarrollo.  Sigue siendo respetada si la tenés seteada
+> de una instalación anterior.
 
 ### Empaquetar la app en Windows (`pnpm package`)
 
-Para generar el instalador `.exe` se necesita reconstruir `better-sqlite3`
-para Electron.  Requisitos:
-
-- **Visual Studio Build Tools 2019 o superior** con la carga de trabajo
-  "Desarrollo de escritorio con C++".
-- **Python 3.x** (agregado al `PATH`).
-- Eliminar `PNPM_SKIP_POSTINSTALL` del entorno (o no setearla) y luego:
+Para generar el instalador `.exe` se puede usar el mismo flujo, ya que
+`electron-builder` descargará los mismos binarios precompilados:
 
 ```powershell
 pnpm package
 ```
+
+> Si por alguna razón querés compilar desde fuente (por ejemplo, para
+> una arquitectura no soportada por los prebuilds), necesitarás
+> **Visual Studio Build Tools 2022** con la carga de trabajo
+> "Desarrollo de escritorio con C++" y **Python 3.x** en el `PATH`.
 
 ---
 
