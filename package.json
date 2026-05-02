@@ -13,6 +13,10 @@
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"electron/**/*.ts\" \"database/**/*.ts\"",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
+    "db:migrate:node": "tsx scripts/migrate.ts",
+    "db:seed:node": "tsx scripts/seed.ts",
+    "db:migrate:electron": "electron scripts/electron-migrate.cjs",
+    "db:seed:electron": "electron scripts/electron-seed.cjs",
     "typecheck": "tsc --noEmit",
     "package": "electron-vite build && electron-builder",
     "postinstall": "node scripts/postinstall.cjs"
@@ -69,6 +73,12 @@
     },
     "files": [
       "dist/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "database/migrations",
+        "to": "database/migrations"
+      }
     ],
     "linux": {
       "target": "AppImage"

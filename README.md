@@ -53,6 +53,11 @@ pnpm db:seed
 pnpm dev
 ```
 
+> **Nota:** `pnpm dev` también ejecuta automáticamente las migraciones pendientes
+> al arrancar el proceso principal de Electron (`bootstrap()` en `electron/main.ts`).
+> Los pasos 4–5 son necesarios sólo si querés poblar la DB antes del primer `pnpm dev`
+> o si necesitás el seed de datos iniciales.
+
 ### Credenciales por defecto (después de seed)
 - **Usuario:** `admin`
 - **Contraseña:** `admin123`
@@ -71,9 +76,7 @@ no requiere Visual Studio Build Tools ni Python.
 ```powershell
 # PowerShell — sin flags adicionales
 pnpm install
-pnpm db:migrate
-pnpm db:seed
-pnpm dev
+pnpm dev          # arranca la app y aplica migraciones automáticamente
 ```
 
 El script `postinstall` detecta automáticamente la versión de Electron
@@ -84,6 +87,32 @@ instalada y descarga el binario correcto de GitHub Releases usando
 > necesaria para desarrollo.  Sigue siendo respetada si la tenés seteada
 > de una instalación anterior.
 
+### Migraciones y seed en Windows (resolución de conflicto ABI)
+
+`better-sqlite3` es un addon nativo que debe compilarse para el runtime que lo
+cargará.  El `postinstall` lo compila para **Electron** (ABI v140).  Si intentás
+correr las migraciones con Node.js directamente (`pnpm db:migrate`) y el binario
+fue compilado para Electron, obtendrás un error `ERR_DLOPEN_FAILED`.
+
+Para cada operación, elegí la variante que corresponda:
+
+| Comando | Runtime | Cuándo usarlo |
+|---------|---------|---------------|
+| `pnpm db:migrate:node` | Node / tsx | Cuando `better-sqlite3` está compilado para Node (e.g. ambiente CI puro, sin Electron) |
+| `pnpm db:migrate:electron` | Electron | Cuando `better-sqlite3` está compilado para Electron (flujo normal después de `pnpm install`) |
+| `pnpm db:seed:node` | Node / tsx | Igual que `:node` arriba |
+| `pnpm db:seed:electron` | Electron | Igual que `:electron` arriba |
+| `pnpm db:migrate` | Node / tsx | Alias de `:node` — usar con cuidado en Windows si ya instalaste con Electron target |
+| `pnpm db:seed` | Node / tsx | Ídem anterior |
+
+**Flujo recomendado en Windows (después de `pnpm install`):**
+
+```powershell
+pnpm db:migrate:electron   # aplica migraciones con el binary de Electron
+pnpm db:seed:electron      # carga datos iniciales con el binary de Electron
+pnpm dev                   # inicia la app (también aplica migraciones al arrancar)
+```
+
 ### Empaquetar la app en Windows (`pnpm package`)
 
 Para generar el instalador `.exe` se puede usar el mismo flujo, ya que
@@ -92,6 +121,11 @@ Para generar el instalador `.exe` se puede usar el mismo flujo, ya que
 ```powershell
 pnpm package
 ```
+
+Las migraciones SQL se incluyen automáticamente en el instalador como
+`extraResources` (`resources/database/migrations/`), por lo que la app
+empaquetada puede aplicar migraciones en producción sin necesitar acceso
+al repositorio.
 
 > Si por alguna razón querés compilar desde fuente (por ejemplo, para
 > una arquitectura no soportada por los prebuilds), necesitarás
@@ -261,12 +295,16 @@ NewSalePage.handleCheckout()
 
 | Comando | Descripción |
 |---------|-------------|
-| `pnpm dev` | Inicia Electron en modo desarrollo |
+| `pnpm dev` | Inicia Electron en modo desarrollo (aplica migraciones al arrancar) |
 | `pnpm build` | Compila para producción |
 | `pnpm lint` | ESLint (TypeScript + React) |
 | `pnpm format` | Prettier |
-| `pnpm db:migrate` | Aplica migraciones SQL pendientes |
-| `pnpm db:seed` | Carga datos iniciales (admin + productos) |
+| `pnpm db:migrate` | Aplica migraciones SQL pendientes (Node/tsx) |
+| `pnpm db:migrate:node` | Ídem — explícitamente con Node/tsx runtime |
+| `pnpm db:migrate:electron` | Aplica migraciones usando el runtime Electron (recomendado en Windows) |
+| `pnpm db:seed` | Carga datos iniciales (admin + productos) (Node/tsx) |
+| `pnpm db:seed:node` | Ídem — explícitamente con Node/tsx runtime |
+| `pnpm db:seed:electron` | Carga datos iniciales usando el runtime Electron (recomendado en Windows) |
 | `pnpm typecheck` | Verifica tipos TypeScript sin compilar |
 | `pnpm package` | Build + empaqueta instalador |
 
