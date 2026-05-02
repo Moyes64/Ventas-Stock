@@ -2,7 +2,7 @@
   "name": "ventas-stock",
   "version": "1.0.0",
   "description": "Desktop application for Sales and Stock management with Argentine AFIP electronic invoicing",
-  "main": "dist/main/main.js",
+  "main": "dist/main/index.js",
   "private": true,
   "scripts": {
     "dev": "electron-vite dev",
@@ -15,7 +15,7 @@
     "db:seed": "tsx scripts/seed.ts",
     "typecheck": "tsc --noEmit",
     "package": "electron-vite build && electron-builder",
-    "postinstall": "electron-builder install-app-deps"
+    "postinstall": "node scripts/postinstall.cjs"
   },
   "dependencies": {
     "better-sqlite3": "^9.4.3",
