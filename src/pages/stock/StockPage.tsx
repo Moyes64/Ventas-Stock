@@ -25,9 +25,13 @@ export default function StockPage() {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     void loadData()
+    return () => {
+      if (toastTimerRef.current !== null) clearTimeout(toastTimerRef.current)
+    }
   }, [])
 
   async function loadData() {
@@ -79,7 +83,8 @@ export default function StockPage() {
       setEditingId(null)
       setEditValue('')
       setToast({ type: 'success', text: 'Stock actualizado correctamente' })
-      setTimeout(() => setToast(null), 4000)
+      if (toastTimerRef.current !== null) clearTimeout(toastTimerRef.current)
+      toastTimerRef.current = setTimeout(() => setToast(null), 4000)
       await loadData()
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Error al guardar')
@@ -161,8 +166,6 @@ export default function StockPage() {
                           <input
                             ref={inputRef}
                             type="number"
-                            min="0"
-                            step="1"
                             value={editValue}
                             onChange={e => setEditValue(e.target.value)}
                             onKeyDown={e => handleKeyDown(e, item.productId)}
