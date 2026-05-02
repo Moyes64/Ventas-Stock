@@ -1,6 +1,6 @@
 import type { Database } from 'better-sqlite3'
 import { SaleRepository } from '../sales/repository'
-import { loadAfipConfig } from '../invoicing-afip/config'
+import { tryLoadAfipConfig } from '../invoicing-afip/config'
 import { generateAfipQR, buildAfipQrPayload } from './qr-generator'
 import { printTicket } from './thermal-printer'
 import type { Sale } from '../sales/types'
@@ -27,7 +27,8 @@ export class PrintingService {
   }
 
   async buildTicketData(sale: Sale): Promise<TicketData> {
-    const config = loadAfipConfig()
+    const config = tryLoadAfipConfig()
+    const defaultPuntoVenta = parseInt(process.env.VITE_EMPRESA_PUNTO_VENTA ?? '1', 10) || 1
 
     const companyName = process.env.VITE_EMPRESA_RAZON_SOCIAL ?? 'Mi Empresa'
     const companyAddress = process.env.VITE_EMPRESA_DOMICILIO ?? ''
@@ -62,14 +63,15 @@ export class PrintingService {
     const invoiceType = sale.invoiceType ?? 11
     const invoiceLabel = INVOICE_TYPE_LABELS[invoiceType] ?? `COMPROBANTE ${invoiceType}`
 
-    const puntoVentaStr = String(sale.puntoVenta ?? config.puntoVenta).padStart(5, '0')
+    const effectivePuntoVenta = sale.puntoVenta ?? config?.puntoVenta ?? defaultPuntoVenta
+    const puntoVentaStr = String(effectivePuntoVenta).padStart(5, '0')
     const invoiceNumStr = String(sale.invoiceNumber ?? 0).padStart(8, '0')
     const invoiceNumber = `${puntoVentaStr}-${invoiceNumStr}`
 
-    // Generate QR if authorized
+    // Generate QR only if authorized and AFIP CUIT is available
     let qrBase64: string | undefined
 
-    if (sale.status === 'AUTHORIZED' && sale.cae && sale.invoiceNumber) {
+    if (sale.status === 'AUTHORIZED' && sale.cae && sale.invoiceNumber && config) {
       const docType = DOC_TYPE_AFIP_CODE[customerDocType as keyof typeof DOC_TYPE_AFIP_CODE] ?? 99
       const docNro = parseInt(customerDoc.replace(/\D/g, ''), 10) || 0
 
@@ -90,10 +92,10 @@ export class PrintingService {
 
     return {
       companyName,
-      companyCuit: String(config.cuit),
+      companyCuit: config ? String(config.cuit) : (process.env.VITE_EMPRESA_CUIT ?? ''),
       companyAddress,
       condicionIva,
-      puntoVenta: sale.puntoVenta ?? config.puntoVenta,
+      puntoVenta: effectivePuntoVenta,
       invoiceType: invoiceLabel,
       invoiceNumber,
       date: sale.saleDate,

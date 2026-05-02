@@ -23,3 +23,16 @@ export function loadAfipConfig(): AfipConfig {
     puntoVenta: parseInt(puntoVentaStr, 10) || 1,
   }
 }
+
+/**
+ * Tries to load AFIP configuration from environment variables.
+ * Returns null if AFIP_CUIT is missing or invalid, instead of throwing.
+ * Use this when AFIP configuration is optional (e.g. printing delivery notes).
+ */
+export function tryLoadAfipConfig(): AfipConfig | null {
+  try {
+    return loadAfipConfig()
+  } catch {
+    return null
+  }
+}

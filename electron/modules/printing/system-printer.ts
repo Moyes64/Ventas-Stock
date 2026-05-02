@@ -38,7 +38,9 @@ function generateTicketHTML(ticketData: TicketData, documentType: 'invoice' | 'd
   const qrSection =
     ticketData.qrBase64
       ? `<div class="qr"><img src="${ticketData.qrBase64}" alt="QR AFIP" /></div>`
-      : ''
+      : ticketData.isAuthorized && ticketData.cae
+        ? `<div class="qr-missing">QR AFIP no disponible<br>(CUIT no configurado)</div>`
+        : ''
 
   const statusSection = ticketData.isAuthorized && ticketData.cae
     ? `<div class="separator"></div>
@@ -117,6 +119,14 @@ function generateTicketHTML(ticketData: TicketData, documentType: 'invoice' | 'd
     .cae-info { font-size: 9px; word-break: break-all; margin: 3px 0; }
     .qr { text-align: center; margin: 5px 0; }
     .qr img { width: 55px; height: 55px; }
+    .qr-missing {
+      text-align: center;
+      font-size: 8px;
+      color: #888;
+      padding: 3px;
+      border: 1px dashed #aaa;
+      margin: 4px 0;
+    }
     .authorized-badge {
       text-align: center;
       font-size: 9px;
