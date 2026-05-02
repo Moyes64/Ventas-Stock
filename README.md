@@ -59,6 +59,55 @@ pnpm dev
 
 ---
 
+## 🪟 Setup en Windows
+
+### `pnpm install` falla por `better-sqlite3` en el postinstall
+
+El script `postinstall` intenta reconstruir `better-sqlite3` para la versión
+de Electron instalada usando `electron-builder install-app-deps`.  En Windows,
+si no hay un binario precompilado disponible para la versión de Electron y el
+paso de compilación desde fuentes falla (requiere Visual Studio Build Tools y
+Python), la instalación se corta.
+
+**Solución para desarrollo:** saltear el postinstall con la variable de entorno
+`PNPM_SKIP_POSTINSTALL`:
+
+```powershell
+# PowerShell
+$env:PNPM_SKIP_POSTINSTALL=1; pnpm install
+```
+
+```cmd
+:: cmd.exe
+set PNPM_SKIP_POSTINSTALL=1 && pnpm install
+```
+
+```bash
+# Git Bash / WSL
+PNPM_SKIP_POSTINSTALL=1 pnpm install
+```
+
+> **Nota:** saltear el postinstall es seguro para desarrollo local porque
+> `better-sqlite3` ya se instala con el binario nativo para Node.js durante
+> `pnpm install`.  El paso de `electron-builder install-app-deps` sólo es
+> necesario para **empaquetar** la app (`pnpm package`).
+
+### Empaquetar la app en Windows (`pnpm package`)
+
+Para generar el instalador `.exe` se necesita reconstruir `better-sqlite3`
+para Electron.  Requisitos:
+
+- **Visual Studio Build Tools 2019 o superior** con la carga de trabajo
+  "Desarrollo de escritorio con C++".
+- **Python 3.x** (agregado al `PATH`).
+- Eliminar `PNPM_SKIP_POSTINSTALL` del entorno (o no setearla) y luego:
+
+```powershell
+pnpm package
+```
+
+---
+
 ## 📁 Estructura del proyecto
 
 ```
