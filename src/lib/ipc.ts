@@ -102,6 +102,18 @@ export const stock = {
     voucherDate?: string
     supplierId?: number
   }) => electron.stock.addMovement(data) as Promise<number>,
+  updateMovement: (
+    id: number,
+    data: {
+      quantity?: number
+      voucherType?: string | null
+      voucherNumber?: string | null
+      voucherDate?: string | null
+      supplierId?: number | null
+      notes?: string
+    }
+  ) => electron.stock.updateMovement(id, data) as Promise<void>,
+  deleteMovement: (id: number) => electron.stock.deleteMovement(id) as Promise<void>,
   adjustStock: (productId: number, newQuantity: number, userId?: number) =>
     electron.stock.adjustStock(productId, newQuantity, userId) as Promise<number>,
 }

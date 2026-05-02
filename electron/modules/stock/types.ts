@@ -42,3 +42,12 @@ export interface CreateMovementInput {
   voucherDate?: string
   supplierId?: number
 }
+
+export interface UpdateMovementInput {
+  quantity?: number
+  voucherType?: string | null
+  voucherNumber?: string | null
+  voucherDate?: string | null
+  supplierId?: number | null
+  notes?: string
+}

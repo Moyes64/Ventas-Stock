@@ -195,6 +195,189 @@ function EntryForm({
   )
 }
 
+function EditMovementForm({
+  movement,
+  onClose,
+  onSaved,
+}: {
+  movement: StockMovement
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [suppliersList, setSuppliersList] = useState<Supplier[]>([])
+  const [loadingData, setLoadingData] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const [form, setForm] = useState({
+    quantity: movement.quantity,
+    voucherType: movement.voucherType ?? 'FACTURA',
+    voucherNumber: movement.voucherNumber ?? '',
+    voucherDate: movement.voucherDate ?? '',
+    supplierId: movement.supplierId ?? ('' as number | ''),
+    notes: movement.notes ?? '',
+  })
+
+  useEffect(() => {
+    async function loadSuppliers() {
+      try {
+        const sups = await suppliersApi.list(true)
+        setSuppliersList(sups)
+      } catch {
+        // non-critical
+      } finally {
+        setLoadingData(false)
+      }
+    }
+    void loadSuppliers()
+  }, [])
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (form.quantity <= 0) {
+      setError('La cantidad debe ser mayor a cero')
+      return
+    }
+    if (!form.voucherDate) {
+      setError('Ingrese la fecha del comprobante')
+      return
+    }
+    setSaving(true)
+    setError(null)
+    try {
+      await stockApi.updateMovement(movement.id, {
+        quantity: form.quantity,
+        voucherType: form.voucherType || null,
+        voucherNumber: form.voucherNumber.trim() || null,
+        voucherDate: form.voucherDate || null,
+        supplierId: form.supplierId === '' ? null : Number(form.supplierId),
+        notes: form.notes,
+      })
+      onSaved()
+      onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al guardar los cambios')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal">
+        <div className="modal-header">
+          <h2>Editar Movimiento #{movement.id}</h2>
+          <button className="btn btn-ghost" onClick={onClose}>✕</button>
+        </div>
+        {loadingData ? (
+          <p>Cargando datos...</p>
+        ) : (
+          <form onSubmit={e => void handleSubmit(e)} className="form">
+            <div className="form-row">
+              <label className="label">Producto</label>
+              <input
+                type="text"
+                value={movement.productName ?? ''}
+                disabled
+                className="input"
+              />
+            </div>
+
+            <div className="form-row">
+              <label className="label">Tipo de movimiento</label>
+              <input
+                type="text"
+                value={MOVEMENT_TYPE_LABELS[movement.type] ?? movement.type}
+                disabled
+                className="input"
+              />
+            </div>
+
+            <div className="form-row">
+              <label className="label">Cantidad *</label>
+              <input
+                type="number"
+                value={form.quantity}
+                onChange={e => { const val = parseInt(e.target.value, 10); setForm({ ...form, quantity: isNaN(val) ? form.quantity : Math.max(1, val) }) }}
+                min="1"
+                required
+                className="input"
+              />
+            </div>
+
+            <div className="form-row">
+              <label className="label">Tipo de comprobante</label>
+              <select
+                value={form.voucherType}
+                onChange={e => setForm({ ...form, voucherType: e.target.value })}
+                className="input"
+              >
+                <option value="">— Sin comprobante —</option>
+                <option value="FACTURA">FACTURA</option>
+                <option value="REMITO">REMITO</option>
+              </select>
+            </div>
+
+            <div className="form-row">
+              <label className="label">Número de comprobante</label>
+              <input
+                type="text"
+                value={form.voucherNumber}
+                onChange={e => setForm({ ...form, voucherNumber: e.target.value })}
+                className="input"
+                placeholder="Ej: 0001-00012345"
+              />
+            </div>
+
+            <div className="form-row">
+              <label className="label">Fecha del comprobante *</label>
+              <input
+                type="date"
+                value={form.voucherDate}
+                onChange={e => setForm({ ...form, voucherDate: e.target.value })}
+                required
+                className="input"
+              />
+            </div>
+
+            <div className="form-row">
+              <label className="label">Proveedor</label>
+              <select
+                value={form.supplierId}
+                onChange={e => setForm({ ...form, supplierId: e.target.value === '' ? '' : Number(e.target.value) })}
+                className="input"
+              >
+                <option value="">— Sin proveedor —</option>
+                {suppliersList.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-row">
+              <label className="label">Notas</label>
+              <input
+                type="text"
+                value={form.notes}
+                onChange={e => setForm({ ...form, notes: e.target.value })}
+                className="input"
+              />
+            </div>
+
+            {error && <p className="error">{error}</p>}
+            <div className="form-actions">
+              <button type="button" className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+              <button type="submit" className="btn btn-primary" disabled={saving}>
+                {saving ? 'Guardando...' : '✓ Guardar cambios'}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function StockPage() {
   const [stockItems, setStockItems] = useState<StockItem[]>([])
   const [movements, setMovements] = useState<StockMovement[]>([])
@@ -204,7 +387,7 @@ export default function StockPage() {
   const [filterLow, setFilterLow] = useState(false)
   const [showEntryForm, setShowEntryForm] = useState(false)
 
-  // Inline-edit state
+  // Inline-edit state (stock levels tab)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editValue, setEditValue] = useState('')
   const [saving, setSaving] = useState(false)
@@ -212,6 +395,12 @@ export default function StockPage() {
   const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Movement edit/delete state
+  const [editingMovement, setEditingMovement] = useState<StockMovement | null>(null)
+  const [deletingMovement, setDeletingMovement] = useState<StockMovement | null>(null)
+  const [deletingMovementBusy, setDeletingMovementBusy] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   useEffect(() => {
     void loadData()
@@ -284,6 +473,24 @@ export default function StockPage() {
     if (e.key === 'Escape') cancelEdit()
   }
 
+  async function confirmDeleteMovement() {
+    if (!deletingMovement) return
+    setDeletingMovementBusy(true)
+    setDeleteError(null)
+    try {
+      await stockApi.deleteMovement(deletingMovement.id)
+      setDeletingMovement(null)
+      setToast({ type: 'success', text: 'Movimiento eliminado correctamente' })
+      if (toastTimerRef.current !== null) clearTimeout(toastTimerRef.current)
+      toastTimerRef.current = setTimeout(() => setToast(null), 4000)
+      await loadData()
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Error al eliminar el movimiento')
+    } finally {
+      setDeletingMovementBusy(false)
+    }
+  }
+
   const displayedItems = filterLow ? stockItems.filter(i => i.isLow) : stockItems
 
   return (
@@ -301,6 +508,66 @@ export default function StockPage() {
           onClose={() => setShowEntryForm(false)}
           onSaved={() => void loadData()}
         />
+      )}
+
+      {editingMovement && (
+        <EditMovementForm
+          movement={editingMovement}
+          onClose={() => setEditingMovement(null)}
+          onSaved={() => {
+            setEditingMovement(null)
+            setToast({ type: 'success', text: 'Movimiento actualizado correctamente' })
+            if (toastTimerRef.current !== null) clearTimeout(toastTimerRef.current)
+            toastTimerRef.current = setTimeout(() => setToast(null), 4000)
+            void loadData()
+          }}
+        />
+      )}
+
+      {deletingMovement && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <div className="modal-header">
+              <h2>Confirmar eliminación</h2>
+              <button className="btn btn-ghost" onClick={() => { setDeletingMovement(null); setDeleteError(null) }}>✕</button>
+            </div>
+            <div className="form">
+              <p>
+                ¿Está seguro que desea eliminar el movimiento <strong>#{deletingMovement.id}</strong>?
+              </p>
+              <p>
+                <strong>Producto:</strong> {deletingMovement.productName}<br />
+                <strong>Tipo:</strong> {MOVEMENT_TYPE_LABELS[deletingMovement.type] ?? deletingMovement.type}<br />
+                <strong>Cantidad:</strong> {deletingMovement.quantity > 0 ? `+${deletingMovement.quantity}` : deletingMovement.quantity}<br />
+                {deletingMovement.voucherType && deletingMovement.voucherNumber && (
+                  <><strong>Comprobante:</strong> {deletingMovement.voucherType} {deletingMovement.voucherNumber}<br /></>
+                )}
+              </p>
+              <p className="error" style={{ fontWeight: 'bold' }}>
+                Esta acción ajustará el stock del producto automáticamente.
+              </p>
+              {deleteError && <p className="error">{deleteError}</p>}
+              <div className="form-actions">
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => { setDeletingMovement(null); setDeleteError(null) }}
+                  disabled={deletingMovementBusy}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  onClick={() => void confirmDeleteMovement()}
+                  disabled={deletingMovementBusy}
+                >
+                  {deletingMovementBusy ? 'Eliminando...' : '🗑️ Eliminar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {toast && (
@@ -434,6 +701,7 @@ export default function StockPage() {
                 <th>Proveedor</th>
                 <th>Cantidad</th>
                 <th>Notas</th>
+                <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -462,10 +730,28 @@ export default function StockPage() {
                     {m.quantity > 0 ? `+${m.quantity}` : m.quantity}
                   </td>
                   <td>{m.notes || '—'}</td>
+                  <td>
+                    <div className="action-group">
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => setEditingMovement(m)}
+                        title="Editar movimiento"
+                      >
+                        ✏️ Editar
+                      </button>
+                      <button
+                        className="btn btn-danger btn-sm"
+                        onClick={() => { setDeletingMovement(m); setDeleteError(null) }}
+                        title="Eliminar movimiento"
+                      >
+                        🗑️ Eliminar
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
               {movements.length === 0 && (
-                <tr><td colSpan={8} className="empty-row">Sin movimientos</td></tr>
+                <tr><td colSpan={9} className="empty-row">Sin movimientos</td></tr>
               )}
             </tbody>
           </table>

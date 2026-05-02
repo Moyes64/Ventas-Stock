@@ -63,6 +63,8 @@ const electronAPI = {
     getCurrent: (productId: number) => invoke('stock:getCurrent', productId),
     getMovements: (filters: unknown) => invoke('stock:getMovements', filters),
     addMovement: (data: unknown) => invoke('stock:addMovement', data),
+    updateMovement: (id: number, data: unknown) => invoke('stock:updateMovement', id, data),
+    deleteMovement: (id: number) => invoke('stock:deleteMovement', id),
     adjustStock: (productId: number, newQuantity: number, userId?: number) =>
       invoke('stock:adjustStock', productId, newQuantity, userId),
   },

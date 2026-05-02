@@ -1,5 +1,5 @@
 import type { Database } from 'better-sqlite3'
-import type { StockMovement, StockItem, CreateMovementInput } from './types'
+import type { StockMovement, StockItem, CreateMovementInput, UpdateMovementInput } from './types'
 
 interface MovementRow {
   id: number
@@ -178,5 +178,106 @@ export class StockRepository {
       supplierId: r.supplier_id,
       supplierName: r.supplier_name,
     }))
+  }
+
+  /**
+   * Returns the signed stock delta that was applied when the movement was recorded.
+   * - EXIT / SALE: stock was decreased  → delta = -abs(quantity)
+   * - ADJUSTMENT: quantity IS the signed delta (may be negative)
+   * - ENTRY / PURCHASE_RETURN (and any future positive types): stock was increased → delta = +abs(quantity)
+   */
+  private movementEffectiveDelta(type: string, quantity: number): number {
+    if (type === 'EXIT' || type === 'SALE') return -Math.abs(quantity)
+    if (type === 'ADJUSTMENT') return quantity
+    // ENTRY, PURCHASE_RETURN — positive stock effect
+    return Math.abs(quantity)
+  }
+
+  updateMovement(id: number, data: UpdateMovementInput): void {
+    const existing = this.db
+      .prepare(
+        `SELECT sm.*, p.name AS product_name, s.name AS supplier_name
+         FROM stock_movements sm
+         JOIN products p ON p.id = sm.product_id
+         LEFT JOIN suppliers s ON s.id = sm.supplier_id
+         WHERE sm.id = ?`
+      )
+      .get(id) as MovementRow | undefined
+
+    if (!existing) throw new Error(`Movimiento #${id} no encontrado`)
+
+    const newQuantity = data.quantity ?? existing.quantity
+
+    const oldDelta = this.movementEffectiveDelta(existing.type, existing.quantity)
+    const newDelta = this.movementEffectiveDelta(existing.type, newQuantity)
+    const stockAdjustment = newDelta - oldDelta
+
+    const currentStock = this.getCurrentStock(existing.product_id)
+    if (currentStock + stockAdjustment < 0) {
+      throw new Error(
+        `El cambio dejaría el stock en negativo (stock actual: ${currentStock}, ajuste: ${stockAdjustment > 0 ? '+' : ''}${stockAdjustment})`
+      )
+    }
+
+    const updateMovement = this.db.prepare(
+      `UPDATE stock_movements
+         SET quantity       = @quantity,
+             voucher_type   = @voucherType,
+             voucher_number = @voucherNumber,
+             voucher_date   = @voucherDate,
+             supplier_id    = @supplierId,
+             notes          = @notes
+       WHERE id = @id`
+    )
+
+    const updateStock = this.db.prepare(
+      'UPDATE products SET stock_quantity = stock_quantity + @delta WHERE id = @productId'
+    )
+
+    this.db.transaction(() => {
+      updateMovement.run({
+        id,
+        quantity: newQuantity,
+        voucherType: data.voucherType !== undefined ? data.voucherType : existing.voucher_type,
+        voucherNumber:
+          data.voucherNumber !== undefined ? data.voucherNumber : existing.voucher_number,
+        voucherDate: data.voucherDate !== undefined ? data.voucherDate : existing.voucher_date,
+        supplierId: data.supplierId !== undefined ? data.supplierId : existing.supplier_id,
+        notes: data.notes !== undefined ? data.notes : existing.notes,
+      })
+      if (stockAdjustment !== 0) {
+        updateStock.run({ delta: stockAdjustment, productId: existing.product_id })
+      }
+    })()
+  }
+
+  deleteMovement(id: number): void {
+    const existing = this.db
+      .prepare('SELECT * FROM stock_movements WHERE id = ?')
+      .get(id) as MovementRow | undefined
+
+    if (!existing) throw new Error(`Movimiento #${id} no encontrado`)
+
+    const effectiveDelta = this.movementEffectiveDelta(existing.type, existing.quantity)
+    const reverseAdjustment = -effectiveDelta
+
+    const currentStock = this.getCurrentStock(existing.product_id)
+    if (currentStock + reverseAdjustment < 0) {
+      throw new Error(
+        `Eliminar este movimiento dejaría el stock en negativo (stock actual: ${currentStock})`
+      )
+    }
+
+    const deleteStmt = this.db.prepare('DELETE FROM stock_movements WHERE id = ?')
+    const updateStock = this.db.prepare(
+      'UPDATE products SET stock_quantity = stock_quantity + @delta WHERE id = @productId'
+    )
+
+    this.db.transaction(() => {
+      deleteStmt.run(id)
+      if (reverseAdjustment !== 0) {
+        updateStock.run({ delta: reverseAdjustment, productId: existing.product_id })
+      }
+    })()
   }
 }
