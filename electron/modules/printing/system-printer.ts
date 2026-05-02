@@ -223,7 +223,6 @@ export async function printSystemTicket(
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      javascript: false,
     },
   })
 

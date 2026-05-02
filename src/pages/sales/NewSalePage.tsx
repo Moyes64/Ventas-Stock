@@ -22,7 +22,7 @@ export default function NewSalePage() {
   const [result, setResult] = useState<Sale | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [printError, setPrintError] = useState<string | null>(null)
-  const [printing_, setPrinting] = useState(false)
+  const [isPrinting, setIsPrinting] = useState(false)
 
   useEffect(() => {
     customers.list().then(setCustomerList).catch(console.error)
@@ -130,7 +130,7 @@ export default function NewSalePage() {
     new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(n)
 
   async function handlePrintInvoice(saleId: number) {
-    setPrinting(true)
+    setIsPrinting(true)
     setPrintError(null)
     try {
       const res = await printing.printInvoiceSystem(saleId)
@@ -138,12 +138,12 @@ export default function NewSalePage() {
     } catch (err) {
       setPrintError(err instanceof Error ? err.message : 'Error al imprimir')
     } finally {
-      setPrinting(false)
+      setIsPrinting(false)
     }
   }
 
   async function handlePrintDelivery(saleId: number) {
-    setPrinting(true)
+    setIsPrinting(true)
     setPrintError(null)
     try {
       const res = await printing.printDeliveryNoteSystem(saleId)
@@ -151,7 +151,7 @@ export default function NewSalePage() {
     } catch (err) {
       setPrintError(err instanceof Error ? err.message : 'Error al imprimir')
     } finally {
-      setPrinting(false)
+      setIsPrinting(false)
     }
   }
 
@@ -185,17 +185,17 @@ export default function NewSalePage() {
               <button
                 className="btn btn-secondary"
                 onClick={() => void handlePrintInvoice(result.id)}
-                disabled={printing_}
+                disabled={isPrinting}
               >
-                {printing_ ? '⏳' : '🖨️'} Imprimir Factura
+                {isPrinting ? '⏳' : '🖨️'} Imprimir Factura
               </button>
             ) : (
               <button
                 className="btn btn-secondary"
                 onClick={() => void handlePrintDelivery(result.id)}
-                disabled={printing_}
+                disabled={isPrinting}
               >
-                {printing_ ? '⏳' : '🖨️'} Imprimir Remito
+                {isPrinting ? '⏳' : '🖨️'} Imprimir Remito
               </button>
             )}
             <button className="btn btn-primary" onClick={() => navigate('/sales')}>
