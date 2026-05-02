@@ -1,12 +1,15 @@
 import type { Database } from 'better-sqlite3'
 import { ProductRepository } from './repository'
+import { StockRepository } from '../stock/repository'
 import type { Product, Category, TaxRate, CreateProductInput, UpdateProductInput } from './types'
 
 export class ProductService {
   private readonly repo: ProductRepository
+  private readonly stockRepo: StockRepository
 
   constructor(db: Database) {
     this.repo = new ProductRepository(db)
+    this.stockRepo = new StockRepository(db)
   }
 
   getById(id: number): Product | undefined {
@@ -32,7 +35,15 @@ export class ProductService {
   create(data: CreateProductInput): Product {
     if (!data.sku.trim()) throw new Error('El SKU es obligatorio')
     if (!data.name.trim()) throw new Error('El nombre es obligatorio')
+    if (!data.supplierId) throw new Error('El proveedor es obligatorio')
     if (data.price < 0) throw new Error('El precio no puede ser negativo')
+    if (data.cost < 0) throw new Error('El costo no puede ser negativo')
+    if (data.gainPercent !== undefined && data.gainPercent < 0) {
+      throw new Error('La ganancia no puede ser negativa')
+    }
+    if (data.initialStock !== undefined && data.initialStock < 0) {
+      throw new Error('El stock inicial no puede ser negativo')
+    }
 
     const existing = this.repo.findBySku(data.sku)
     if (existing) throw new Error(`Ya existe un producto con SKU: ${data.sku}`)
@@ -43,6 +54,17 @@ export class ProductService {
     }
 
     const id = this.repo.create(data)
+
+    if (data.initialStock !== undefined && data.initialStock > 0) {
+      this.stockRepo.addMovement({
+        productId: id,
+        type: 'ENTRY',
+        quantity: data.initialStock,
+        referenceType: 'MANUAL',
+        notes: 'Stock inicial',
+      })
+    }
+
     return this.repo.findById(id)!
   }
 

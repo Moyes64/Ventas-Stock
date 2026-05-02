@@ -60,9 +60,12 @@ export interface Product {
   name: string
   description: string
   categoryId: number | null
+  supplierId: number | null
+  supplierCode: string
   price: number
   cost: number
   taxRateId: number
+  gainPercent: number
   active: boolean
   stockQuantity: number
   stockMin: number

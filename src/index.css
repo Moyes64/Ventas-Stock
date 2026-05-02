@@ -197,6 +197,14 @@ html, body, #root {
 .input--large { font-size: 16px; padding: 12px 14px; }
 .input--search { min-width: 280px; }
 .input--qty { width: 60px; text-align: center; }
+.input--readonly { background: var(--color-surface-alt, #f5f5f5); color: var(--color-text-muted); cursor: default; }
+
+.hint {
+  display: block;
+  font-size: 11.5px;
+  color: var(--color-text-muted);
+  margin-top: 3px;
+}
 
 .select {
   padding: 8px 10px;
