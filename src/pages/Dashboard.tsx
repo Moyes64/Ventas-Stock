@@ -60,11 +60,11 @@ export default function Dashboard() {
         <div className="stats-grid">
           <div className="stat-card stat-card--black">
             <div className="stat-value">{todaySummary?.blackSalesCount ?? 0}</div>
-            <div className="stat-label">🅽 Ventas N hoy</div>
+            <div className="stat-label">Ventas N hoy</div>
           </div>
           <div className="stat-card stat-card--black">
             <div className="stat-value">{currency(todaySummary?.blackSalesTotal ?? 0)}</div>
-            <div className="stat-label">🅽 Total N hoy</div>
+            <div className="stat-label">Total N hoy</div>
           </div>
           <div className="stat-card stat-card--total">
             <div className="stat-value">
