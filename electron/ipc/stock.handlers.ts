@@ -27,4 +27,11 @@ export function registerStockHandlers(db: Database): void {
   ipcMain.handle('stock:addMovement', (_event, data: CreateMovementInput) => {
     return stockService.addManualMovement(data)
   })
+
+  ipcMain.handle(
+    'stock:adjustStock',
+    (_event, productId: number, newQuantity: number, userId?: number) => {
+      return stockService.adjustStockAbsolute(productId, newQuantity, userId)
+    }
+  )
 }

@@ -83,6 +83,35 @@ export class StockRepository {
     return result
   }
 
+  adjustStockAbsolute(productId: number, newQuantity: number, userId?: number): number {
+    const current = this.getCurrentStock(productId)
+    const delta = newQuantity - current
+
+    const insertMovement = this.db.prepare(
+      `INSERT INTO stock_movements
+         (product_id, type, quantity, reference_type, reference_id, notes, user_id)
+       VALUES
+         (@productId, 'ADJUSTMENT', @quantity, NULL, NULL, @notes, @userId)`
+    )
+
+    const updateStock = this.db.prepare(
+      'UPDATE products SET stock_quantity = @newQuantity WHERE id = @productId'
+    )
+
+    const result = this.db.transaction(() => {
+      const r = insertMovement.run({
+        productId,
+        quantity: delta,
+        notes: `Ajuste manual: ${current} → ${newQuantity}`,
+        userId: userId ?? null,
+      })
+      updateStock.run({ newQuantity, productId })
+      return r.lastInsertRowid as number
+    })()
+
+    return result
+  }
+
   getMovements(filters: {
     productId?: number
     dateFrom?: string
