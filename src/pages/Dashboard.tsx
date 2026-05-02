@@ -41,7 +41,8 @@ export default function Dashboard() {
       <h1 className="page-title">Dashboard</h1>
       <p className="page-subtitle">{new Date().toLocaleDateString('es-AR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
 
-      <div className="stats-grid">
+      <div className="stats-dashboard-grid">
+        {/* Fila 1: Ventas hoy, Total hoy, Productos bajo stock */}
         <div className="stat-card">
           <div className="stat-value">{todaySummary?.whiteSalesCount ?? 0}</div>
           <div className="stat-label">Ventas hoy</div>
@@ -54,11 +55,10 @@ export default function Dashboard() {
           <div className="stat-value">{lowStockCount}</div>
           <div className="stat-label">Productos bajo stock</div>
         </div>
-      </div>
 
-      {isHiddenOptionsVisible && (
-        <>
-          <div className="stats-grid">
+        {isHiddenOptionsVisible && (
+          <>
+            {/* Fila 2: Ventas N hoy, Total N hoy (col 3 vacía) */}
             <div className="stat-card stat-card--black">
               <div className="stat-value">{todaySummary?.blackSalesCount ?? 0}</div>
               <div className="stat-label">Ventas N hoy</div>
@@ -67,8 +67,9 @@ export default function Dashboard() {
               <div className="stat-value">{currency(todaySummary?.blackSalesTotal ?? 0)}</div>
               <div className="stat-label">Total N hoy</div>
             </div>
-          </div>
-          <div className="stats-grid">
+            <div className="stats-dashboard-grid__spacer" aria-hidden="true" />
+
+            {/* Fila 3: Total ventas día, Total general día */}
             <div className="stat-card stat-card--total">
               <div className="stat-value">
                 {(todaySummary?.whiteSalesCount ?? 0) + (todaySummary?.blackSalesCount ?? 0)}
@@ -81,9 +82,9 @@ export default function Dashboard() {
               </div>
               <div className="stat-label">Total general día</div>
             </div>
-          </div>
-        </>
-      )}
+          </>
+        )}
+      </div>
 
       <div className="quick-actions">
         <h2>Acciones rápidas</h2>
