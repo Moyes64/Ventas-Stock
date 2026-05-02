@@ -22,16 +22,17 @@
     "postinstall": "node scripts/postinstall.cjs"
   },
   "dependencies": {
+    "axios": "^1.13.5",
     "better-sqlite3": "12.9.0",
+    "date-fns": "^3.3.1",
+    "dotenv": "^16.4.7",
     "node-forge": "^1.4.0",
     "qrcode": "^1.5.3",
-    "thermal-printer-encoder": "^2.0.0-alpha.15",
-    "axios": "^1.13.5",
-    "xml2js": "^0.6.2",
-    "date-fns": "^3.3.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^6.22.1"
+    "react-router-dom": "^6.22.1",
+    "thermal-printer-encoder": "^2.0.0-alpha.15",
+    "xml2js": "^0.6.2"
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config": "^1.0.2",
