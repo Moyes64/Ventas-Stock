@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 
 /** Duration of inactivity (ms) after which hidden options are auto-hidden */
@@ -27,28 +27,28 @@ export function HiddenOptionsProvider({ children }: { children: ReactNode }) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   /** Clear the existing inactivity timer */
-  function clearInactivityTimer() {
+  const clearInactivityTimer = useCallback(() => {
     if (timerRef.current !== null) {
       clearTimeout(timerRef.current)
       timerRef.current = null
     }
-  }
+  }, [])
 
   /** Start (or restart) the 2-minute inactivity timer */
-  function startInactivityTimer() {
+  const startInactivityTimer = useCallback(() => {
     clearInactivityTimer()
     timerRef.current = setTimeout(() => {
       setIsVisible(false)
     }, INACTIVITY_TIMEOUT_MS)
-  }
+  }, [clearInactivityTimer])
 
   /** Handler for user activity events — resets the timer while options are visible */
-  function handleActivity() {
+  const handleActivity = useCallback(() => {
     setIsVisible(prev => {
       if (prev) startInactivityTimer()
       return prev
     })
-  }
+  }, [startInactivityTimer])
 
   useEffect(() => {
     /** Toggle visibility on Ctrl+Shift+N */
@@ -80,8 +80,7 @@ export function HiddenOptionsProvider({ children }: { children: ReactNode }) {
       }
       clearInactivityTimer()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [startInactivityTimer, clearInactivityTimer, handleActivity])
 
   return (
     <HiddenOptionsContext.Provider value={{ isHiddenOptionsVisible: isVisible }}>

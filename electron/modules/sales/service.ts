@@ -52,7 +52,7 @@ export class SaleService {
     let taxAmount = 0
 
     if (input.isBlackSale) {
-      // Black sale (venta en negro): no IVA applied — total equals sum of item prices
+      // Black sale (venta en negro): no IVA applied — total equals base prices (unitPrice stripped of IVA)
       for (const item of input.items) {
         const itemTotal = item.quantity * item.unitPrice
         const taxFactor = item.taxRate / 100
