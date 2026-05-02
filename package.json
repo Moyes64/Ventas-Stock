@@ -19,6 +19,7 @@
     "db:seed:electron": "electron scripts/electron-seed.cjs",
     "typecheck": "tsc --noEmit",
     "package": "electron-vite build && electron-builder",
+    "check:conflicts": "node scripts/check-merge-markers.js",
     "postinstall": "node scripts/postinstall.cjs"
   },
   "dependencies": {
