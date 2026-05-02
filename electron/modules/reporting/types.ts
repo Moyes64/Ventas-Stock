@@ -33,6 +33,9 @@ export interface DailySummaryReport {
   totalGross: number
   totalTax: number
   totalNet: number
+  whiteSalesCount: number
+  whiteSalesTotal: number
+  blackSalesCount: number
   blackSalesTotal: number
 }
 
