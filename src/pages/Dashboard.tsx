@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { reporting, catalog } from '../lib/ipc'
 import type { DailySummaryReport } from '../types/ipc'
+import { useHiddenOptions } from '../context/HiddenOptionsContext'
 
 export default function Dashboard() {
   const [todaySummary, setTodaySummary] = useState<DailySummaryReport | null>(null)
   const [lowStockCount, setLowStockCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { isHiddenOptionsVisible } = useHiddenOptions()
 
   useEffect(() => {
     async function loadData() {
@@ -56,6 +58,12 @@ export default function Dashboard() {
           <div className="stat-value">{lowStockCount}</div>
           <div className="stat-label">Productos bajo stock</div>
         </div>
+        {isHiddenOptionsVisible && (
+          <div className="stat-card stat-card--black">
+            <div className="stat-value">{currency(todaySummary?.blackSalesTotal ?? 0)}</div>
+            <div className="stat-label">Total N hoy</div>
+          </div>
+        )}
       </div>
 
       <div className="quick-actions">

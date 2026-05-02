@@ -108,6 +108,7 @@ export const sales = {
     customerId?: number
     userId?: number
     invoiceType?: number
+    isBlackSale?: boolean
     items: Array<{
       productId: number
       quantity: number

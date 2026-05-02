@@ -19,6 +19,11 @@ export function registerInvoicingHandlers(db: Database): void {
     const sale = saleRepo.findById(saleId)
     if (!sale) return { success: false, error: `Venta no encontrada: ${saleId}` }
 
+    // Black sales are always internal receipts — never send to AFIP
+    if (sale.isBlackSale) {
+      return { success: false, error: 'Las ventas en negro no pueden solicitar CAE (comprobante interno siempre).' }
+    }
+
     const result = await invoicingService.solicitarCAE(sale)
 
     if (result.success && result.cae) {

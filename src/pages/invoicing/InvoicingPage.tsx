@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { invoicing as invoicingApi, printing } from '../../lib/ipc'
 import type { Sale } from '../../types/ipc'
+import { useHiddenOptions } from '../../context/HiddenOptionsContext'
 
 const STATUS_LABELS: Record<string, string> = {
   AUTHORIZED: '✅ Autorizada',
@@ -23,6 +24,8 @@ export default function InvoicingPage() {
   const [retrying, setRetrying] = useState<number | null>(null)
   const [printingId, setPrintingId] = useState<number | null>(null)
   const [printError, setPrintError] = useState<string | null>(null)
+  const [blackFilter, setBlackFilter] = useState<'all' | 'normal' | 'black'>('all')
+  const { isHiddenOptionsVisible } = useHiddenOptions()
 
   async function loadInvoices() {
     setLoading(true)
@@ -102,6 +105,16 @@ export default function InvoicingPage() {
             <option value="INTERNAL_RECEIPT">Comprobantes Internos</option>
           </select>
         </label>
+        {isHiddenOptionsVisible && (
+          <label>
+            Tipo N:
+            <select value={blackFilter} onChange={e => setBlackFilter(e.target.value as 'all' | 'normal' | 'black')} className="select">
+              <option value="all">Todos</option>
+              <option value="normal">Solo normales</option>
+              <option value="black">Solo N (sin IVA)</option>
+            </select>
+          </label>
+        )}
         <button onClick={loadInvoices} className="btn btn-secondary">Buscar</button>
       </div>
 
@@ -126,9 +139,18 @@ export default function InvoicingPage() {
               </tr>
             </thead>
             <tbody>
-              {invoices.map(inv => (
-                <tr key={inv.id}>
-                  <td>{inv.id}</td>
+              {invoices
+                .filter(inv => {
+                  if (blackFilter === 'normal') return !inv.isBlackSale
+                  if (blackFilter === 'black') return inv.isBlackSale
+                  return true
+                })
+                .map(inv => (
+                <tr key={inv.id} className={inv.isBlackSale ? 'row--black-sale' : ''}>
+                  <td>
+                    {inv.id}
+                    {inv.isBlackSale && <span className="badge badge--black" title="Venta N (sin IVA)">N</span>}
+                  </td>
                   <td>{inv.saleDate}</td>
                   <td>{inv.customerName ?? 'Consumidor Final'}</td>
                   <td>{inv.invoiceType ?? '—'}</td>
@@ -151,7 +173,7 @@ export default function InvoicingPage() {
                     )}
                   </td>
                   <td>
-                    {(inv.status === 'PENDING_CAE' || inv.status === 'INTERNAL_RECEIPT') && (
+                    {!inv.isBlackSale && (inv.status === 'PENDING_CAE' || inv.status === 'INTERNAL_RECEIPT') && (
                       <button
                         className="btn btn-secondary btn-sm"
                         onClick={() => handleRetryCAE(inv.id)}

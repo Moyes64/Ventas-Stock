@@ -155,7 +155,8 @@ export class ReportingService {
            SUM(CASE WHEN status = 'INTERNAL_RECEIPT' THEN 1 ELSE 0 END) AS internalReceipts,
            SUM(total) AS totalGross,
            SUM(tax_amount) AS totalTax,
-           SUM(subtotal) AS totalNet
+           SUM(subtotal) AS totalNet,
+           SUM(CASE WHEN is_black_sale = 1 THEN total ELSE 0 END) AS blackSalesTotal
          FROM sales
          ${where}
          GROUP BY sale_date
