@@ -83,6 +83,8 @@ const electronAPI = {
   printing: {
     printSale: (saleId: number) => invoke('printing:printSale', saleId),
     buildTicketData: (saleId: number) => invoke('printing:buildTicketData', saleId),
+    printInvoiceSystem: (saleId: number) => invoke('printing:printInvoiceSystem', saleId),
+    printDeliveryNoteSystem: (saleId: number) => invoke('printing:printDeliveryNoteSystem', saleId),
   },
 
   // Reporting

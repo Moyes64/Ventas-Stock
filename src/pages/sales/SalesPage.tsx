@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { sales } from '../../lib/ipc'
+import { sales, printing } from '../../lib/ipc'
 import type { Sale } from '../../types/ipc'
 
 const STATUS_LABELS: Record<string, string> = {
@@ -23,6 +23,8 @@ export default function SalesPage() {
   const [error, setError] = useState<string | null>(null)
   const [dateFrom, setDateFrom] = useState(new Date().toISOString().slice(0, 10))
   const [dateTo, setDateTo] = useState(new Date().toISOString().slice(0, 10))
+  const [printingId, setPrintingId] = useState<number | null>(null)
+  const [printError, setPrintError] = useState<string | null>(null)
 
   async function loadSales() {
     setLoading(true)
@@ -41,6 +43,21 @@ export default function SalesPage() {
 
   const currency = (n: number) =>
     new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(n)
+
+  async function handlePrint(sale: Sale) {
+    setPrintingId(sale.id)
+    setPrintError(null)
+    try {
+      const res = sale.status === 'AUTHORIZED'
+        ? await printing.printInvoiceSystem(sale.id)
+        : await printing.printDeliveryNoteSystem(sale.id)
+      if (!res.success) setPrintError(res.error ?? 'Error al imprimir')
+    } catch (err) {
+      setPrintError(err instanceof Error ? err.message : 'Error al imprimir')
+    } finally {
+      setPrintingId(null)
+    }
+  }
 
   return (
     <div className="page">
@@ -73,6 +90,7 @@ export default function SalesPage() {
 
       {loading && <p>Cargando...</p>}
       {error && <p className="error">{error}</p>}
+      {printError && <p className="error">{printError}</p>}
 
       {!loading && !error && (
         <>
@@ -87,6 +105,7 @@ export default function SalesPage() {
                   <th>Total</th>
                   <th>Estado</th>
                   <th>CAE</th>
+                  <th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -110,11 +129,21 @@ export default function SalesPage() {
                         <span className="text-muted">—</span>
                       )}
                     </td>
+                    <td>
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => void handlePrint(sale)}
+                        disabled={printingId === sale.id}
+                        title={sale.status === 'AUTHORIZED' ? 'Imprimir Factura' : 'Imprimir Remito'}
+                      >
+                        {printingId === sale.id ? '⏳' : '🖨️'}
+                      </button>
+                    </td>
                   </tr>
                 ))}
                 {saleList.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="empty-row">No hay ventas para el período seleccionado</td>
+                    <td colSpan={7} className="empty-row">No hay ventas para el período seleccionado</td>
                   </tr>
                 )}
               </tbody>

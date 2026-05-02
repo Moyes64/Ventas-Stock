@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { invoicing as invoicingApi } from '../../lib/ipc'
+import { invoicing as invoicingApi, printing } from '../../lib/ipc'
 import type { Sale } from '../../types/ipc'
 
 const STATUS_LABELS: Record<string, string> = {
@@ -21,6 +21,8 @@ export default function InvoicingPage() {
   const [dateTo, setDateTo] = useState(new Date().toISOString().slice(0, 10))
   const [statusFilter, setStatusFilter] = useState('')
   const [retrying, setRetrying] = useState<number | null>(null)
+  const [printingId, setPrintingId] = useState<number | null>(null)
+  const [printError, setPrintError] = useState<string | null>(null)
 
   async function loadInvoices() {
     setLoading(true)
@@ -57,6 +59,21 @@ export default function InvoicingPage() {
     }
   }
 
+  async function handlePrint(inv: Sale) {
+    setPrintingId(inv.id)
+    setPrintError(null)
+    try {
+      const res = inv.status === 'AUTHORIZED'
+        ? await printing.printInvoiceSystem(inv.id)
+        : await printing.printDeliveryNoteSystem(inv.id)
+      if (!res.success) setPrintError(res.error ?? 'Error al imprimir')
+    } catch (err) {
+      setPrintError(err instanceof Error ? err.message : 'Error al imprimir')
+    } finally {
+      setPrintingId(null)
+    }
+  }
+
   const currency = (n: number) =>
     new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(n)
 
@@ -90,6 +107,7 @@ export default function InvoicingPage() {
 
       {loading && <p>Cargando...</p>}
       {error && <p className="error">{error}</p>}
+      {printError && <p className="error">{printError}</p>}
 
       {!loading && (
         <div className="table-container">
@@ -142,6 +160,14 @@ export default function InvoicingPage() {
                         {retrying === inv.id ? '⏳' : '↺ CAE'}
                       </button>
                     )}
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => void handlePrint(inv)}
+                      disabled={printingId === inv.id}
+                      title={inv.status === 'AUTHORIZED' ? 'Imprimir Factura (Sistema)' : 'Imprimir Remito (Sistema)'}
+                    >
+                      {printingId === inv.id ? '⏳' : '🖨️'}
+                    </button>
                   </td>
                 </tr>
               ))}

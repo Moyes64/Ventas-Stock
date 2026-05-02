@@ -204,12 +204,51 @@ Las ventas decrementan automáticamente el stock.
 ### Impresión / QR
 - `qr-generator.ts` genera el QR AFIP (formato RG 4291/2018)
 - `thermal-printer.ts` — stub con documentación ESC/POS
+- `system-printer.ts` — impresión vía diálogo del sistema operativo (sin impresora térmica)
 
 ### Reportes
 Resumen diario, top productos por revenue, stock bajo, movimientos de stock.
 
 ### Respaldos
 Usa la API de backup nativa de SQLite (`db.backup(destPath)`).
+
+---
+
+## 🖨️ Impresión por sistema (sin impresora térmica)
+
+La app incluye un modo de impresión que utiliza **cualquier impresora instalada en el sistema**
+(láser, inkjet, PDF, etc.) hasta que el usuario cuente con una impresora térmica ESC/POS.
+
+### Cómo funciona
+
+1. El proceso principal (Electron) genera una plantilla HTML/CSS con formato de **ticket 80 mm**.
+2. Carga la plantilla en una `BrowserWindow` oculta.
+3. Llama a `webContents.print({ silent: false, printBackground: true })` para abrir el
+   **diálogo de impresión nativo** del sistema operativo.
+4. El usuario elige la impresora (o "Microsoft Print to PDF" en Windows) y confirma.
+
+### Documentos soportados
+
+| Documento | Cuándo aparece |
+|-----------|---------------|
+| **Factura** (Autorizada por AFIP) | Botón 🖨️ en Ventas → al finalizar una venta autorizada |
+| **Remito Interno** | Botón 🖨️ en Ventas → al finalizar una venta no autorizada |
+| **Factura / Remito** | Botón 🖨️ en la columna *Acciones* de Ventas y Facturación |
+
+### Canales IPC involucrados
+
+| Canal | Descripción |
+|-------|-------------|
+| `printing:printInvoiceSystem` | Imprime la factura de una venta como ticket 80 mm |
+| `printing:printDeliveryNoteSystem` | Imprime el remito interno de una venta como ticket 80 mm |
+
+### Compatibilidad
+
+- ✅ Windows (incluye "Microsoft Print to PDF")
+- ✅ macOS
+- ✅ Linux (CUPS)
+- No requiere impresora térmica ni drivers ESC/POS
+- No rompe el flujo térmico existente (`printing:printSale`)
 
 ---
 
