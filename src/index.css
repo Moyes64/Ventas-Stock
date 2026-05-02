@@ -559,6 +559,19 @@ code {
    Hidden Options (Ventas N / sin IVA) — Ctrl+Shift+N
    ============================================================================= */
 
+/* Dashboard: unified stats grid (3 fixed columns for vertical alignment) */
+.stats-dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+/* Invisible spacer to occupy an empty grid cell */
+.stats-dashboard-grid__spacer {
+  visibility: hidden;
+}
+
 /* Dashboard: black sale stat card */
 .stat-card--black {
   border-color: #1e293b;
