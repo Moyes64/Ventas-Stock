@@ -90,7 +90,8 @@
     },
     "win": {
       "target": "nsis",
-      "sign": "./scripts/win-sign.cjs"
+      "sign": "./scripts/win-sign.cjs",
+      "signingHashAlgorithms": []
     },
     "mac": {
       "target": "dmg"
