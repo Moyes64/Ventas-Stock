@@ -170,7 +170,7 @@ pnpm install           # sincronizar dependencias con el package.json actualizad
 
 > Si no necesitás conservar tus cambios locales en `package.json` o
 > `pnpm-lock.yaml` (por ejemplo, si los modificaste intentando arreglar el
-> build manualmente), podés descartalos directamente:
+> build manualmente), podés descartarlos directamente:
 > ```powershell
 > git checkout -- package.json pnpm-lock.yaml
 > git pull
