@@ -76,10 +76,17 @@ function getElectronVersion () {
 // Locate the prebuild-install binary (installed as a dep of better-sqlite3)
 // ---------------------------------------------------------------------------
 function findPrebuildInstall () {
-  const candidates = [
-    path.resolve(root, 'node_modules', '.bin', 'prebuild-install'),
-    path.resolve(root, 'node_modules', '.bin', 'prebuild-install.cmd'),
-  ]
+  // On Windows cmd.exe cannot execute the bare POSIX shim (no extension), so
+  // prefer the .cmd wrapper first on Windows.
+  const candidates = process.platform === 'win32'
+    ? [
+        path.resolve(root, 'node_modules', '.bin', 'prebuild-install.cmd'),
+        path.resolve(root, 'node_modules', '.bin', 'prebuild-install'),
+      ]
+    : [
+        path.resolve(root, 'node_modules', '.bin', 'prebuild-install'),
+        path.resolve(root, 'node_modules', '.bin', 'prebuild-install.cmd'),
+      ]
   for (const c of candidates) {
     if (fs.existsSync(c)) return c
   }
@@ -90,10 +97,16 @@ function findPrebuildInstall () {
 // Locate the @electron/rebuild binary
 // ---------------------------------------------------------------------------
 function findElectronRebuild () {
-  const candidates = [
-    path.resolve(root, 'node_modules', '.bin', 'electron-rebuild'),
-    path.resolve(root, 'node_modules', '.bin', 'electron-rebuild.cmd'),
-  ]
+  // Same Windows preference as findPrebuildInstall: .cmd first.
+  const candidates = process.platform === 'win32'
+    ? [
+        path.resolve(root, 'node_modules', '.bin', 'electron-rebuild.cmd'),
+        path.resolve(root, 'node_modules', '.bin', 'electron-rebuild'),
+      ]
+    : [
+        path.resolve(root, 'node_modules', '.bin', 'electron-rebuild'),
+        path.resolve(root, 'node_modules', '.bin', 'electron-rebuild.cmd'),
+      ]
   for (const c of candidates) {
     if (fs.existsSync(c)) return c
   }
