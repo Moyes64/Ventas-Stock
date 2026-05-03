@@ -87,8 +87,10 @@ pnpm dev          # arranca la app y aplica migraciones automáticamente
 ```
 
 El script `postinstall` detecta automáticamente la versión de Electron
-instalada y descarga el binario correcto de GitHub Releases usando
-`prebuild-install`.  **No es necesario compilar desde fuente.**
+instalada y compila (o descarga) el binario correcto usando
+`@electron/rebuild`.  **No es necesario compilar desde fuente ni instalar
+Visual Studio Build Tools** — `@electron/rebuild` descarga el prebuild
+apropiado para el ABI de Electron 39 (v140) desde GitHub Releases.
 
 > **Nota:** la variable de entorno `PNPM_SKIP_POSTINSTALL` ya no es
 > necesaria para desarrollo.  Sigue siendo respetada si la tenés seteada
@@ -122,12 +124,21 @@ pnpm dev                   # inicia la app (también aplica migraciones al arran
 
 ### Empaquetar la app en Windows (`pnpm package`)
 
-Para generar el instalador `.exe` se puede usar el mismo flujo, ya que
-`electron-builder` descargará los mismos binarios precompilados:
+Para generar el instalador `.exe`:
 
 ```powershell
 pnpm package
 ```
+
+El script `package` realiza tres pasos en orden:
+
+1. **`electron-vite build`** — compila el bundle de la app.
+2. **`electron-rebuild -f -w better-sqlite3`** — recompila el addon nativo
+   para el ABI de Electron instalado.  Esto garantiza que el binario
+   incluido en el instalador sea compatible con el runtime empaquetado.
+3. **`electron-builder`** — empaqueta todo.  La opción `npmRebuild: false`
+   evita que electron-builder intente recompilar (y falle con pnpm en
+   Windows); la compilación ya fue hecha en el paso anterior.
 
 Las migraciones SQL se incluyen automáticamente en el instalador como
 `extraResources` (`resources/database/migrations/`), por lo que la app
@@ -138,6 +149,33 @@ al repositorio.
 > una arquitectura no soportada por los prebuilds), necesitarás
 > **Visual Studio Build Tools 2022** con la carga de trabajo
 > "Desarrollo de escritorio con C++" y **Python 3.x** en el `PATH`.
+
+### Resolver conflictos de `git pull` en archivos de paquete
+
+Si `git pull` falla con un error como:
+
+```
+error: Your local changes to the following files would be overwritten by merge:
+  package.json  pnpm-lock.yaml  src/pages/...
+```
+
+guardá tus cambios locales, traé la versión remota y luego reaplicá lo tuyo:
+
+```powershell
+git stash              # guarda cambios locales temporalmente
+git pull               # trae los cambios del repositorio remoto
+git stash pop          # reaplicar tus cambios (resolver conflictos si los hay)
+pnpm install           # sincronizar dependencias con el package.json actualizado
+```
+
+> Si no necesitás conservar tus cambios locales en `package.json` o
+> `pnpm-lock.yaml` (por ejemplo, si los modificaste intentando arreglar el
+> build manualmente), podés descartalos directamente:
+> ```powershell
+> git checkout -- package.json pnpm-lock.yaml
+> git pull
+> pnpm install
+> ```
 
 ---
 
