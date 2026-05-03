@@ -19,7 +19,7 @@
     "db:seed:electron": "electron scripts/electron-seed.cjs",
     "typecheck": "tsc --noEmit",
     "rebuild": "electron-rebuild -f -w better-sqlite3",
-    "package": "electron-vite build && electron-rebuild -f -w better-sqlite3 && electron-builder",
+    "package": "node scripts/package.cjs",
     "check:conflicts": "node scripts/check-merge-markers.js",
     "postinstall": "node scripts/postinstall.cjs"
   },
@@ -89,7 +89,8 @@
       "target": "AppImage"
     },
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "sign": "./scripts/win-sign.cjs"
     },
     "mac": {
       "target": "dmg"
