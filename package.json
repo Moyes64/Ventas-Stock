@@ -18,7 +18,8 @@
     "db:migrate:electron": "electron scripts/electron-migrate.cjs",
     "db:seed:electron": "electron scripts/electron-seed.cjs",
     "typecheck": "tsc --noEmit",
-    "package": "electron-vite build && electron-builder",
+    "rebuild": "electron-rebuild -f -w better-sqlite3",
+    "package": "electron-vite build && electron-rebuild -f -w better-sqlite3 && electron-builder",
     "check:conflicts": "node scripts/check-merge-markers.js",
     "postinstall": "node scripts/postinstall.cjs"
   },
@@ -52,6 +53,7 @@
     "@typescript-eslint/parser": "^7.0.2",
     "@vitejs/plugin-react": "^4.2.1",
     "electron": "^39.8.1",
+    "@electron/rebuild": "^3.7.1",
     "electron-builder": "^24.9.1",
     "electron-vite": "^2.0.0",
     "eslint": "^8.56.0",
@@ -82,6 +84,7 @@
         "to": "database/migrations"
       }
     ],
+    "npmRebuild": false,
     "linux": {
       "target": "AppImage"
     },
