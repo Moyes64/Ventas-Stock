@@ -89,7 +89,8 @@
       "target": "AppImage"
     },
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "sign": "./scripts/win-sign.cjs"
     },
     "mac": {
       "target": "dmg"

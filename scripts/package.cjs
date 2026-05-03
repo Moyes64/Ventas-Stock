@@ -5,14 +5,20 @@
  * Package script for Ventas-Stock.
  *
  * Wraps the standard `electron-vite build && electron-rebuild && electron-builder`
- * pipeline with two important environment overrides for Windows compatibility:
+ * pipeline with environment overrides for Windows compatibility:
  *
  *   CSC_IDENTITY_AUTO_DISCOVERY=false
- *     Prevents electron-builder from probing the Windows certificate store for
- *     code-signing certificates.  Without this, electron-builder downloads the
- *     `winCodeSign` binary archive which contains macOS .dylib symlinks;
- *     extracting those on a non-admin Windows session (without Developer Mode)
- *     fails with "Cannot create symbolic link: insufficient privilege".
+ *     Belt-and-suspenders guard: prevents electron-builder from probing the
+ *     Windows certificate store for code-signing certificates.
+ *
+ *     NOTE: In electron-builder 24.x this flag alone does NOT prevent the
+ *     `winCodeSign` binary archive from being downloaded.  The archive contains
+ *     macOS .dylib symlinks; extracting those on a non-admin Windows session
+ *     (without Developer Mode / SeCreateSymbolicLinkPrivilege) fails with
+ *     "Cannot create symbolic link: insufficient privilege".
+ *     The actual fix is `build.win.sign` in package.json pointing to
+ *     scripts/win-sign.cjs, which short-circuits the entire signing code-path
+ *     (including the winCodeSign download) in electron-builder.
  *
  *   USE_HARD_LINKS=false
  *     Avoids rare pnpm hard-link issues on Windows during the packaging step.
