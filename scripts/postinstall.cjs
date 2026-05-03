@@ -10,15 +10,17 @@
  * Strategy
  * --------
  * 1. Resolve the Electron version from the local installation.
- * 2. Run `prebuild-install` for better-sqlite3 directly, targeting that
- *    Electron version.  better-sqlite3 >=12.9.0 ships prebuilt binaries for
- *    every supported Electron ABI (including v140 for Electron 39) on all
- *    platforms, so NO C++ toolchain is required.
- * 3. Falls back to `electron-builder install-app-deps` only when
- *    prebuild-install is not available (e.g. CI packaging builds).
+ * 2. Locate the `prebuild-install` binary or script. With pnpm the binary is
+ *    NOT hoisted to the root `node_modules/.bin/`; instead it lives in the
+ *    virtual-store scope directory alongside `better-sqlite3`.  We resolve
+ *    the `better-sqlite3` symlink to find that scoped `.bin/` directory, or
+ *    fall back to running `prebuild-install/bin.js` directly with the current
+ *    Node.js executable (most portable — no shell, no .cmd wrapper needed).
+ * 3. better-sqlite3 >=12.9.0 ships prebuilt binaries for every supported
+ *    Electron ABI (including v140 for Electron 39) on all platforms, so no
+ *    C++ toolchain is required.
  *
- * Set PNPM_SKIP_POSTINSTALL=1 to skip this step entirely (not normally
- * needed anymore, but preserved for compatibility).
+ * Set PNPM_SKIP_POSTINSTALL=1 to skip this step entirely.
  */
 
 if (process.env.PNPM_SKIP_POSTINSTALL || process.env.SKIP_ELECTRON_BUILDER_INSTALL_APP_DEPS) {
@@ -69,20 +71,6 @@ function getElectronVersion () {
 }
 
 // ---------------------------------------------------------------------------
-// Locate the prebuild-install binary (installed as a dep of better-sqlite3)
-// ---------------------------------------------------------------------------
-function findPrebuildInstall () {
-  const candidates = [
-    path.resolve(__dirname, '..', 'node_modules', '.bin', 'prebuild-install'),
-    path.resolve(__dirname, '..', 'node_modules', '.bin', 'prebuild-install.cmd'),
-  ]
-  for (const c of candidates) {
-    if (fs.existsSync(c)) return c
-  }
-  return 'prebuild-install'  // hope it's on PATH
-}
-
-// ---------------------------------------------------------------------------
 // Locate the better-sqlite3 module directory
 // ---------------------------------------------------------------------------
 function findBs3Dir () {
@@ -96,13 +84,62 @@ function findBs3Dir () {
 }
 
 // ---------------------------------------------------------------------------
+// Locate the prebuild-install binary (installed as a dep of better-sqlite3).
+//
+// With pnpm, transitive-dep binaries are NOT hoisted to the root
+// node_modules/.bin/.  Instead they live in the pnpm virtual-store scope
+// directory that sits next to the better-sqlite3 package itself, e.g.:
+//   node_modules/.pnpm/better-sqlite3@X.Y.Z_.../node_modules/.bin/prebuild-install[.cmd]
+//
+// We resolve the better-sqlite3 symlink to find that scope, then look there
+// before falling back to a plain node execution of the bin.js script.
+// ---------------------------------------------------------------------------
+function findPrebuildInstall (bs3Dir) {
+  const candidates = [
+    // Standard: npm/yarn/pnpm hoisted layout
+    path.resolve(__dirname, '..', 'node_modules', '.bin', 'prebuild-install'),
+    path.resolve(__dirname, '..', 'node_modules', '.bin', 'prebuild-install.cmd'),
+  ]
+
+  // pnpm virtual-store: follow the better-sqlite3 symlink to find the scoped .bin/
+  if (bs3Dir) {
+    try {
+      const realBs3 = fs.realpathSync(bs3Dir)
+      const scopeDir = path.dirname(realBs3) // …/.pnpm/better-sqlite3@X/node_modules/
+      candidates.push(path.join(scopeDir, '.bin', 'prebuild-install'))
+      candidates.push(path.join(scopeDir, '.bin', 'prebuild-install.cmd'))
+    } catch (_) { /* ignore */ }
+  }
+
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return { cmd: c, useNode: false }
+  }
+  return null
+}
+
+// ---------------------------------------------------------------------------
+// Locate prebuild-install/bin.js for direct node execution (last resort).
+// This is the most portable approach: no shell quoting, no .cmd wrapper.
+// ---------------------------------------------------------------------------
+function findPrebuildInstallScript (bs3Dir) {
+  if (bs3Dir) {
+    try {
+      const realBs3 = fs.realpathSync(bs3Dir)
+      const scopeDir = path.dirname(realBs3)
+      const binJs = path.join(scopeDir, 'prebuild-install', 'bin.js')
+      if (fs.existsSync(binJs)) return binJs
+    } catch (_) { /* ignore */ }
+  }
+  return null
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 const electronVersion = getElectronVersion()
 if (!electronVersion) {
-  console.warn('[postinstall] Could not determine Electron version; falling back to electron-builder install-app-deps.')
-  const r = spawnSync('electron-builder', ['install-app-deps'], { stdio: 'inherit', shell: true })
-  process.exit(r.status ?? 1)
+  console.warn('[postinstall] Could not determine Electron version; skipping native rebuild.')
+  process.exit(0)
 }
 
 console.log(`[postinstall] Electron ${electronVersion} detected -- downloading better-sqlite3 prebuilt binary...`)
@@ -113,8 +150,7 @@ if (!bs3Dir) {
   process.exit(0)
 }
 
-const prebuildInstall = findPrebuildInstall()
-const args = [
+const prebuildArgs = [
   '--runtime=electron',
   `--target=${electronVersion}`,
   '--arch=' + (process.env.npm_config_arch || process.arch),
@@ -122,16 +158,38 @@ const args = [
   '--tag-prefix=v',
 ]
 
-const result = spawnSync(prebuildInstall, args, {
+// Resolve how to invoke prebuild-install
+let spawnCmd
+let spawnArgs
+let spawnShell = false
+
+const found = findPrebuildInstall(bs3Dir)
+if (found) {
+  spawnCmd = found.cmd
+  spawnArgs = prebuildArgs
+  // .cmd files on Windows need shell: true; POSIX binaries do not
+  spawnShell = found.cmd.endsWith('.cmd')
+} else {
+  const binJs = findPrebuildInstallScript(bs3Dir)
+  if (binJs) {
+    // Run the script directly with the current Node.js binary — no shell needed
+    spawnCmd = process.execPath
+    spawnArgs = [binJs, ...prebuildArgs]
+    spawnShell = false
+  } else {
+    console.warn('[postinstall] prebuild-install not found in node_modules; skipping native rebuild.')
+    process.exit(0)
+  }
+}
+
+const result = spawnSync(spawnCmd, spawnArgs, {
   stdio: 'inherit',
-  shell: process.platform === 'win32',
+  shell: spawnShell,
   cwd: bs3Dir,
 })
 
 if (result.status !== 0) {
-  console.warn('[postinstall] prebuild-install failed; falling back to electron-builder install-app-deps.')
-  const r2 = spawnSync('electron-builder', ['install-app-deps'], { stdio: 'inherit', shell: true })
-  process.exit(r2.status ?? 1)
+  console.warn('[postinstall] prebuild-install failed (exit ' + result.status + '); native module may not work until rebuilt.')
 }
 
-process.exit(0)
+process.exit(result.status ?? 0)
