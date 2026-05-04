@@ -122,19 +122,20 @@ pnpm db:seed:electron      # carga datos iniciales con el binary de Electron
 pnpm dev                   # inicia la app (también aplica migraciones al arrancar)
 ```
 
-### Empaquetar la app en Windows (`pnpm package-win`)
+### Empaquetar la app en Windows (`pnpm package`)
 
-Para generar el instalador `.exe`:
+Para generar el instalador `.exe` basta con:
 
 ```powershell
-pnpm package-win
+pnpm install
+pnpm package
 ```
 
-> **Nota:** El script `package:win` (con dos puntos) está definido en `package.json` para
-> compatibilidad con Linux/macOS, pero **no funciona en Windows** porque pnpm en Windows
-> no puede resolver scripts con dos puntos en el nombre
-> (`ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL: Command "package:win" not found`).
-> Usá siempre `pnpm package-win` (con guion) en Windows.
+> **Importante:** No uses `pnpm package:win` ni `pnpm package-win`.
+> Esos scripts tienen problemas en Windows: pnpm no puede resolver nombres
+> de scripts con dos puntos (`:`) y en algunos entornos tampoco con guion seguido de
+> `win`. El script `pnpm package` detecta automáticamente que está corriendo en
+> Windows y le pasa `--win` a `electron-builder` internamente.
 
 El script `package` realiza tres pasos en orden:
 
@@ -142,9 +143,9 @@ El script `package` realiza tres pasos en orden:
 2. **`electron-rebuild -f -w better-sqlite3`** — recompila el addon nativo
    para el ABI de Electron instalado.  Esto garantiza que el binario
    incluido en el instalador sea compatible con el runtime empaquetado.
-3. **`electron-builder`** — empaqueta todo.  La opción `npmRebuild: false`
-   evita que electron-builder intente recompilar (y falle con pnpm en
-   Windows); la compilación ya fue hecha en el paso anterior.
+3. **`electron-builder --win`** — empaqueta todo y genera el instalador NSIS `.exe`.
+   La opción `npmRebuild: false` evita que electron-builder intente recompilar
+   (y falle con pnpm en Windows); la compilación ya fue hecha en el paso anterior.
 
 Las migraciones SQL se incluyen automáticamente en el instalador como
 `extraResources` (`resources/database/migrations/`), por lo que la app
@@ -396,8 +397,7 @@ NewSalePage.handleCheckout()
 | `pnpm db:seed:node` | Ídem — explícitamente con Node/tsx runtime |
 | `pnpm db:seed:electron` | Carga datos iniciales usando el runtime Electron (recomendado en Windows) |
 | `pnpm typecheck` | Verifica tipos TypeScript sin compilar |
-| `pnpm package` | Build + empaqueta instalador (plataforma actual) |
-| `pnpm package-win` | Build + empaqueta instalador `.exe` para Windows (usar en Windows en lugar de `package:win`) |
+| `pnpm package` | Build + empaqueta instalador (detecta automáticamente la plataforma; en Windows genera el `.exe`) |
 
 ---
 

@@ -84,6 +84,12 @@ run(bin('electron-rebuild'), ['-f', '-w', 'better-sqlite3'])
 // ---------------------------------------------------------------------------
 // 3. Package with electron-builder (code signing is intentionally disabled)
 //    Extra arguments (e.g. --win, --linux, --mac) are forwarded as-is.
+//    When running on Windows without an explicit platform flag, --win is
+//    added automatically so that the target platform is always explicit.
 // ---------------------------------------------------------------------------
+const platformFlags = ['--win', '--mac', '--linux', '-w', '-m', '-l']
 const extraArgs = process.argv.slice(2)
+if (process.platform === 'win32' && !extraArgs.some(a => platformFlags.includes(a))) {
+  extraArgs.push('--win')
+}
 run(bin('electron-builder'), extraArgs)
