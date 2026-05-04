@@ -1,0 +1,63 @@
+name: Build Windows Installer
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-win:
+    name: Build NSIS installer (Windows)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '8'
+
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
+      - name: Install dependencies
+        # --ignore-scripts skips the postinstall electron-rebuild step; package:win
+        # runs electron-rebuild itself as part of the packaging pipeline.
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Build Windows installer
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          USE_HARD_LINKS: 'false'
+        run: pnpm package:win
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ventas-stock-windows-installer
+          # electron-builder outputs to the directory defined in package.json
+          # build.directories.output ("release/"). NSIS produces a single .exe.
+          path: release/*.exe
+          if-no-files-found: error
+          retention-days: 30
