@@ -165,15 +165,17 @@ function seedWinCodeSignCache () {
   console.log('[package] Pre-seeding winCodeSign cache (skipping macOS symlinks)...')
   console.log(`[package] Cache target: ${cacheDir}`)
 
-  // curl.exe ships with Windows 10 1803+; use it for a synchronous download
-  const dl = spawnSync(
-    'curl.exe',
-    ['-L', '--silent', '--show-error', '--fail', '-o', tmpArchive, WIN_CODE_SIGN_URL],
-    { stdio: 'inherit', shell: false }
-  )
+  // Download using Node.js built-in https module to avoid curl SSL issues on Windows
+  // (curl.exe can fail with CRYPT_E_NO_REVOCATION_CHECK on certain corporate/home networks)
+  try {
+    downloadFileSync(WIN_CODE_SIGN_URL, tmpArchive)
+  } catch (err) {
+    console.warn(`[package] winCodeSign download failed: ${err.message} — electron-builder will retry`)
+    return
+  }
 
-  if (dl.status !== 0 || !fs.existsSync(tmpArchive)) {
-    console.warn(`[package] winCodeSign download failed (exit ${dl.status}) — electron-builder will retry`)
+  if (!fs.existsSync(tmpArchive)) {
+    console.warn('[package] winCodeSign archive not found after download — electron-builder will retry')
     return
   }
   console.log(`[package] Downloaded to: ${tmpArchive}`)
@@ -245,4 +247,53 @@ function find7za () {
   if (fs.existsSync(classic)) return classic
 
   return null
+}
+
+/**
+ * Synchronously download a URL to a local file, following redirects.
+ * Uses Node.js built-in https module to avoid curl SSL issues on Windows
+ * (e.g. CRYPT_E_NO_REVOCATION_CHECK on corporate/home networks).
+ *
+ * @param {string} url  HTTPS URL to download
+ * @param {string} dest Local file path to write to
+ */
+function downloadFileSync (url, dest) {
+  // We need synchronous behaviour; use a shared-memory approach via spawnSync
+  // calling a small inline Node script in a subprocess so we stay synchronous
+  // without requiring external packages.
+  const script = `
+    const https = require('https');
+    const http  = require('http');
+    const fs    = require('fs');
+    const url   = require('url');
+
+    function download(src, dst, redirects) {
+      if (redirects > 10) { process.stderr.write('Too many redirects\\n'); process.exit(1); }
+      const mod = src.startsWith('https') ? https : http;
+      const req = mod.get(src, (res) => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          return download(res.headers.location, dst, redirects + 1);
+        }
+        if (res.statusCode !== 200) {
+          process.stderr.write('HTTP ' + res.statusCode + '\\n');
+          process.exit(1);
+        }
+        const out = fs.createWriteStream(dst);
+        res.pipe(out);
+        out.on('finish', () => { out.close(); process.exit(0); });
+        out.on('error', (e) => { process.stderr.write(e.message + '\\n'); process.exit(1); });
+      });
+      req.on('error', (e) => { process.stderr.write(e.message + '\\n'); process.exit(1); });
+    }
+
+    download(process.argv[2], process.argv[3], 0);
+  `
+  const result = spawnSync(process.execPath, ['-e', script, url, dest], {
+    stdio: ['ignore', 'inherit', 'pipe'],
+    timeout: 120_000,
+  })
+  if (result.status !== 0) {
+    const errMsg = result.stderr ? result.stderr.toString().trim() : `exit ${result.status}`
+    throw new Error(errMsg || `download exited with code ${result.status}`)
+  }
 }
