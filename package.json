@@ -87,6 +87,9 @@
       }
     ],
     "npmRebuild": false,
+    "asarUnpack": [
+      "**/*.node"
+    ],
     "linux": {
       "target": "AppImage"
     },
