@@ -122,13 +122,19 @@ pnpm db:seed:electron      # carga datos iniciales con el binary de Electron
 pnpm dev                   # inicia la app (también aplica migraciones al arrancar)
 ```
 
-### Empaquetar la app en Windows (`pnpm package`)
+### Empaquetar la app en Windows (`pnpm package-win`)
 
 Para generar el instalador `.exe`:
 
 ```powershell
-pnpm package
+pnpm package-win
 ```
+
+> **Nota:** El script `package:win` (con dos puntos) está definido en `package.json` para
+> compatibilidad con Linux/macOS, pero **no funciona en Windows** porque pnpm en Windows
+> no puede resolver scripts con dos puntos en el nombre
+> (`ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL: Command "package:win" not found`).
+> Usá siempre `pnpm package-win` (con guion) en Windows.
 
 El script `package` realiza tres pasos en orden:
 
@@ -390,7 +396,8 @@ NewSalePage.handleCheckout()
 | `pnpm db:seed:node` | Ídem — explícitamente con Node/tsx runtime |
 | `pnpm db:seed:electron` | Carga datos iniciales usando el runtime Electron (recomendado en Windows) |
 | `pnpm typecheck` | Verifica tipos TypeScript sin compilar |
-| `pnpm package` | Build + empaqueta instalador |
+| `pnpm package` | Build + empaqueta instalador (plataforma actual) |
+| `pnpm package-win` | Build + empaqueta instalador `.exe` para Windows (usar en Windows en lugar de `package:win`) |
 
 ---
 
