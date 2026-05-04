@@ -128,59 +128,121 @@ function seedWinCodeSignCache () {
     `https://github.com/electron-userland/electron-builder-binaries/releases/download/winCodeSign-${WIN_CODE_SIGN_VERSION}/winCodeSign-${WIN_CODE_SIGN_VERSION}.7z`
 
   const localAppData = process.env.LOCALAPPDATA
-  if (!localAppData) return
+  if (!localAppData) {
+    console.warn('[package] LOCALAPPDATA not set — skipping winCodeSign pre-seed')
+    return
+  }
 
+  // electron-builder caches binaries at:
+  //   %LOCALAPPDATA%\electron-builder\Cache\winCodeSign\winCodeSign-<version>
+  // If that directory exists, electron-builder skips its own download.
   const cacheDir = path.join(
     localAppData,
     'electron-builder', 'Cache', 'winCodeSign',
     `winCodeSign-${WIN_CODE_SIGN_VERSION}`
   )
 
-  if (fs.existsSync(cacheDir)) {
-    return // cache already valid — nothing to do
-  }
-
-  // Locate the 7za binary bundled by electron-builder's 7zip-bin dependency
-  let sevenZaBin
-  try {
-    ;({ path7za: sevenZaBin } = require('7zip-bin'))
-  } catch {
-    console.warn('[package] 7zip-bin not found — skipping winCodeSign pre-seed')
+  if (fs.existsSync(path.join(cacheDir, 'win'))) {
+    console.log('[package] winCodeSign cache already present — skipping pre-seed')
     return
   }
 
-  const tmpArchive = path.join(os.tmpdir(), `winCodeSign-${WIN_CODE_SIGN_VERSION}.7z`)
+  // -------------------------------------------------------------------------
+  // Locate 7za.exe bundled with the 7zip-bin package.
+  //
+  // In pnpm, transitive dependencies are NOT hoisted so require('7zip-bin')
+  // from our script fails.  We search the .pnpm virtual store manually.
+  // -------------------------------------------------------------------------
+  const sevenZaBin = find7za()
+  if (!sevenZaBin) {
+    console.warn('[package] 7za.exe not found — skipping winCodeSign pre-seed')
+    return
+  }
+  console.log(`[package] Found 7za: ${sevenZaBin}`)
+
+  const tmpArchive = path.join(os.tmpdir(), `winCodeSign-${WIN_CODE_SIGN_VERSION}-preseed.7z`)
 
   console.log('[package] Pre-seeding winCodeSign cache (skipping macOS symlinks)...')
+  console.log(`[package] Cache target: ${cacheDir}`)
 
   // curl.exe ships with Windows 10 1803+; use it for a synchronous download
   const dl = spawnSync(
     'curl.exe',
-    ['-L', '--silent', '--show-error', '-o', tmpArchive, WIN_CODE_SIGN_URL],
+    ['-L', '--silent', '--show-error', '--fail', '-o', tmpArchive, WIN_CODE_SIGN_URL],
     { stdio: 'inherit', shell: false }
   )
 
   if (dl.status !== 0 || !fs.existsSync(tmpArchive)) {
-    console.warn('[package] winCodeSign download failed — electron-builder will retry on its own')
+    console.warn(`[package] winCodeSign download failed (exit ${dl.status}) — electron-builder will retry`)
     return
   }
+  console.log(`[package] Downloaded to: ${tmpArchive}`)
 
-  fs.mkdirSync(path.dirname(cacheDir), { recursive: true })
+  // Create the target directory before extraction.
+  // IMPORTANT: 7za extracts archive *contents* (win/, darwin/, …) directly
+  // into the output directory.  The target must be cacheDir itself so the
+  // result is cacheDir/win/x64/rcedit.exe  (not cacheDir/../win/x64/…).
+  fs.mkdirSync(cacheDir, { recursive: true })
 
   // -snl  skip symbolic links (avoids "insufficient privilege" on Windows)
   // -bd   suppress progress indicator
   // -y    assume Yes on all queries
-  spawnSync(
+  const extract = spawnSync(
     sevenZaBin,
-    ['x', '-bd', '-snl', '-y', tmpArchive, `-o${path.dirname(cacheDir)}`],
+    ['x', '-bd', '-snl', '-y', tmpArchive, `-o${cacheDir}`],
     { stdio: 'inherit', shell: false }
   )
+  console.log(`[package] 7za extraction exit code: ${extract.status}`)
 
   try { fs.unlinkSync(tmpArchive) } catch { /* best-effort cleanup */ }
 
-  if (fs.existsSync(cacheDir)) {
-    console.log('[package] winCodeSign cache ready')
+  if (fs.existsSync(path.join(cacheDir, 'win'))) {
+    console.log('[package] winCodeSign cache ready ✓')
   } else {
-    console.warn('[package] winCodeSign pre-seed incomplete — electron-builder will retry on its own')
+    console.warn('[package] winCodeSign pre-seed incomplete — electron-builder will attempt its own extraction')
   }
+}
+
+/**
+ * Locate the 7za.exe binary from the 7zip-bin package.
+ *
+ * pnpm does not hoist transitive dependencies, so require('7zip-bin') from
+ * our top-level script fails.  Instead we search the pnpm virtual store
+ * (.pnpm/<name>@<version>/node_modules/<name>) and fall back to common npm/
+ * yarn paths.
+ *
+ * @returns {string|null} Absolute path to 7za.exe, or null if not found.
+ */
+function find7za () {
+  // Method 1: direct require (works under npm / yarn / hoisted pnpm)
+  try {
+    const { path7za } = require('7zip-bin')
+    if (path7za && fs.existsSync(path7za)) return path7za
+  } catch { /* not hoisted */ }
+
+  // Method 2: resolve relative to electron-builder (which depends on 7zip-bin)
+  try {
+    const ebMainPath = require.resolve('electron-builder')
+    const p7 = require.resolve('7zip-bin', { paths: [path.dirname(ebMainPath)] })
+    const { path7za } = require(p7)
+    if (path7za && fs.existsSync(path7za)) return path7za
+  } catch { /* not resolvable */ }
+
+  // Method 3: scan the pnpm virtual store (most reliable for strict pnpm)
+  const pnpmStore = path.resolve(root, 'node_modules', '.pnpm')
+  if (fs.existsSync(pnpmStore)) {
+    for (const entry of fs.readdirSync(pnpmStore)) {
+      if (!entry.startsWith('7zip-bin@')) continue
+      const candidate = path.join(
+        pnpmStore, entry, 'node_modules', '7zip-bin', 'win', 'x64', '7za.exe'
+      )
+      if (fs.existsSync(candidate)) return candidate
+    }
+  }
+
+  // Method 4: well-known path under node_modules (classic npm/yarn)
+  const classic = path.resolve(root, 'node_modules', '7zip-bin', 'win', 'x64', '7za.exe')
+  if (fs.existsSync(classic)) return classic
+
+  return null
 }
