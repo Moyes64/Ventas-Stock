@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
 import SalesPage from './pages/sales/SalesPage'
@@ -16,7 +16,7 @@ import { HiddenOptionsProvider } from './context/HiddenOptionsContext'
 export default function App() {
   return (
     <HiddenOptionsProvider>
-      <BrowserRouter>
+      <HashRouter>
         <Routes>
           <Route path="/" element={<Layout />}>
             <Route index element={<Navigate to="/dashboard" replace />} />
@@ -34,7 +34,7 @@ export default function App() {
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Route>
         </Routes>
-      </BrowserRouter>
+      </HashRouter>
     </HiddenOptionsProvider>
   )
 }
