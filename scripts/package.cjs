@@ -83,5 +83,7 @@ run(bin('electron-rebuild'), ['-f', '-w', 'better-sqlite3'])
 
 // ---------------------------------------------------------------------------
 // 3. Package with electron-builder (code signing is intentionally disabled)
+//    Extra arguments (e.g. --win, --linux, --mac) are forwarded as-is.
 // ---------------------------------------------------------------------------
-run(bin('electron-builder'), [])
+const extraArgs = process.argv.slice(2)
+run(bin('electron-builder'), extraArgs)
