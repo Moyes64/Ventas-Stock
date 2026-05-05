@@ -130,6 +130,7 @@ export function buildSoapEnvelope(
   request: CAERequest
 ): string {
   const factura = request.facturas[0]
+  if (!factura) throw new Error('La solicitud debe contener al menos una factura')
   const ivaItems = factura.iva
     ?.map(
       a => `<AlicIva><Id>${a.id}</Id><BaseImp>${a.baseImp.toFixed(2)}</BaseImp><Importe>${a.importe.toFixed(2)}</Importe></AlicIva>`
