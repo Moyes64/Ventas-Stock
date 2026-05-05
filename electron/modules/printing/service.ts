@@ -90,11 +90,8 @@ export class PrintingService {
       )
     }
 
-    // Calculate gross subtotal (before parameter adjustments) from item lines
-    const grossSubtotal = items.reduce((sum, item) => {
-      const taxFactor = item.taxRate / 100
-      return sum + item.subtotal / (1 + taxFactor)
-    }, 0)
+    // Calculate gross subtotal (before parameter adjustments) from item lines, including IVA
+    const grossSubtotal = items.reduce((sum, item) => sum + item.subtotal, 0)
 
     // Build discount lines (only tipo='-') from persisted sale_parameters.
     // Surcharges (tipo='+') still update runningBase to keep amounts accurate

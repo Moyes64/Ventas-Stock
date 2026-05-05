@@ -69,8 +69,6 @@ export function printTicket(ticketData: TicketData): void {
   }
 
   console.log('-'.repeat(48))
-  console.log(`${'Subtotal:'.padEnd(36)}$${ticketData.subtotal.toFixed(2).padStart(10)}`)
-  console.log(`${'IVA:'.padEnd(36)}$${ticketData.taxAmount.toFixed(2).padStart(10)}`)
   console.log(`${'TOTAL:'.padEnd(36)}$${ticketData.total.toFixed(2).padStart(10)}`)
   console.log('-'.repeat(48))
 
