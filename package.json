@@ -21,6 +21,7 @@
     "rebuild": "electron-rebuild -f -w better-sqlite3",
     "package": "node scripts/package.cjs",
     "package:win": "node scripts/package.cjs --win",
+    "package-win": "node scripts/package.cjs --win",
     "check:conflicts": "node scripts/check-merge-markers.js",
     "postinstall": "node scripts/postinstall.cjs"
   },
@@ -86,6 +87,9 @@
       }
     ],
     "npmRebuild": false,
+    "asarUnpack": [
+      "**/*.node"
+    ],
     "linux": {
       "target": "AppImage"
     },

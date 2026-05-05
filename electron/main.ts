@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, shell, dialog } from 'electron'
 import path from 'path'
 import { config as dotenvConfig } from 'dotenv'
 import { getDb, closeDb } from '../database/db'
@@ -19,6 +19,13 @@ const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
     console.warn(`[main] .env not loaded from "${envPath}":`, error.message)
   } else {
     console.debug(`[main] .env loaded from "${envPath}"`)
+  }
+
+  // In production the app ships without a .env, so DB_PATH is unset.
+  // Use the platform-appropriate user-data directory so the DB is always
+  // written to a writable location (e.g. %APPDATA%\ventas-stock\ on Windows).
+  if (!process.env.DB_PATH) {
+    process.env.DB_PATH = path.join(app.getPath('userData'), 'ventas.db')
   }
 }
 
@@ -65,7 +72,12 @@ async function bootstrap(): Promise<void> {
     registerAllIpcHandlers(db)
     console.log('[main] Database initialized and IPC handlers registered')
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
     console.error('[main] Failed to initialize database:', err)
+    dialog.showErrorBox(
+      'Error al iniciar la aplicación',
+      `No se pudo inicializar la base de datos:\n\n${message}\n\nRuta: ${process.env.DB_PATH ?? '(no definida)'}`,
+    )
     app.quit()
     return
   }

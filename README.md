@@ -124,21 +124,31 @@ pnpm dev                   # inicia la app (también aplica migraciones al arran
 
 ### Empaquetar la app en Windows (`pnpm package`)
 
-Para generar el instalador `.exe`:
+Para generar el instalador `.exe` basta con:
 
 ```powershell
+pnpm install
 pnpm package
 ```
 
-El script `package` realiza tres pasos en orden:
+El script `package` realiza los siguientes pasos automáticamente:
 
 1. **`electron-vite build`** — compila el bundle de la app.
 2. **`electron-rebuild -f -w better-sqlite3`** — recompila el addon nativo
-   para el ABI de Electron instalado.  Esto garantiza que el binario
+   para el ABI de Electron instalado. Esto garantiza que el binario
    incluido en el instalador sea compatible con el runtime empaquetado.
-3. **`electron-builder`** — empaqueta todo.  La opción `npmRebuild: false`
-   evita que electron-builder intente recompilar (y falle con pnpm en
-   Windows); la compilación ya fue hecha en el paso anterior.
+3. **Pre-seeding del cache de `winCodeSign`** — `electron-builder 24.x` siempre
+   descarga el archivo `winCodeSign-2.6.0.7z` al empaquetar para Windows, incluso
+   sin certificado de firma. Ese archivo `.7z` contiene symlinks de macOS
+   (`darwin/.../libcrypto.dylib`); en Windows sin Developer Mode o sin permisos de
+   administrador, `7-Zip` no puede crearlos y falla con
+   _"Cannot create symbolic link: insufficient privilege"_.
+   El script descarga el archivo él mismo usando `curl.exe` y lo extrae con
+   el flag `-snl` (skip symbolic links). `electron-builder` encuentra el cache
+   ya poblado y omite su propia descarga.
+4. **`electron-builder --win`** — empaqueta todo y genera el instalador NSIS `.exe`.
+   La opción `npmRebuild: false` evita que `electron-builder` intente recompilar
+   (y falle con pnpm en Windows); la compilación ya fue hecha en el paso 2.
 
 Las migraciones SQL se incluyen automáticamente en el instalador como
 `extraResources` (`resources/database/migrations/`), por lo que la app
@@ -390,7 +400,7 @@ NewSalePage.handleCheckout()
 | `pnpm db:seed:node` | Ídem — explícitamente con Node/tsx runtime |
 | `pnpm db:seed:electron` | Carga datos iniciales usando el runtime Electron (recomendado en Windows) |
 | `pnpm typecheck` | Verifica tipos TypeScript sin compilar |
-| `pnpm package` | Build + empaqueta instalador |
+| `pnpm package` | Build + empaqueta instalador (detecta automáticamente la plataforma; en Windows genera el `.exe`) |
 
 ---
 
