@@ -129,6 +129,9 @@ export default function NewSalePage() {
 
   // ── Totals calculation ────────────────────────────────────────────────────
 
+  // Catalog total: sum of item subtotals (unitPrice includes IVA)
+  const catalogSubtotal = cart.reduce((sum, item) => sum + item.subtotal, 0)
+
   // Base totals from cart items (unitPrice includes IVA)
   const baseSubtotal = cart.reduce((sum, item) => {
     const taxFactor = item.taxRate / 100
@@ -153,7 +156,6 @@ export default function NewSalePage() {
   const adjustmentFactor = baseSubtotal > 0 ? adjustedSubtotal / baseSubtotal : 1
   const adjustedTaxAmount = baseTaxAmount * adjustmentFactor
   const cartTotal = adjustedSubtotal + adjustedTaxAmount
-  const discountAmount = baseSubtotal - adjustedSubtotal  // positive = savings
 
   // ── Checkout ──────────────────────────────────────────────────────────────
 
@@ -431,12 +433,12 @@ export default function NewSalePage() {
                 {selectedParameters.length > 0 ? (
                   <>
                     <div className="cart-total-row">
-                      <span>Subtotal (s/IVA):</span>
-                      <span>{currency(baseSubtotal)}</span>
+                      <span>Subtotal:</span>
+                      <span>{currency(catalogSubtotal)}</span>
                     </div>
                     {selectedParameters.map((p, idx) => {
-                      // Recalculate running base up to this parameter for display
-                      let runBase = baseSubtotal
+                      // Recalculate running base (catalog price with IVA) up to this parameter
+                      let runBase = catalogSubtotal
                       for (let i = 0; i < idx; i++) {
                         const pp = selectedParameters[i]
                         runBase *= pp.tipo === '-' ? 1 - pp.porcentaje / 100 : 1 + pp.porcentaje / 100
@@ -449,40 +451,16 @@ export default function NewSalePage() {
                         </div>
                       )
                     })}
-                    <div className="cart-total-row">
-                      <span>Subtotal c/param. (s/IVA):</span>
-                      <span>{currency(adjustedSubtotal)}</span>
-                    </div>
-                    <div className="cart-total-row">
-                      <span>IVA:</span>
-                      <span>{currency(adjustedTaxAmount)}</span>
-                    </div>
-                    {discountAmount > 0 && (
-                      <div className="cart-total-row cart-total-row--savings">
-                        <span>Ahorro total:</span>
-                        <span>-{currency(discountAmount)}</span>
-                      </div>
-                    )}
                     <div className={`cart-total-row cart-total-row--total${isBlackSale ? ' cart-total-row--black' : ''}`}>
                       <span>{isBlackSale ? 'TOTAL N:' : 'TOTAL:'}</span>
                       <span>{currency(cartTotal)}</span>
                     </div>
                   </>
                 ) : (
-                  <>
-                    <div className="cart-total-row">
-                      <span>Subtotal (s/IVA):</span>
-                      <span>{currency(baseSubtotal)}</span>
-                    </div>
-                    <div className="cart-total-row">
-                      <span>IVA:</span>
-                      <span>{currency(adjustedTaxAmount)}</span>
-                    </div>
-                    <div className={`cart-total-row cart-total-row--total${isBlackSale ? ' cart-total-row--black' : ''}`}>
-                      <span>{isBlackSale ? 'TOTAL N:' : 'TOTAL:'}</span>
-                      <span>{currency(cartTotal)}</span>
-                    </div>
-                  </>
+                  <div className={`cart-total-row cart-total-row--total${isBlackSale ? ' cart-total-row--black' : ''}`}>
+                    <span>{isBlackSale ? 'TOTAL N:' : 'TOTAL:'}</span>
+                    <span>{currency(cartTotal)}</span>
+                  </div>
                 )}
               </div>
 

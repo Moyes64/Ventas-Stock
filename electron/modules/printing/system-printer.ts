@@ -177,7 +177,7 @@ function generateTicketHTML(ticketData: TicketData, documentType: 'invoice' | 'd
     <thead>
       <tr>
         <th>Descripción</th>
-        <th class="r">Qty</th>
+        <th class="r">Cant</th>
         <th class="r">P.Unit</th>
         <th class="r">Total</th>
       </tr>
@@ -200,20 +200,7 @@ function generateTicketHTML(ticketData: TicketData, documentType: 'invoice' | 'd
       <span>Dto. ${escapeHtml(d.descripcion)} (${d.porcentaje}%):</span>
       <span>-${formatCurrency(d.amount)}</span>
     </div>`).join('')}
-    <div class="total-row">
-      <span>Subtotal c/dto. (s/IVA):</span>
-      <span>${formatCurrency(ticketData.subtotal)}</span>
-    </div>
-    ` : `
-    <div class="total-row">
-      <span>Subtotal (s/IVA):</span>
-      <span>${formatCurrency(ticketData.subtotal)}</span>
-    </div>
-    `}
-    <div class="total-row">
-      <span>IVA:</span>
-      <span>${formatCurrency(ticketData.taxAmount)}</span>
-    </div>
+    ` : ``}
     <div class="total-row total-row--final">
       <span>TOTAL:</span>
       <span>${formatCurrency(ticketData.total)}</span>

@@ -37,9 +37,9 @@ export interface TicketData {
     taxRate: number
   }>
   // Totals
-  grossSubtotal: number      // Sum of items without IVA, before parameters
+  grossSubtotal: number      // Sum of items with IVA, before parameters
   discountLines: DiscountLine[] // Only tipo='-' parameters (for invoice display)
-  subtotal: number           // Adjusted subtotal without IVA (after all parameters)
+  subtotal: number           // Adjusted subtotal without IVA (after all parameters; not displayed)
   taxAmount: number
   total: number
   // CAE
