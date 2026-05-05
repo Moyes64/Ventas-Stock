@@ -144,7 +144,7 @@ export default function ParametersPage() {
             {selected ? 'Editar Parámetro' : 'Nuevo Parámetro'}
           </h2>
 
-          <form onSubmit={handleSave} className="form" style={{ padding: 0 }}>
+          <form onSubmit={handleSave} className="form params-form">
             <div className="form-row">
               <label className="label">ID</label>
               <input
@@ -177,9 +177,9 @@ export default function ParametersPage() {
             </div>
 
             {formError && <p className="error">{formError}</p>}
-            {successMsg && <p style={{ color: 'var(--color-success)', fontSize: '13px', marginTop: '8px' }}>{successMsg}</p>}
+            {successMsg && <p className="params-success">{successMsg}</p>}
 
-            <div className="form-actions" style={{ paddingTop: '16px', marginTop: '16px', borderTop: '1px solid var(--color-border)' }}>
+            <div className="form-actions params-form-actions">
               {selected && (
                 <button
                   type="button"
@@ -190,7 +190,7 @@ export default function ParametersPage() {
                   Eliminar
                 </button>
               )}
-              <div style={{ flex: 1 }} />
+              <div className="params-spacer" />
               {selected && (
                 <button
                   type="button"

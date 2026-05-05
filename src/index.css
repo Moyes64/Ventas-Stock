@@ -730,3 +730,23 @@ code {
   margin-bottom: 16px;
   color: var(--color-text);
 }
+
+.params-form {
+  padding: 0;
+}
+
+.params-form-actions {
+  padding-top: 16px;
+  margin-top: 16px;
+  border-top: 1px solid var(--color-border);
+}
+
+.params-spacer {
+  flex: 1;
+}
+
+.params-success {
+  color: var(--color-success);
+  font-size: 13px;
+  margin-top: 8px;
+}
