@@ -186,9 +186,9 @@ export const backup = {
 export const parameters = {
   list: () => electron.parameters.list() as Promise<Parameter[]>,
   get: (id: number) => electron.parameters.get(id) as Promise<Parameter | undefined>,
-  create: (data: { descripcion: string; porcentaje: number }) =>
+  create: (data: { descripcion: string; porcentaje: number; tipo: '+' | '-' }) =>
     electron.parameters.create(data) as Promise<Parameter>,
-  update: (id: number, data: Partial<{ descripcion: string; porcentaje: number }>) =>
+  update: (id: number, data: Partial<{ descripcion: string; porcentaje: number; tipo: '+' | '-' }>) =>
     electron.parameters.update(id, data) as Promise<Parameter>,
   delete: (id: number) => electron.parameters.delete(id) as Promise<void>,
 }

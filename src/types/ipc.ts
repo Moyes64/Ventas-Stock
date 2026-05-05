@@ -197,6 +197,7 @@ export interface Parameter {
   id: number
   descripcion: string
   porcentaje: number
+  tipo: '+' | '-'
   createdAt: string
   updatedAt: string
 }

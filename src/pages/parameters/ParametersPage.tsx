@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { parameters as parametersApi } from '../../lib/ipc'
 import type { Parameter } from '../../types/ipc'
 
-const EMPTY_FORM = { descripcion: '', porcentaje: '' }
+const EMPTY_FORM = { descripcion: '', porcentaje: '', tipo: '+' as '+' | '-' }
 
 export default function ParametersPage() {
   const [paramList, setParamList] = useState<Parameter[]>([])
@@ -30,7 +30,7 @@ export default function ParametersPage() {
 
   function selectParameter(p: Parameter) {
     setSelected(p)
-    setForm({ descripcion: p.descripcion, porcentaje: String(p.porcentaje) })
+    setForm({ descripcion: p.descripcion, porcentaje: String(p.porcentaje), tipo: p.tipo })
     setFormError(null)
     setSuccessMsg(null)
   }
@@ -60,10 +60,10 @@ export default function ParametersPage() {
     setSaving(true)
     try {
       if (selected) {
-        await parametersApi.update(selected.id, { descripcion: form.descripcion.trim(), porcentaje })
+        await parametersApi.update(selected.id, { descripcion: form.descripcion.trim(), porcentaje, tipo: form.tipo })
         setSuccessMsg('Parámetro actualizado')
       } else {
-        await parametersApi.create({ descripcion: form.descripcion.trim(), porcentaje })
+        await parametersApi.create({ descripcion: form.descripcion.trim(), porcentaje, tipo: form.tipo })
         setSuccessMsg('Parámetro creado')
         clearForm()
       }
@@ -111,6 +111,7 @@ export default function ParametersPage() {
                   <tr>
                     <th style={{ width: '60px' }}>ID</th>
                     <th>Descripción</th>
+                    <th style={{ width: '50px', textAlign: 'center' }}>+/-</th>
                     <th style={{ width: '80px' }}>%</th>
                   </tr>
                 </thead>
@@ -124,12 +125,13 @@ export default function ParametersPage() {
                     >
                       <td>{p.id}</td>
                       <td>{p.descripcion}</td>
+                      <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{p.tipo}</td>
                       <td>{p.porcentaje}</td>
                     </tr>
                   ))}
                   {paramList.length === 0 && (
                     <tr>
-                      <td colSpan={3} className="empty-row">Sin parámetros</td>
+                      <td colSpan={4} className="empty-row">Sin parámetros</td>
                     </tr>
                   )}
                 </tbody>
@@ -174,6 +176,31 @@ export default function ParametersPage() {
                 placeholder="0"
                 step="any"
               />
+            </div>
+            <div className="form-row">
+              <label className="label">Tipo</label>
+              <div className="params-tipo-group">
+                <label className="params-tipo-option">
+                  <input
+                    type="radio"
+                    name="tipo"
+                    value="+"
+                    checked={form.tipo === '+'}
+                    onChange={() => setForm({ ...form, tipo: '+' })}
+                  />
+                  <span>+ (Incremento)</span>
+                </label>
+                <label className="params-tipo-option">
+                  <input
+                    type="radio"
+                    name="tipo"
+                    value="-"
+                    checked={form.tipo === '-'}
+                    onChange={() => setForm({ ...form, tipo: '-' })}
+                  />
+                  <span>- (Descuento)</span>
+                </label>
+              </div>
             </div>
 
             {formError && <p className="error">{formError}</p>}

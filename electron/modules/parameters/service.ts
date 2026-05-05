@@ -20,6 +20,7 @@ export class ParameterService {
   create(data: CreateParameterInput): Parameter {
     if (!data.descripcion.trim()) throw new Error('La descripción es obligatoria')
     if (typeof data.porcentaje !== 'number') throw new Error('El porcentaje debe ser un número')
+    if (data.tipo !== '+' && data.tipo !== '-') throw new Error('El tipo debe ser "+" o "-"')
     const id = this.repo.create(data)
     const created = this.repo.findById(id)
     if (!created) throw new Error('Error al recuperar el parámetro creado')
