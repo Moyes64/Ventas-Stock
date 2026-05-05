@@ -88,12 +88,14 @@ export default function NewSalePage() {
         },
       ]
     })
+    setError(null)
     setProductResults([])
     setSearchQuery('')
   }
 
   function removeFromCart(productId: number) {
     setCart(prev => prev.filter(item => item.product.id !== productId))
+    setError(null)
   }
 
   function updateQuantity(productId: number, quantity: number) {
@@ -108,6 +110,7 @@ export default function NewSalePage() {
           : item
       )
     )
+    setError(null)
   }
 
   // ── Parameter management ──────────────────────────────────────────────────
