@@ -142,15 +142,24 @@ export interface SaleItem {
   subtotal: number
 }
 
+export interface AppliedParameter {
+  id?: number
+  parameterId?: number | null
+  descripcion: string
+  porcentaje: number
+  tipo: '+' | '-'
+}
+
 export interface Sale {
   id: number
   customerId: number | null
   customerName?: string
   userId: number | null
   status: SaleStatus
-  subtotal: number
-  taxAmount: number
-  total: number
+  subtotal: number        // Adjusted subtotal without IVA (after parameters)
+  taxAmount: number       // IVA on adjusted subtotal
+  total: number           // subtotal + taxAmount
+  discountAmount: number  // Net reduction in subtotal (positive = money saved)
   saleDate: string
   invoiceType: number | null
   invoiceNumber: number | null
@@ -162,6 +171,7 @@ export interface Sale {
   createdAt: string
   updatedAt: string
   items?: SaleItem[]
+  appliedParameters?: AppliedParameter[]
 }
 
 export interface BackupInfo {

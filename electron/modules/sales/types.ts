@@ -11,15 +11,24 @@ export interface SaleItem {
   subtotal: number    // quantity * unitPrice
 }
 
+export interface AppliedParameter {
+  id?: number         // sale_parameters row id
+  parameterId?: number | null
+  descripcion: string
+  porcentaje: number
+  tipo: '+' | '-'
+}
+
 export interface Sale {
   id: number
   customerId: number | null
   customerName?: string
   userId: number | null
   status: SaleStatus
-  subtotal: number     // Without IVA
-  taxAmount: number    // Total IVA
-  total: number        // With IVA
+  subtotal: number        // Adjusted subtotal without IVA (after parameters)
+  taxAmount: number       // IVA on adjusted subtotal
+  total: number           // subtotal + taxAmount
+  discountAmount: number  // Net reduction in subtotal (positive = money saved)
   saleDate: string
   invoiceType: number | null
   invoiceNumber: number | null
@@ -27,10 +36,11 @@ export interface Sale {
   cae: string | null
   caeVto: string | null
   afipError: string | null
-  isBlackSale: boolean // Venta en negro (sin IVA / comprobante interno siempre)
+  isBlackSale: boolean    // Venta en negro (comprobante interno, sin CAE)
   createdAt: string
   updatedAt: string
   items?: SaleItem[]
+  appliedParameters?: AppliedParameter[]
 }
 
 export interface CreateSaleInput {
@@ -38,6 +48,7 @@ export interface CreateSaleInput {
   userId?: number
   invoiceType?: number
   isBlackSale?: boolean
+  parameterIds?: number[]
   items: Array<{
     productId: number
     quantity: number

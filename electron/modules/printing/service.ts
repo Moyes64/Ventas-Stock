@@ -90,6 +90,28 @@ export class PrintingService {
       )
     }
 
+    // Calculate gross subtotal (before parameter adjustments) from item lines
+    const grossSubtotal = items.reduce((sum, item) => {
+      const taxFactor = item.taxRate / 100
+      return sum + item.subtotal / (1 + taxFactor)
+    }, 0)
+
+    // Build discount lines (only tipo='-') from persisted sale_parameters.
+    // Surcharges (tipo='+') still update runningBase to keep amounts accurate
+    // but are intentionally excluded from the printed invoice per requirements.
+    const appliedParams = this.saleRepo.getAppliedParameters(sale.id)
+    const discountLines: TicketData['discountLines'] = []
+    let runningBase = grossSubtotal
+    for (const param of appliedParams) {
+      if (param.tipo === '-') {
+        const amount = runningBase * (param.porcentaje / 100)
+        discountLines.push({ descripcion: param.descripcion, porcentaje: param.porcentaje, amount })
+        runningBase *= 1 - param.porcentaje / 100
+      } else {
+        runningBase *= 1 + param.porcentaje / 100
+      }
+    }
+
     return {
       companyName,
       companyCuit: config ? String(config.cuit) : (process.env.VITE_EMPRESA_CUIT ?? ''),
@@ -110,6 +132,8 @@ export class PrintingService {
         subtotal: i.subtotal,
         taxRate: i.taxRate,
       })),
+      grossSubtotal,
+      discountLines,
       subtotal: sale.subtotal,
       taxAmount: sale.taxAmount,
       total: sale.total,

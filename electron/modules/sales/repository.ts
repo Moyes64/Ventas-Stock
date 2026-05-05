@@ -1,5 +1,5 @@
 import type { Database } from 'better-sqlite3'
-import type { Sale, SaleItem, CreateSaleInput } from './types'
+import type { Sale, SaleItem, AppliedParameter, CreateSaleInput } from './types'
 
 interface SaleRow {
   id: number
@@ -9,6 +9,7 @@ interface SaleRow {
   subtotal: number
   tax_amount: number
   total: number
+  discount_amount: number
   sale_date: string
   invoice_type: number | null
   invoice_number: number | null
@@ -33,6 +34,15 @@ interface SaleItemRow {
   product_name?: string
 }
 
+interface SaleParameterRow {
+  id: number
+  sale_id: number
+  parameter_id: number | null
+  descripcion: string
+  porcentaje: number
+  tipo: string
+}
+
 export class SaleRepository {
   constructor(private readonly db: Database) {}
 
@@ -48,7 +58,8 @@ export class SaleRepository {
     if (!row) return undefined
 
     const items = this.getItems(id)
-    return { ...this.mapRow(row), items }
+    const appliedParameters = this.getAppliedParameters(id)
+    return { ...this.mapRow(row), items, appliedParameters }
   }
 
   list(filters: { dateFrom?: string; dateTo?: string; status?: string; limit?: number }): Sale[] {
@@ -89,15 +100,28 @@ export class SaleRepository {
     return this.list({ status: 'PENDING_CAE' })
   }
 
-  create(data: CreateSaleInput & { subtotal: number; taxAmount: number; total: number }): number {
+  create(
+    data: CreateSaleInput & {
+      subtotal: number
+      taxAmount: number
+      total: number
+      discountAmount: number
+      appliedParameters: AppliedParameter[]
+    }
+  ): number {
     const insertSale = this.db.prepare(
-      `INSERT INTO sales (customer_id, user_id, invoice_type, subtotal, tax_amount, total, is_black_sale)
-       VALUES (@customerId, @userId, @invoiceType, @subtotal, @taxAmount, @total, @isBlackSale)`
+      `INSERT INTO sales (customer_id, user_id, invoice_type, subtotal, tax_amount, total, discount_amount, is_black_sale)
+       VALUES (@customerId, @userId, @invoiceType, @subtotal, @taxAmount, @total, @discountAmount, @isBlackSale)`
     )
 
     const insertItem = this.db.prepare(
       `INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, tax_rate, subtotal)
        VALUES (@saleId, @productId, @quantity, @unitPrice, @taxRate, @subtotal)`
+    )
+
+    const insertParam = this.db.prepare(
+      `INSERT INTO sale_parameters (sale_id, parameter_id, descripcion, porcentaje, tipo)
+       VALUES (@saleId, @parameterId, @descripcion, @porcentaje, @tipo)`
     )
 
     const saleId = this.db.transaction(() => {
@@ -108,6 +132,7 @@ export class SaleRepository {
         subtotal: data.subtotal,
         taxAmount: data.taxAmount,
         total: data.total,
+        discountAmount: data.discountAmount,
         isBlackSale: data.isBlackSale ? 1 : 0,
       })
       const id = r.lastInsertRowid as number
@@ -120,6 +145,16 @@ export class SaleRepository {
           unitPrice: item.unitPrice,
           taxRate: item.taxRate,
           subtotal: item.quantity * item.unitPrice,
+        })
+      }
+
+      for (const param of data.appliedParameters) {
+        insertParam.run({
+          saleId: id,
+          parameterId: param.parameterId ?? null,
+          descripcion: param.descripcion,
+          porcentaje: param.porcentaje,
+          tipo: param.tipo,
         })
       }
 
@@ -196,6 +231,20 @@ export class SaleRepository {
     }))
   }
 
+  getAppliedParameters(saleId: number): AppliedParameter[] {
+    const rows = this.db
+      .prepare('SELECT * FROM sale_parameters WHERE sale_id = ? ORDER BY id ASC')
+      .all(saleId) as SaleParameterRow[]
+
+    return rows.map(r => ({
+      id: r.id,
+      parameterId: r.parameter_id,
+      descripcion: r.descripcion,
+      porcentaje: r.porcentaje,
+      tipo: r.tipo as '+' | '-',
+    }))
+  }
+
   private mapRow(row: SaleRow): Sale {
     return {
       id: row.id,
@@ -206,6 +255,7 @@ export class SaleRepository {
       subtotal: row.subtotal,
       taxAmount: row.tax_amount,
       total: row.total,
+      discountAmount: row.discount_amount ?? 0,
       saleDate: row.sale_date,
       invoiceType: row.invoice_type,
       invoiceNumber: row.invoice_number,

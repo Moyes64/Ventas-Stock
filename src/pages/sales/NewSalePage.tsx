@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { catalog, customers, sales, printing } from '../../lib/ipc'
-import type { Product, Customer, Sale } from '../../types/ipc'
+import { catalog, customers, sales, printing, parameters as parametersApi } from '../../lib/ipc'
+import type { Product, Customer, Sale, Parameter } from '../../types/ipc'
 import { useHiddenOptions } from '../../context/HiddenOptionsContext'
 
 interface CartItem {
@@ -27,9 +27,16 @@ export default function NewSalePage() {
   const [isPrinting, setIsPrinting] = useState(false)
   const { isHiddenOptionsVisible } = useHiddenOptions()
 
+  // Parameters
+  const [parameterList, setParameterList] = useState<Parameter[]>([])
+  const [selectedParameters, setSelectedParameters] = useState<Parameter[]>([])
+  const [paramSelectValue, setParamSelectValue] = useState('')
+
   useEffect(() => {
     // eslint-disable-next-line no-console
     customers.list().then(setCustomerList).catch(console.error)
+    // eslint-disable-next-line no-console
+    parametersApi.list().then(setParameterList).catch(console.error)
   }, [])
 
   // Reset black sale mode when hidden options become invisible
@@ -76,7 +83,7 @@ export default function NewSalePage() {
           product,
           quantity: 1,
           unitPrice: product.price,
-          taxRate: 21, // Will be fetched from product's taxRate
+          taxRate: 21,
           subtotal: product.price,
         },
       ]
@@ -103,13 +110,52 @@ export default function NewSalePage() {
     )
   }
 
-  const cartTotal = cart.reduce((sum, item) => sum + item.subtotal, 0)
-  const cartTax = cart.reduce((sum, item) => {
-    const base = item.subtotal / (1 + item.taxRate / 100)
+  // ── Parameter management ──────────────────────────────────────────────────
+
+  function addParameter(paramId: string) {
+    if (!paramId) return
+    const id = Number(paramId)
+    const param = parameterList.find(p => p.id === id)
+    if (!param) return
+    // Avoid duplicates
+    if (selectedParameters.some(p => p.id === id)) return
+    setSelectedParameters(prev => [...prev, param])
+    setParamSelectValue('')
+  }
+
+  function removeParameter(paramId: number) {
+    setSelectedParameters(prev => prev.filter(p => p.id !== paramId))
+  }
+
+  // ── Totals calculation ────────────────────────────────────────────────────
+
+  // Base totals from cart items (unitPrice includes IVA)
+  const baseSubtotal = cart.reduce((sum, item) => {
+    const taxFactor = item.taxRate / 100
+    return sum + item.subtotal / (1 + taxFactor)
+  }, 0)
+  const baseTaxAmount = cart.reduce((sum, item) => {
+    const taxFactor = item.taxRate / 100
+    const base = item.subtotal / (1 + taxFactor)
     return sum + (item.subtotal - base)
   }, 0)
-  // For black sales, the total is the base price (no IVA)
-  const cartTotalBlack = cartTotal - cartTax
+
+  // Apply parameters sequentially on the base subtotal
+  let adjustedSubtotal = baseSubtotal
+  for (const param of selectedParameters) {
+    if (param.tipo === '-') {
+      adjustedSubtotal *= 1 - param.porcentaje / 100
+    } else {
+      adjustedSubtotal *= 1 + param.porcentaje / 100
+    }
+  }
+
+  const adjustmentFactor = baseSubtotal > 0 ? adjustedSubtotal / baseSubtotal : 1
+  const adjustedTaxAmount = baseTaxAmount * adjustmentFactor
+  const cartTotal = adjustedSubtotal + adjustedTaxAmount
+  const discountAmount = baseSubtotal - adjustedSubtotal  // positive = savings
+
+  // ── Checkout ──────────────────────────────────────────────────────────────
 
   async function handleCheckout() {
     if (cart.length === 0) {
@@ -123,6 +169,7 @@ export default function NewSalePage() {
         customerId: selectedCustomerId ?? undefined,
         invoiceType: 11, // Factura C por defecto
         isBlackSale,
+        parameterIds: selectedParameters.map(p => p.id),
         items: cart.map(item => ({
           productId: item.product.id,
           quantity: item.quantity,
@@ -132,6 +179,7 @@ export default function NewSalePage() {
       })
       setResult(saleResult)
       setCart([])
+      setSelectedParameters([])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al procesar la venta')
     } finally {
@@ -168,7 +216,8 @@ export default function NewSalePage() {
     }
   }
 
-  // Show result screen after successful sale
+  // ── Result screen ─────────────────────────────────────────────────────────
+
   if (result) {
     return (
       <div className="page">
@@ -176,9 +225,9 @@ export default function NewSalePage() {
           {result.isBlackSale ? (
             <div className="sale-result--black">
               <h2>📄 Venta N — Comprobante Interno</h2>
-              <p>Venta en negro registrada como comprobante interno (sin IVA).</p>
+              <p>Venta en negro registrada como comprobante interno (sin CAE).</p>
               <p><strong>Remito Interno N°:</strong> {result.id}</p>
-              <p><strong>Total (sin IVA):</strong> {currency(result.total)}</p>
+              <p><strong>Total:</strong> {currency(result.total)}</p>
             </div>
           ) : result.status === 'AUTHORIZED' ? (
             <div className="sale-result--success">
@@ -230,6 +279,12 @@ export default function NewSalePage() {
     )
   }
 
+  // ── Main sale form ────────────────────────────────────────────────────────
+
+  const availableParameters = parameterList.filter(
+    p => !selectedParameters.some(s => s.id === p.id)
+  )
+
   return (
     <div className="page">
       <div className="page-header">
@@ -279,6 +334,42 @@ export default function NewSalePage() {
               ))}
             </select>
           </div>
+
+          {/* Parameters */}
+          <div className="sale-params">
+            <label className="label">Parámetros (descuentos / recargos)</label>
+            <div className="sale-params-add">
+              <select
+                value={paramSelectValue}
+                onChange={e => addParameter(e.target.value)}
+                className="select"
+              >
+                <option value="">— Agregar parámetro —</option>
+                {availableParameters.map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.tipo}{p.porcentaje}% — {p.descripcion}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {selectedParameters.length > 0 && (
+              <ul className="sale-params-list">
+                {selectedParameters.map(p => (
+                  <li key={p.id} className="sale-params-item">
+                    <span className={`sale-params-badge sale-params-badge--${p.tipo === '-' ? 'discount' : 'surcharge'}`}>
+                      {p.tipo}{p.porcentaje}%
+                    </span>
+                    <span className="sale-params-name">{p.descripcion}</span>
+                    <button
+                      type="button"
+                      className="btn btn-danger btn-sm"
+                      onClick={() => removeParameter(p.id)}
+                    >✕</button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
 
         {/* Right: Cart */}
@@ -292,7 +383,7 @@ export default function NewSalePage() {
                   checked={isBlackSale}
                   onChange={e => setIsBlackSale(e.target.checked)}
                 />
-                <span className="black-sale-toggle__label">🅽 Venta N (sin IVA)</span>
+                <span className="black-sale-toggle__label">🅽 Venta N (sin CAE)</span>
               </label>
             )}
           </div>
@@ -337,33 +428,58 @@ export default function NewSalePage() {
               </table>
 
               <div className="cart-totals">
-                {isBlackSale ? (
+                {selectedParameters.length > 0 ? (
                   <>
                     <div className="cart-total-row">
-                      <span>Subtotal (sin IVA):</span>
-                      <span>{currency(cartTotalBlack)}</span>
+                      <span>Subtotal (s/IVA):</span>
+                      <span>{currency(baseSubtotal)}</span>
+                    </div>
+                    {selectedParameters.map((p, idx) => {
+                      // Recalculate running base up to this parameter for display
+                      let runBase = baseSubtotal
+                      for (let i = 0; i < idx; i++) {
+                        const pp = selectedParameters[i]
+                        runBase *= pp.tipo === '-' ? 1 - pp.porcentaje / 100 : 1 + pp.porcentaje / 100
+                      }
+                      const amount = runBase * (p.porcentaje / 100)
+                      return (
+                        <div key={p.id} className={`cart-total-row ${p.tipo === '-' ? 'cart-total-row--discount' : 'cart-total-row--surcharge'}`}>
+                          <span>{p.tipo === '-' ? 'Dto.' : 'Rec.'} {p.descripcion} ({p.porcentaje}%):</span>
+                          <span>{p.tipo === '-' ? '-' : '+'}{currency(amount)}</span>
+                        </div>
+                      )
+                    })}
+                    <div className="cart-total-row">
+                      <span>Subtotal c/param. (s/IVA):</span>
+                      <span>{currency(adjustedSubtotal)}</span>
                     </div>
                     <div className="cart-total-row">
                       <span>IVA:</span>
-                      <span>{currency(0)}</span>
+                      <span>{currency(adjustedTaxAmount)}</span>
                     </div>
-                    <div className="cart-total-row cart-total-row--total cart-total-row--black">
-                      <span>TOTAL N:</span>
-                      <span>{currency(cartTotalBlack)}</span>
+                    {discountAmount > 0 && (
+                      <div className="cart-total-row cart-total-row--savings">
+                        <span>Ahorro total:</span>
+                        <span>-{currency(discountAmount)}</span>
+                      </div>
+                    )}
+                    <div className={`cart-total-row cart-total-row--total${isBlackSale ? ' cart-total-row--black' : ''}`}>
+                      <span>{isBlackSale ? 'TOTAL N:' : 'TOTAL:'}</span>
+                      <span>{currency(cartTotal)}</span>
                     </div>
                   </>
                 ) : (
                   <>
                     <div className="cart-total-row">
-                      <span>Subtotal (sin IVA):</span>
-                      <span>{currency(cartTotal - cartTax)}</span>
+                      <span>Subtotal (s/IVA):</span>
+                      <span>{currency(baseSubtotal)}</span>
                     </div>
                     <div className="cart-total-row">
                       <span>IVA:</span>
-                      <span>{currency(cartTax)}</span>
+                      <span>{currency(adjustedTaxAmount)}</span>
                     </div>
-                    <div className="cart-total-row cart-total-row--total">
-                      <span>TOTAL:</span>
+                    <div className={`cart-total-row cart-total-row--total${isBlackSale ? ' cart-total-row--black' : ''}`}>
+                      <span>{isBlackSale ? 'TOTAL N:' : 'TOTAL:'}</span>
                       <span>{currency(cartTotal)}</span>
                     </div>
                   </>
@@ -380,7 +496,7 @@ export default function NewSalePage() {
                 {processing
                   ? '⏳ Procesando...'
                   : isBlackSale
-                    ? `💵 Confirmar Venta N ${currency(cartTotalBlack)}`
+                    ? `💵 Confirmar Venta N ${currency(cartTotal)}`
                     : `💳 Confirmar Venta ${currency(cartTotal)}`}
               </button>
             </>
