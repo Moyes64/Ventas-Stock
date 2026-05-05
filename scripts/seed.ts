@@ -9,15 +9,13 @@ import 'dotenv/config'
 import { runMigrations } from '../database/migrate'
 import { runSeed } from '../database/seed'
 
-async function main() {
+try {
   // Ensure schema is up-to-date before seeding
-  await runMigrations()
+  runMigrations()
   runSeed()
   console.log('Seed completed successfully.')
   process.exit(0)
-}
-
-main().catch(err => {
+} catch (err) {
   console.error('Seed failed:', err)
   process.exit(1)
-})
+}

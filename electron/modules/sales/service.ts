@@ -1,7 +1,7 @@
 import type { Database } from 'better-sqlite3'
 import { SaleRepository } from './repository'
 import { StockService } from '../stock/service'
-import { InvoicingService } from '../invoicing-afip/service'
+import type { InvoicingService } from '../invoicing-afip/service'
 import type { Sale, CreateSaleInput } from './types'
 
 export class SaleService {
@@ -89,7 +89,8 @@ export class SaleService {
     )
 
     // Step 5: Request CAE (skip for black sales — always internal receipt)
-    const sale = this.saleRepo.findById(saleId)!
+    const sale = this.saleRepo.findById(saleId)
+    if (!sale) throw new Error(`Venta no encontrada: ${saleId}`)
 
     if (input.isBlackSale) {
       // Black sales are always internal receipts — never interact with AFIP
@@ -102,9 +103,9 @@ export class SaleService {
           // Step 5a: CAE obtained — update sale as AUTHORIZED
           this.saleRepo.updateStatus(sale.id, 'AUTHORIZED', {
             cae: caeResult.cae,
-            caeVto: caeResult.caeVto!,
-            invoiceNumber: caeResult.invoiceNumber!,
-            puntoVenta: caeResult.puntoVenta!,
+            caeVto: caeResult.caeVto ?? '',
+            invoiceNumber: caeResult.invoiceNumber ?? 0,
+            puntoVenta: caeResult.puntoVenta ?? 0,
           })
         } else {
           // Step 5b: AFIP rejected or error — fallback to internal receipt
@@ -122,6 +123,8 @@ export class SaleService {
     }
 
     // Step 6: Return final state
-    return this.saleRepo.findById(saleId)!
+    const finalSale = this.saleRepo.findById(saleId)
+    if (!finalSale) throw new Error(`Venta no encontrada: ${saleId}`)
+    return finalSale
   }
 }

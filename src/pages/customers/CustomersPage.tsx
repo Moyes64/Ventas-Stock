@@ -24,7 +24,8 @@ export default function CustomersPage() {
     }
   }
 
-  useEffect(() => { loadCustomers() }, [search])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { void loadCustomers() }, [search])
 
   async function handleDelete(id: number) {
     if (!window.confirm('¿Eliminar este cliente?')) return
@@ -88,7 +89,7 @@ export default function CustomersPage() {
                     >Editar</button>
                     <button
                       className="btn btn-danger btn-sm"
-                      onClick={() => handleDelete(c.id)}
+                      onClick={() => { void handleDelete(c.id) }}
                     >Eliminar</button>
                   </td>
                 </tr>
@@ -105,7 +106,7 @@ export default function CustomersPage() {
         <CustomerForm
           customer={editCustomer}
           onClose={() => setShowForm(false)}
-          onSaved={loadCustomers}
+          onSaved={() => { void loadCustomers() }}
         />
       )}
     </div>
@@ -160,7 +161,7 @@ function CustomerForm({
           <h2>{customer ? 'Editar Cliente' : 'Nuevo Cliente'}</h2>
           <button className="btn btn-ghost" onClick={onClose}>✕</button>
         </div>
-        <form onSubmit={handleSubmit} className="form">
+        <form onSubmit={e => { void handleSubmit(e) }} className="form">
           <div className="form-row">
             <label className="label">Nombre / Razón Social *</label>
             <input

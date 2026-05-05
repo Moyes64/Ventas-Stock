@@ -29,9 +29,9 @@ export function registerInvoicingHandlers(db: Database): void {
     if (result.success && result.cae) {
       saleRepo.updateStatus(sale.id, 'AUTHORIZED', {
         cae: result.cae,
-        caeVto: result.caeVto!,
-        invoiceNumber: result.invoiceNumber!,
-        puntoVenta: result.puntoVenta!,
+        caeVto: result.caeVto ?? '',
+        invoiceNumber: result.invoiceNumber ?? 0,
+        puntoVenta: result.puntoVenta ?? 0,
       })
     }
 

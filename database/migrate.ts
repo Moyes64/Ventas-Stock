@@ -19,7 +19,7 @@ import { getDb } from './db'
  */
 function getMigrationsDir(): string {
   if (process.versions.electron) {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/consistent-type-imports
     const { app } = require('electron') as typeof import('electron')
     if (app.isPackaged) {
       // Production: migrations shipped as extraResources
@@ -53,7 +53,7 @@ const MIGRATIONS_DIR = getMigrationsDir()
  * Reads all *.sql files from the migrations directory, sorts them by name,
  * and applies any that have not yet been recorded in schema_migrations.
  */
-export async function runMigrations(): Promise<void> {
+export function runMigrations(): void {
   const db = getDb()
 
   // Ensure the tracking table exists before we start

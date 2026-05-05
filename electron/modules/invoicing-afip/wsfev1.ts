@@ -1,6 +1,6 @@
 import { getTicketAcceso } from './wsaa'
 import { loadAfipConfig } from './config'
-import type { CAERequest, CAEResponse, FECAESolicitarResult } from './types'
+import type { CAERequest, CAEResponse } from './types'
 
 /**
  * WSFEv1 - Web Service de Facturación Electrónica versión 1 (AFIP)
@@ -82,7 +82,9 @@ const ENDPOINTS = {
 
 export async function solicitarCAE(request: CAERequest): Promise<CAEResponse> {
   const config = loadAfipConfig()
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const _ta = await getTicketAcceso()
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const _endpoint = ENDPOINTS[config.ambiente]
 
   if (config.ambiente === 'produccion') {
@@ -127,7 +129,7 @@ export function buildSoapEnvelope(
   cuit: number,
   request: CAERequest
 ): string {
-  const factura = request.facturas[0]!
+  const factura = request.facturas[0]
   const ivaItems = factura.iva
     ?.map(
       a => `<AlicIva><Id>${a.id}</Id><BaseImp>${a.baseImp.toFixed(2)}</BaseImp><Importe>${a.importe.toFixed(2)}</Importe></AlicIva>`

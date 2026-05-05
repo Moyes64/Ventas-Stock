@@ -29,7 +29,8 @@ export default function ReportingPage() {
     }
   }
 
-  useEffect(() => { loadReport() }, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { void loadReport() }, [])
 
   const currency = (n: number) =>
     new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(n)
@@ -67,7 +68,7 @@ export default function ReportingPage() {
               Hasta:
               <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="input" />
             </label>
-            <button onClick={loadReport} className="btn btn-secondary">Generar</button>
+            <button onClick={() => { void loadReport() }} className="btn btn-secondary">Generar</button>
           </div>
 
           {loading && <p>Cargando...</p>}

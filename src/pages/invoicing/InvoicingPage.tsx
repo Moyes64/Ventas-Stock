@@ -44,7 +44,8 @@ export default function InvoicingPage() {
     }
   }
 
-  useEffect(() => { loadInvoices() }, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { void loadInvoices() }, [])
 
   async function handleRetryCAE(saleId: number) {
     setRetrying(saleId)
@@ -115,7 +116,7 @@ export default function InvoicingPage() {
             </select>
           </label>
         )}
-        <button onClick={loadInvoices} className="btn btn-secondary">Buscar</button>
+        <button onClick={() => { void loadInvoices() }} className="btn btn-secondary">Buscar</button>
       </div>
 
       {loading && <p>Cargando...</p>}
@@ -176,7 +177,7 @@ export default function InvoicingPage() {
                     {!inv.isBlackSale && (inv.status === 'PENDING_CAE' || inv.status === 'INTERNAL_RECEIPT') && (
                       <button
                         className="btn btn-secondary btn-sm"
-                        onClick={() => handleRetryCAE(inv.id)}
+                        onClick={() => { void handleRetryCAE(inv.id) }}
                         disabled={retrying === inv.id}
                       >
                         {retrying === inv.id ? '⏳' : '↺ CAE'}

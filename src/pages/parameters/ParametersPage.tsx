@@ -26,7 +26,7 @@ export default function ParametersPage() {
     }
   }
 
-  useEffect(() => { loadParameters() }, [])
+  useEffect(() => { void loadParameters() }, [])
 
   function selectParameter(p: Parameter) {
     setSelected(p)
@@ -144,7 +144,7 @@ export default function ParametersPage() {
             {selected ? 'Editar Parámetro' : 'Nuevo Parámetro'}
           </h2>
 
-          <form onSubmit={handleSave} className="form params-form">
+          <form onSubmit={e => { void handleSave(e) }} className="form params-form">
             <div className="form-row">
               <label className="label">ID</label>
               <input
@@ -184,7 +184,7 @@ export default function ParametersPage() {
                 <button
                   type="button"
                   className="btn btn-danger"
-                  onClick={handleDelete}
+                  onClick={() => { void handleDelete() }}
                   disabled={saving}
                 >
                   Eliminar

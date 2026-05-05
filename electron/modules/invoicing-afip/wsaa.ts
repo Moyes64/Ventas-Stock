@@ -67,7 +67,7 @@ import type { TokenAuth } from './types'
 // In-memory TA cache
 let cachedTA: TokenAuth | null = null
 
-export async function getTicketAcceso(): Promise<TokenAuth> {
+export function getTicketAcceso(): Promise<TokenAuth> {
   const config = loadAfipConfig()
 
   // Return cached TA if still valid (with 5 min safety margin)
@@ -75,17 +75,17 @@ export async function getTicketAcceso(): Promise<TokenAuth> {
     const expiresAt = new Date(cachedTA.expiresAt)
     const safetyMargin = 5 * 60 * 1000 // 5 minutes
     if (expiresAt.getTime() - Date.now() > safetyMargin) {
-      return cachedTA
+      return Promise.resolve(cachedTA)
     }
   }
 
   if (config.ambiente === 'produccion') {
     // TODO: Implement real WSAA call for production
     // See implementation steps above
-    throw new Error(
+    return Promise.reject(new Error(
       'Implementación real de WSAA requerida para producción. ' +
       'Ver electron/modules/invoicing-afip/wsaa.ts para los pasos.'
-    )
+    ))
   }
 
   // ---------------------------------------------------------------
@@ -102,7 +102,7 @@ export async function getTicketAcceso(): Promise<TokenAuth> {
     expiresAt: expiresAt.toISOString(),
   }
 
-  return cachedTA
+  return Promise.resolve(cachedTA)
 }
 
 /** Clears cached TA (useful after config changes or errors). */

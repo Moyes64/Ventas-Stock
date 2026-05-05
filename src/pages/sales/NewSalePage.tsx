@@ -28,6 +28,7 @@ export default function NewSalePage() {
   const { isHiddenOptionsVisible } = useHiddenOptions()
 
   useEffect(() => {
+    // eslint-disable-next-line no-console
     customers.list().then(setCustomerList).catch(console.error)
   }, [])
 
@@ -54,6 +55,7 @@ export default function NewSalePage() {
       const results = await catalog.searchProducts(query)
       setProductResults(results)
     } catch (err) {
+      // eslint-disable-next-line no-console
       console.error(err)
     }
   }
@@ -242,7 +244,7 @@ export default function NewSalePage() {
           <input
             type="text"
             value={searchQuery}
-            onChange={e => handleSearch(e.target.value)}
+            onChange={e => { void handleSearch(e.target.value) }}
             placeholder="Escanear código o buscar por nombre..."
             className="input input--large"
             autoFocus
@@ -372,7 +374,7 @@ export default function NewSalePage() {
 
               <button
                 className={`btn btn-lg btn-block ${isBlackSale ? 'btn-black-sale' : 'btn-primary'}`}
-                onClick={handleCheckout}
+                onClick={() => { void handleCheckout() }}
                 disabled={processing}
               >
                 {processing

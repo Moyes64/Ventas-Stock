@@ -22,7 +22,7 @@ import type {
 } from '../types/ipc'
 
 // Access the electron bridge exposed by preload
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
 const electron = (window as any).electron as Record<string, Record<string, (...args: any[]) => Promise<unknown>>>
 
 // Auth
@@ -152,7 +152,7 @@ export const printing = {
   printSale: (saleId: number) =>
     electron.printing.printSale(saleId) as Promise<{ success: boolean; error?: string }>,
   buildTicketData: (saleId: number) =>
-    electron.printing.buildTicketData(saleId) as Promise<unknown>,
+    electron.printing.buildTicketData(saleId),
   printInvoiceSystem: (saleId: number) =>
     electron.printing.printInvoiceSystem(saleId) as Promise<{ success: boolean; error?: string }>,
   printDeliveryNoteSystem: (saleId: number) =>

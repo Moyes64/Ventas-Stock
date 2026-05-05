@@ -21,7 +21,9 @@ export class ParameterService {
     if (!data.descripcion.trim()) throw new Error('La descripción es obligatoria')
     if (typeof data.porcentaje !== 'number') throw new Error('El porcentaje debe ser un número')
     const id = this.repo.create(data)
-    return this.repo.findById(id)!
+    const created = this.repo.findById(id)
+    if (!created) throw new Error('Error al recuperar el parámetro creado')
+    return created
   }
 
   update(id: number, data: UpdateParameterInput): Parameter {
@@ -31,7 +33,9 @@ export class ParameterService {
       throw new Error('La descripción es obligatoria')
     }
     this.repo.update(id, data)
-    return this.repo.findById(id)!
+    const updated = this.repo.findById(id)
+    if (!updated) throw new Error(`Parámetro no encontrado: ${id}`)
+    return updated
   }
 
   delete(id: number): void {

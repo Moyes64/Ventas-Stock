@@ -14,8 +14,8 @@ export default function UsersPage() {
     setLoading(true)
     try {
       const [u, r] = await Promise.all([authApi.listUsers(), authApi.listRoles()])
-      setUsers(u as User[])
-      setRoles(r as Role[])
+      setUsers(u)
+      setRoles(r)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al cargar')
     } finally {
@@ -23,7 +23,7 @@ export default function UsersPage() {
     }
   }
 
-  useEffect(() => { loadData() }, [])
+  useEffect(() => { void loadData() }, [])
 
   async function handleToggleActive(user: User) {
     try {
@@ -91,13 +91,13 @@ export default function UsersPage() {
                     >Editar</button>
                     <button
                       className={`btn btn-sm ${u.active ? 'btn-warning' : 'btn-secondary'}`}
-                      onClick={() => handleToggleActive(u)}
+                      onClick={() => { void handleToggleActive(u) }}
                     >
                       {u.active ? 'Desactivar' : 'Activar'}
                     </button>
                     <button
                       className="btn btn-danger btn-sm"
-                      onClick={() => handleDelete(u.id)}
+                      onClick={() => { void handleDelete(u.id) }}
                     >Eliminar</button>
                   </td>
                 </tr>
@@ -115,7 +115,7 @@ export default function UsersPage() {
           user={editUser}
           roles={roles}
           onClose={() => setShowForm(false)}
-          onSaved={loadData}
+          onSaved={() => { void loadData() }}
         />
       )}
     </div>
@@ -185,7 +185,7 @@ function UserForm({
           <h2>{user ? 'Editar Usuario' : 'Nuevo Usuario'}</h2>
           <button className="btn btn-ghost" onClick={onClose}>✕</button>
         </div>
-        <form onSubmit={handleSubmit} className="form">
+        <form onSubmit={e => { void handleSubmit(e) }} className="form">
           <div className="form-row">
             <label className="label">Usuario *</label>
             <input
