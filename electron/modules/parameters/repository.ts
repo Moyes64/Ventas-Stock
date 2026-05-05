@@ -5,6 +5,7 @@ interface ParameterRow {
   id: number
   descripcion: string
   porcentaje: number
+  tipo: string
   created_at: string
   updated_at: string
 }
@@ -28,10 +29,10 @@ export class ParameterRepository {
   create(data: CreateParameterInput): number {
     const result = this.db
       .prepare(
-        `INSERT INTO parameters (descripcion, porcentaje)
-         VALUES (@descripcion, @porcentaje)`
+        `INSERT INTO parameters (descripcion, porcentaje, tipo)
+         VALUES (@descripcion, @porcentaje, @tipo)`
       )
-      .run({ descripcion: data.descripcion, porcentaje: data.porcentaje })
+      .run({ descripcion: data.descripcion, porcentaje: data.porcentaje, tipo: data.tipo })
     return result.lastInsertRowid as number
   }
 
@@ -47,6 +48,10 @@ export class ParameterRepository {
       fields.push('porcentaje = @porcentaje')
       params.porcentaje = data.porcentaje
     }
+    if (data.tipo !== undefined) {
+      fields.push('tipo = @tipo')
+      params.tipo = data.tipo
+    }
 
     this.db.prepare(`UPDATE parameters SET ${fields.join(', ')} WHERE id = @id`).run(params)
   }
@@ -56,10 +61,14 @@ export class ParameterRepository {
   }
 
   private mapRow(row: ParameterRow): Parameter {
+    if (row.tipo !== '+' && row.tipo !== '-') {
+      throw new Error(`Valor de tipo inválido en parámetro id=${row.id}: "${row.tipo}"`)
+    }
     return {
       id: row.id,
       descripcion: row.descripcion,
       porcentaje: row.porcentaje,
+      tipo: row.tipo,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     }

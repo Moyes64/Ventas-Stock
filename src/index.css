@@ -750,3 +750,19 @@ code {
   font-size: 13px;
   margin-top: 8px;
 }
+
+.params-tipo-group {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 4px 0;
+}
+
+.params-tipo-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  user-select: none;
+}
