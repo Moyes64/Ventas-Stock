@@ -96,7 +96,9 @@ export class PrintingService {
       return sum + item.subtotal / (1 + taxFactor)
     }, 0)
 
-    // Build discount lines (only tipo='-') from persisted sale_parameters
+    // Build discount lines (only tipo='-') from persisted sale_parameters.
+    // Surcharges (tipo='+') still update runningBase to keep amounts accurate
+    // but are intentionally excluded from the printed invoice per requirements.
     const appliedParams = this.saleRepo.getAppliedParameters(sale.id)
     const discountLines: TicketData['discountLines'] = []
     let runningBase = grossSubtotal

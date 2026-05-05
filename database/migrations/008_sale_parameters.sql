@@ -2,7 +2,9 @@
 -- Migration 008: Sale parameters (descuentos/recargos aplicados por venta)
 -- =============================================================================
 
--- Net adjustment applied to the subtotal (positive = discount, negative = surcharge)
+-- Net adjustment applied to the subtotal due to all parameters combined.
+-- Positive = net reduction (discounts outweigh surcharges).
+-- Negative = net increase (surcharges outweigh discounts).
 ALTER TABLE sales ADD COLUMN discount_amount REAL NOT NULL DEFAULT 0;
 
 -- Stores which parameters were applied to each sale, snapshotting their values

@@ -441,7 +441,7 @@ export default function NewSalePage() {
                         const pp = selectedParameters[i]
                         runBase *= pp.tipo === '-' ? 1 - pp.porcentaje / 100 : 1 + pp.porcentaje / 100
                       }
-                      const amount = Math.abs(runBase * (p.porcentaje / 100))
+                      const amount = runBase * (p.porcentaje / 100)
                       return (
                         <div key={p.id} className={`cart-total-row ${p.tipo === '-' ? 'cart-total-row--discount' : 'cart-total-row--surcharge'}`}>
                           <span>{p.tipo === '-' ? 'Dto.' : 'Rec.'} {p.descripcion} ({p.porcentaje}%):</span>
