@@ -683,3 +683,50 @@ code {
   color: #f8fafc;
 }
 .hidden-options-section .page-subtitle { color: #94a3b8; }
+
+/* =============================================================================
+   ParametersPage — split layout
+   ============================================================================= */
+
+.params-layout {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 24px;
+  align-items: start;
+}
+
+.params-list-panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.params-table-wrapper {
+  overflow-y: auto;
+  max-height: calc(100vh - 180px);
+}
+
+.params-row--selected {
+  background: #eff6ff !important;
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+.params-form-panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 20px;
+  position: sticky;
+  top: 24px;
+}
+
+.params-form-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 16px;
+  color: var(--color-text);
+}

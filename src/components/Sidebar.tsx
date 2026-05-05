@@ -7,16 +7,17 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { to: '/dashboard',  label: 'Inicio',       icon: '🏠' },
-  { to: '/sales',      label: 'Ventas',        icon: '🛒' },
-  { to: '/catalog',    label: 'Catálogo',      icon: '📦' },
-  { to: '/customers',  label: 'Clientes',      icon: '👥' },
-  { to: '/suppliers',  label: 'Proveedores',   icon: '🏭' },
-  { to: '/stock',      label: 'Stock',         icon: '📊' },
-  { to: '/invoicing',  label: 'Facturación',   icon: '🧾' },
-  { to: '/reporting',  label: 'Reportes',      icon: '📈' },
-  { to: '/backup',     label: 'Respaldos',     icon: '💾' },
-  { to: '/users',      label: 'Usuarios',      icon: '⚙️' },
+  { to: '/dashboard',   label: 'Inicio',       icon: '🏠' },
+  { to: '/sales',       label: 'Ventas',        icon: '🛒' },
+  { to: '/catalog',     label: 'Catálogo',      icon: '📦' },
+  { to: '/customers',   label: 'Clientes',      icon: '👥' },
+  { to: '/suppliers',   label: 'Proveedores',   icon: '🏭' },
+  { to: '/stock',       label: 'Stock',         icon: '📊' },
+  { to: '/invoicing',   label: 'Facturación',   icon: '🧾' },
+  { to: '/reporting',   label: 'Reportes',      icon: '📈' },
+  { to: '/backup',      label: 'Respaldos',     icon: '💾' },
+  { to: '/users',       label: 'Usuarios',      icon: '⚙️' },
+  { to: '/parameters',  label: 'Parámetros',    icon: '🔧' },
 ]
 
 export default function Sidebar() {

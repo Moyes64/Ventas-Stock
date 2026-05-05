@@ -107,6 +107,15 @@ const electronAPI = {
     restore: (filename: string) => invoke('backup:restore', filename),
     purge: (retentionDays: number) => invoke('backup:purge', retentionDays),
   },
+
+  // Parameters
+  parameters: {
+    list: () => invoke('parameters:list'),
+    get: (id: number) => invoke('parameters:get', id),
+    create: (data: unknown) => invoke('parameters:create', data),
+    update: (id: number, data: unknown) => invoke('parameters:update', id, data),
+    delete: (id: number) => invoke('parameters:delete', id),
+  },
 }
 
 contextBridge.exposeInMainWorld('electron', electronAPI)
