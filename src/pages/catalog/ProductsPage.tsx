@@ -24,7 +24,8 @@ export default function ProductsPage() {
     }
   }
 
-  useEffect(() => { loadProducts() }, [search])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { void loadProducts() }, [search])
 
   async function handleDelete(id: number) {
     if (!window.confirm('¿Desactivar este producto?')) return
@@ -101,7 +102,7 @@ export default function ProductsPage() {
                     {p.active && (
                       <button
                         className="btn btn-danger btn-sm"
-                        onClick={() => handleDelete(p.id)}
+                        onClick={() => { void handleDelete(p.id) }}
                       >Desactivar</button>
                     )}
                   </td>
@@ -119,7 +120,7 @@ export default function ProductsPage() {
         <ProductForm
           product={editProduct}
           onClose={() => setShowForm(false)}
-          onSaved={loadProducts}
+          onSaved={() => { void loadProducts() }}
         />
       )}
     </div>
@@ -188,7 +189,7 @@ function ProductForm({
         setLoadingData(false)
       }
     }
-    loadData()
+    void loadData()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -248,7 +249,7 @@ function ProductForm({
         {loadingData ? (
           <p style={{ padding: '1rem' }}>Cargando datos...</p>
         ) : (
-          <form onSubmit={handleSubmit} className="form">
+          <form onSubmit={e => { void handleSubmit(e) }} className="form">
             {/* SKU */}
             <div className="form-row">
               <label className="label">SKU *</label>

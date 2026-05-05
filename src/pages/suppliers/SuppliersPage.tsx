@@ -24,7 +24,8 @@ export default function SuppliersPage() {
     }
   }
 
-  useEffect(() => { loadSuppliers() }, [search])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { void loadSuppliers() }, [search])
 
   async function handleDelete(id: number) {
     if (!window.confirm('¿Desactivar este proveedor?')) return
@@ -88,7 +89,7 @@ export default function SuppliersPage() {
                   <td>
                     <button className="btn btn-secondary btn-sm" onClick={() => { setEditSupplier(s); setShowForm(true) }}>Editar</button>
                     {s.active && (
-                      <button className="btn btn-danger btn-sm" onClick={() => handleDelete(s.id)}>Desactivar</button>
+                      <button className="btn btn-danger btn-sm" onClick={() => { void handleDelete(s.id) }}>Desactivar</button>
                     )}
                   </td>
                 </tr>
@@ -105,7 +106,7 @@ export default function SuppliersPage() {
         <SupplierForm
           supplier={editSupplier}
           onClose={() => setShowForm(false)}
-          onSaved={loadSuppliers}
+          onSaved={() => { void loadSuppliers() }}
         />
       )}
     </div>
@@ -159,7 +160,7 @@ function SupplierForm({
           <h2>{supplier ? 'Editar Proveedor' : 'Nuevo Proveedor'}</h2>
           <button className="btn btn-ghost" onClick={onClose}>✕</button>
         </div>
-        <form onSubmit={handleSubmit} className="form">
+        <form onSubmit={e => { void handleSubmit(e) }} className="form">
           {[
             { label: 'Nombre / Razón Social *', key: 'name', required: true },
             { label: 'CUIT', key: 'cuit' },

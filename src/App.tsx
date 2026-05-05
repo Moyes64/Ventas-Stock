@@ -11,6 +11,7 @@ import InvoicingPage from './pages/invoicing/InvoicingPage'
 import ReportingPage from './pages/reporting/ReportingPage'
 import BackupPage from './pages/backup/BackupPage'
 import UsersPage from './pages/auth/UsersPage'
+import ParametersPage from './pages/parameters/ParametersPage'
 import { HiddenOptionsProvider } from './context/HiddenOptionsContext'
 
 export default function App() {
@@ -31,6 +32,7 @@ export default function App() {
             <Route path="reporting" element={<ReportingPage />} />
             <Route path="backup" element={<BackupPage />} />
             <Route path="users" element={<UsersPage />} />
+            <Route path="parameters" element={<ParametersPage />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Route>
         </Routes>

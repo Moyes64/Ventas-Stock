@@ -129,7 +129,7 @@ export class PrintingService {
     }
 
     const ticketData = await this.buildTicketData(sale)
-    await printTicket(ticketData)
+    printTicket(ticketData)
   }
 
   async printInternalReceipt(saleId: number): Promise<void> {
@@ -137,6 +137,6 @@ export class PrintingService {
     if (!sale) throw new Error(`Venta no encontrada: ${saleId}`)
 
     const ticketData = await this.buildTicketData(sale)
-    await printTicket(ticketData)
+    printTicket(ticketData)
   }
 }

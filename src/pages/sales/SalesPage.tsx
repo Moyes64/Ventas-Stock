@@ -39,7 +39,8 @@ export default function SalesPage() {
     }
   }
 
-  useEffect(() => { loadSales() }, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { void loadSales() }, [])
 
   const currency = (n: number) =>
     new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(n)
@@ -85,7 +86,7 @@ export default function SalesPage() {
             className="input"
           />
         </label>
-        <button onClick={loadSales} className="btn btn-secondary">Buscar</button>
+        <button onClick={() => { void loadSales() }} className="btn btn-secondary">Buscar</button>
       </div>
 
       {loading && <p>Cargando...</p>}

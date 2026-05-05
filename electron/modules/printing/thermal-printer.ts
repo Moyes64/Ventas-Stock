@@ -43,7 +43,7 @@ import type { TicketData } from './types'
  * For cross-platform, consider generating a PDF with 'pdfkit' and printing that.
  */
 
-export async function printTicket(ticketData: TicketData): Promise<void> {
+export function printTicket(ticketData: TicketData): void {
   // STUB: Log ticket to console for development
   console.log('\n' + '='.repeat(48))
   console.log(centerText(ticketData.companyName, 48))

@@ -51,7 +51,7 @@ async function createWindow(): Promise<void> {
 
   // Open external links in default browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url)
+    shell.openExternal(url).catch(() => undefined)
     return { action: 'deny' }
   })
 
@@ -68,7 +68,7 @@ async function bootstrap(): Promise<void> {
   // Initialize database and run pending migrations
   try {
     const db = getDb()
-    await runMigrations()
+    runMigrations()
     registerAllIpcHandlers(db)
     console.log('[main] Database initialized and IPC handlers registered')
   } catch (err) {
@@ -85,7 +85,7 @@ async function bootstrap(): Promise<void> {
   await createWindow()
 }
 
-app.whenReady().then(bootstrap)
+void app.whenReady().then(bootstrap)
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
@@ -95,7 +95,7 @@ app.on('window-all-closed', () => {
 
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow()
+    void createWindow()
   }
 })
 

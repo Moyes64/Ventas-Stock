@@ -192,3 +192,11 @@ export interface SalesSummary {
   authorizedCount: number
   internalReceiptCount: number
 }
+
+export interface Parameter {
+  id: number
+  descripcion: string
+  porcentaje: number
+  createdAt: string
+  updatedAt: string
+}

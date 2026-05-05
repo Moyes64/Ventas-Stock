@@ -34,7 +34,7 @@ export class BackupService {
 
       // Use SQLite backup API for safe hot backup
       const db = getDb()
-      db.backup(destPath)
+      void db.backup(destPath)
 
       const stats = fs.statSync(destPath)
 

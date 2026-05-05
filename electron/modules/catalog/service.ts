@@ -65,14 +65,18 @@ export class ProductService {
       })
     }
 
-    return this.repo.findById(id)!
+    const created = this.repo.findById(id)
+    if (!created) throw new Error('Error al recuperar el producto creado')
+    return created
   }
 
   update(id: number, data: UpdateProductInput): Product {
     const existing = this.repo.findById(id)
     if (!existing) throw new Error(`Producto no encontrado: ${id}`)
     this.repo.update(id, data)
-    return this.repo.findById(id)!
+    const updated = this.repo.findById(id)
+    if (!updated) throw new Error(`Producto no encontrado: ${id}`)
+    return updated
   }
 
   delete(id: number): void {

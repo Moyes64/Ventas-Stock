@@ -27,7 +27,7 @@ export default function Dashboard() {
         setLoading(false)
       }
     }
-    loadData()
+    void loadData()
   }, [])
 
   if (loading) return <div className="page"><p>Cargando...</p></div>

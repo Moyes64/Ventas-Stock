@@ -27,7 +27,7 @@ export default function BackupPage() {
     }
   }
 
-  useEffect(() => { loadBackups() }, [])
+  useEffect(() => { void loadBackups() }, [])
 
   async function handleCreate() {
     setCreating(true)
@@ -77,7 +77,7 @@ export default function BackupPage() {
     <div className="page">
       <div className="page-header">
         <h1 className="page-title">Respaldos</h1>
-        <button className="btn btn-primary" onClick={handleCreate} disabled={creating}>
+        <button className="btn btn-primary" onClick={() => { void handleCreate() }} disabled={creating}>
           {creating ? '⏳ Creando...' : '💾 Crear Respaldo Ahora'}
         </button>
       </div>
@@ -118,7 +118,7 @@ export default function BackupPage() {
                   <td>
                     <button
                       className="btn btn-danger btn-sm"
-                      onClick={() => handleRestore(b.filename)}
+                      onClick={() => { void handleRestore(b.filename) }}
                       disabled={restoring === b.filename}
                     >
                       {restoring === b.filename ? '⏳' : '↺ Restaurar'}
