@@ -6,6 +6,12 @@ export interface TicketLine {
   separator?: boolean
 }
 
+export interface DiscountLine {
+  descripcion: string
+  porcentaje: number
+  amount: number   // Absolute amount discounted (always positive)
+}
+
 export interface TicketData {
   // Header
   companyName: string
@@ -31,7 +37,9 @@ export interface TicketData {
     taxRate: number
   }>
   // Totals
-  subtotal: number
+  grossSubtotal: number      // Sum of items without IVA, before parameters
+  discountLines: DiscountLine[] // Only tipo='-' parameters (for invoice display)
+  subtotal: number           // Adjusted subtotal without IVA (after all parameters)
   taxAmount: number
   total: number
   // CAE

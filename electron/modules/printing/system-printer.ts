@@ -109,6 +109,10 @@ function generateTicketHTML(ticketData: TicketData, documentType: 'invoice' | 'd
       font-size: 10px;
       padding: 1px 0;
     }
+    .total-row--discount {
+      color: #c00;
+      font-size: 9.5px;
+    }
     .total-row--final {
       font-weight: bold;
       font-size: 13px;
@@ -186,10 +190,26 @@ function generateTicketHTML(ticketData: TicketData, documentType: 'invoice' | 'd
   <div class="separator"></div>
 
   <div class="totals">
+    ${ticketData.discountLines.length > 0 ? `
+    <div class="total-row">
+      <span>Subtotal:</span>
+      <span>${formatCurrency(ticketData.grossSubtotal)}</span>
+    </div>
+    ${ticketData.discountLines.map(d => `
+    <div class="total-row total-row--discount">
+      <span>Dto. ${escapeHtml(d.descripcion)} (${d.porcentaje}%):</span>
+      <span>-${formatCurrency(d.amount)}</span>
+    </div>`).join('')}
+    <div class="total-row">
+      <span>Subtotal c/dto. (s/IVA):</span>
+      <span>${formatCurrency(ticketData.subtotal)}</span>
+    </div>
+    ` : `
     <div class="total-row">
       <span>Subtotal (s/IVA):</span>
       <span>${formatCurrency(ticketData.subtotal)}</span>
     </div>
+    `}
     <div class="total-row">
       <span>IVA:</span>
       <span>${formatCurrency(ticketData.taxAmount)}</span>

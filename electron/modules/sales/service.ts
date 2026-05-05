@@ -1,17 +1,20 @@
 import type { Database } from 'better-sqlite3'
 import { SaleRepository } from './repository'
 import { StockService } from '../stock/service'
+import { ParameterRepository } from '../parameters/repository'
 import type { InvoicingService } from '../invoicing-afip/service'
-import type { Sale, CreateSaleInput } from './types'
+import type { Sale, AppliedParameter, CreateSaleInput } from './types'
 
 export class SaleService {
   private readonly saleRepo: SaleRepository
   private readonly stockService: StockService
+  private readonly paramRepo: ParameterRepository
   private readonly invoicingService: InvoicingService
 
   constructor(db: Database, invoicingService: InvoicingService) {
     this.saleRepo = new SaleRepository(db)
     this.stockService = new StockService(db)
+    this.paramRepo = new ParameterRepository(db)
     this.invoicingService = invoicingService
   }
 
@@ -31,15 +34,16 @@ export class SaleService {
    * End-to-end sale creation flow:
    *
    * 1. Validate stock availability for all items
-   * 2. Calculate totals (subtotal without IVA, taxAmount, total with IVA)
-   *    For black sales (isBlackSale=true): taxAmount=0, total=subtotal (base price, no IVA)
-   * 3. Persist sale with status PENDING_CAE (or INTERNAL_RECEIPT for black sales)
-   * 4. Register stock exits
-   * 5. For normal sales: Call InvoicingService.solicitarCAE(sale)
-   *    a. On success → update sale with CAE data, status = AUTHORIZED
-   *    b. On failure → update sale with error, status = INTERNAL_RECEIPT
-   *    For black sales: skip AFIP, status remains INTERNAL_RECEIPT
-   * 6. Return the final sale state
+   * 2. Calculate base totals (subtotal without IVA, taxAmount)
+   * 3. Resolve and apply parameters sequentially on the base subtotal:
+   *    - tipo '-': subtotal *= (1 - pct/100)
+   *    - tipo '+': subtotal *= (1 + pct/100)
+   *    IVA is scaled proportionally with the adjustment factor.
+   * 4. Persist sale + sale_parameters
+   * 5. Register stock exits
+   * 6. For normal sales: call InvoicingService.solicitarCAE(sale)
+   *    For black sales: skip AFIP -> status = INTERNAL_RECEIPT (IVA is still calculated)
+   * 7. Return the final sale state
    */
   async createSale(input: CreateSaleInput): Promise<Sale> {
     // Step 1: Validate stock
@@ -47,60 +51,79 @@ export class SaleService {
       input.items.map(i => ({ productId: i.productId, quantity: i.quantity }))
     )
 
-    // Step 2: Calculate totals
-    let subtotal = 0
-    let taxAmount = 0
+    // Step 2: Calculate base totals (unitPrice includes IVA)
+    let originalSubtotal = 0
+    let originalTaxAmount = 0
 
-    if (input.isBlackSale) {
-      // Black sale (venta en negro): no IVA applied — total equals base prices (unitPrice stripped of IVA)
-      for (const item of input.items) {
-        const itemTotal = item.quantity * item.unitPrice
-        const taxFactor = item.taxRate / 100
-        // Extract base price (strip IVA that is embedded in unit price)
-        subtotal += itemTotal / (1 + taxFactor)
-      }
-      taxAmount = 0
-    } else {
-      for (const item of input.items) {
-        const itemTotal = item.quantity * item.unitPrice
-        const taxFactor = item.taxRate / 100
-        // unitPrice is WITH IVA; extract base and tax
-        const itemBase = itemTotal / (1 + taxFactor)
-        subtotal += itemBase
-        taxAmount += itemTotal - itemBase
+    for (const item of input.items) {
+      const itemTotal = item.quantity * item.unitPrice
+      const taxFactor = item.taxRate / 100
+      const itemBase = itemTotal / (1 + taxFactor)
+      originalSubtotal += itemBase
+      originalTaxAmount += itemTotal - itemBase
+    }
+
+    // Step 3: Resolve and apply parameters sequentially
+    const appliedParameters: AppliedParameter[] = []
+    if (input.parameterIds && input.parameterIds.length > 0) {
+      for (const pid of input.parameterIds) {
+        const param = this.paramRepo.findById(pid)
+        if (param) {
+          appliedParameters.push({
+            parameterId: param.id,
+            descripcion: param.descripcion,
+            porcentaje: param.porcentaje,
+            tipo: param.tipo,
+          })
+        }
       }
     }
 
-    const total = subtotal + taxAmount
+    let adjustedSubtotal = originalSubtotal
+    for (const param of appliedParameters) {
+      if (param.tipo === '-') {
+        adjustedSubtotal *= 1 - param.porcentaje / 100
+      } else {
+        adjustedSubtotal *= 1 + param.porcentaje / 100
+      }
+    }
 
-    // Step 3: Persist sale
+    // Scale IVA proportionally to the adjustment
+    const adjustmentFactor = originalSubtotal > 0 ? adjustedSubtotal / originalSubtotal : 1
+    const taxAmount = originalTaxAmount * adjustmentFactor
+    const discountAmount = originalSubtotal - adjustedSubtotal  // positive = net savings
+    const total = adjustedSubtotal + taxAmount
+
+    // Step 4: Persist sale
     const saleId = this.saleRepo.create({
       ...input,
-      subtotal: Math.round(subtotal * 100) / 100,
+      subtotal: Math.round(adjustedSubtotal * 100) / 100,
       taxAmount: Math.round(taxAmount * 100) / 100,
       total: Math.round(total * 100) / 100,
+      discountAmount: Math.round(discountAmount * 100) / 100,
+      appliedParameters,
     })
 
-    // Step 4: Register stock exits
+    // Step 5: Register stock exits
     this.stockService.registerSaleExit(
       input.items.map(i => ({ productId: i.productId, quantity: i.quantity })),
       saleId,
       input.userId
     )
 
-    // Step 5: Request CAE (skip for black sales — always internal receipt)
+    // Step 6: Request CAE (skip for black sales -- always internal receipt)
     const sale = this.saleRepo.findById(saleId)
     if (!sale) throw new Error(`Venta no encontrada: ${saleId}`)
 
     if (input.isBlackSale) {
-      // Black sales are always internal receipts — never interact with AFIP
+      // Black sales skip AFIP and are always stored as internal receipts.
+      // IVA is still calculated (same as a normal sale) but no CAE is requested.
       this.saleRepo.updateStatus(sale.id, 'INTERNAL_RECEIPT')
     } else {
       try {
         const caeResult = await this.invoicingService.solicitarCAE(sale)
 
         if (caeResult.success && caeResult.cae) {
-          // Step 5a: CAE obtained — update sale as AUTHORIZED
           this.saleRepo.updateStatus(sale.id, 'AUTHORIZED', {
             cae: caeResult.cae,
             caeVto: caeResult.caeVto ?? '',
@@ -108,21 +131,19 @@ export class SaleService {
             puntoVenta: caeResult.puntoVenta ?? 0,
           })
         } else {
-          // Step 5b: AFIP rejected or error — fallback to internal receipt
           this.saleRepo.updateStatus(sale.id, 'INTERNAL_RECEIPT')
           if (caeResult.error) {
             this.saleRepo.updateAfipError(sale.id, caeResult.error)
           }
         }
       } catch (err) {
-        // Network or unexpected error — save as internal receipt
         const errorMsg = err instanceof Error ? err.message : String(err)
         this.saleRepo.updateStatus(sale.id, 'INTERNAL_RECEIPT')
         this.saleRepo.updateAfipError(sale.id, `Error inesperado: ${errorMsg}`)
       }
     }
 
-    // Step 6: Return final state
+    // Step 7: Return final state
     const finalSale = this.saleRepo.findById(saleId)
     if (!finalSale) throw new Error(`Venta no encontrada: ${saleId}`)
     return finalSale
