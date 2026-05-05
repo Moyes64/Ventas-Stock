@@ -6,6 +6,8 @@
   "private": true,
   "scripts": {
     "dev": "electron-vite dev",
+    "clean": "node scripts/clean.cjs",
+    "dev:clean": "pnpm clean && electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "lint": "eslint . --ext .ts,.tsx --report-unused-disable-directives --max-warnings 0",

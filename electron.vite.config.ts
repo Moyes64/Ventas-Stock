@@ -33,6 +33,10 @@ export default defineConfig({
   },
   renderer: {
     root: 'src',
+    server: {
+      host: 'localhost',
+      hmr: true,
+    },
     resolve: {
       alias: {
         '@': resolve('src'),
