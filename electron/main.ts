@@ -56,8 +56,10 @@ async function createWindow(): Promise<void> {
   })
 
   if (isDev) {
-    // electron-vite dev server
-    await mainWindow.loadURL('http://localhost:5173')
+    // electron-vite sets ELECTRON_RENDERER_URL to the actual dev-server URL
+    // (port may differ from 5173 if that port is already in use).
+    const devUrl = process.env['ELECTRON_RENDERER_URL'] ?? 'http://localhost:5173'
+    await mainWindow.loadURL(devUrl)
     mainWindow.webContents.openDevTools()
   } else {
     await mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'))
