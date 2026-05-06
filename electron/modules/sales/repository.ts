@@ -10,6 +10,7 @@ interface SaleRow {
   tax_amount: number
   total: number
   discount_amount: number
+  payment_method: string
   sale_date: string
   invoice_type: number | null
   invoice_number: number | null
@@ -110,8 +111,8 @@ export class SaleRepository {
     }
   ): number {
     const insertSale = this.db.prepare(
-      `INSERT INTO sales (customer_id, user_id, invoice_type, subtotal, tax_amount, total, discount_amount, is_black_sale)
-       VALUES (@customerId, @userId, @invoiceType, @subtotal, @taxAmount, @total, @discountAmount, @isBlackSale)`
+      `INSERT INTO sales (customer_id, user_id, invoice_type, subtotal, tax_amount, total, discount_amount, is_black_sale, payment_method)
+       VALUES (@customerId, @userId, @invoiceType, @subtotal, @taxAmount, @total, @discountAmount, @isBlackSale, @paymentMethod)`
     )
 
     const insertItem = this.db.prepare(
@@ -134,6 +135,7 @@ export class SaleRepository {
         total: data.total,
         discountAmount: data.discountAmount,
         isBlackSale: data.isBlackSale ? 1 : 0,
+        paymentMethod: data.paymentMethod ?? 'contado_efectivo',
       })
       const id = r.lastInsertRowid as number
 
@@ -256,6 +258,7 @@ export class SaleRepository {
       taxAmount: row.tax_amount,
       total: row.total,
       discountAmount: row.discount_amount ?? 0,
+      paymentMethod: (row.payment_method ?? 'contado_efectivo') as Sale['paymentMethod'],
       saleDate: row.sale_date,
       invoiceType: row.invoice_type,
       invoiceNumber: row.invoice_number,

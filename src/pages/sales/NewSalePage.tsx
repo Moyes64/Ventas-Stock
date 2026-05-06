@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { catalog, customers, sales, printing, parameters as parametersApi } from '../../lib/ipc'
-import type { Product, Customer, Sale, Parameter } from '../../types/ipc'
+import type { Product, Customer, Sale, Parameter, PaymentMethod } from '../../types/ipc'
 import { useHiddenOptions } from '../../context/HiddenOptionsContext'
 
 interface CartItem {
@@ -21,6 +21,7 @@ export default function NewSalePage() {
   const [cart, setCart] = useState<CartItem[]>([])
   const [processing, setProcessing] = useState(false)
   const [isBlackSale, setIsBlackSale] = useState(false)
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('contado_efectivo')
   const [result, setResult] = useState<Sale | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [printError, setPrintError] = useState<string | null>(null)
@@ -174,6 +175,7 @@ export default function NewSalePage() {
         customerId: selectedCustomerId ?? undefined,
         invoiceType: 11, // Factura C por defecto
         isBlackSale,
+        paymentMethod,
         parameterIds: selectedParameters.map(p => p.id),
         items: cart.map(item => ({
           productId: item.product.id,
@@ -337,6 +339,20 @@ export default function NewSalePage() {
                   {c.name} {c.cuitDni ? `(${c.cuitDni})` : ''}
                 </option>
               ))}
+            </select>
+          </div>
+
+          <div className="customer-select">
+            <label className="label">Tipo de pago</label>
+            <select
+              value={paymentMethod}
+              onChange={e => setPaymentMethod(e.target.value as PaymentMethod)}
+              className="select"
+            >
+              <option value="contado_efectivo">💵 Contado Efectivo</option>
+              <option value="transferencia">🏦 Transferencia</option>
+              <option value="debito">💳 Débito</option>
+              <option value="credito">💳 Crédito</option>
             </select>
           </div>
 

@@ -824,3 +824,198 @@ code {
   font-size: 14px;
   user-select: none;
 }
+
+/* =============================================================================
+   Sidebar Groups (collapsible sub-menus)
+   ============================================================================= */
+
+.sidebar-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-group-toggle {
+  background: none;
+  border: none;
+  text-align: left;
+  width: 100%;
+  cursor: pointer;
+  justify-content: flex-start;
+}
+
+.sidebar-group-arrow {
+  margin-left: auto;
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.sidebar-group-items {
+  display: flex;
+  flex-direction: column;
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.sidebar-nav-item--sub {
+  padding-left: 36px;
+  font-size: 13px;
+}
+
+/* =============================================================================
+   Sub-navigation tabs (CajaLayout)
+   ============================================================================= */
+
+.sub-nav {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid var(--color-border);
+  padding-bottom: 0;
+}
+
+.sub-nav-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  color: var(--color-text-muted);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: var(--radius) var(--radius) 0 0;
+  border: 1px solid transparent;
+  border-bottom: none;
+  margin-bottom: -2px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.sub-nav-item:hover {
+  background: var(--color-border);
+  color: var(--color-text);
+}
+
+.sub-nav-item.active {
+  background: var(--color-surface);
+  color: var(--color-primary);
+  border-color: var(--color-border);
+  border-bottom-color: var(--color-surface);
+}
+
+.sub-page {
+  padding: 0;
+}
+
+/* =============================================================================
+   Caja module
+   ============================================================================= */
+
+.caja-section {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 24px;
+  max-width: 700px;
+}
+
+.section-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: var(--color-text);
+}
+
+.section-desc {
+  color: var(--color-text-muted);
+  margin-bottom: 20px;
+  font-size: 13.5px;
+}
+
+.caja-status-card {
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+
+.caja-status-card p + p { margin-top: 4px; }
+
+.caja-status-card--open {
+  background: #ecfdf5;
+  border: 1px solid #6ee7b7;
+  color: #065f46;
+}
+
+.caja-status-card--closed {
+  background: #eff6ff;
+  border: 1px solid #93c5fd;
+  color: #1e40af;
+}
+
+.caja-summary {
+  margin-top: 16px;
+}
+
+.caja-summary-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--color-text);
+}
+
+.caja-summary-table {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.caja-summary-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 16px;
+  font-size: 14px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.caja-summary-row:last-child { border-bottom: none; }
+
+.caja-summary-row--ingreso { background: #f0fdf4; color: #15803d; }
+.caja-summary-row--egreso  { background: #fef2f2; color: #dc2626; }
+.caja-summary-row--total   { background: #eff6ff; font-weight: 700; }
+
+.caja-movement-form {
+  background: #f8fafc;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  margin-bottom: 20px;
+}
+
+.caja-movement-form h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.form-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.form-group--grow { flex: 1; min-width: 180px; }
+.form-group--action { flex-shrink: 0; }
+
+.success {
+  color: var(--color-success);
+  font-size: 13.5px;
+  margin-top: 8px;
+}
+
+.empty-message {
+  color: var(--color-text-muted);
+  font-style: italic;
+  padding: 16px 0;
+}
+
+.text-danger { color: var(--color-danger); }
+

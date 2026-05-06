@@ -12,6 +12,10 @@ import ReportingPage from './pages/reporting/ReportingPage'
 import BackupPage from './pages/backup/BackupPage'
 import UsersPage from './pages/auth/UsersPage'
 import ParametersPage from './pages/parameters/ParametersPage'
+import CajaLayout from './pages/caja/CajaLayout'
+import AperturaPage from './pages/caja/AperturaPage'
+import CierrePage from './pages/caja/CierrePage'
+import MovimientosPage from './pages/caja/MovimientosPage'
 import { HiddenOptionsProvider } from './context/HiddenOptionsContext'
 
 export default function App() {
@@ -33,6 +37,12 @@ export default function App() {
             <Route path="backup" element={<BackupPage />} />
             <Route path="users" element={<UsersPage />} />
             <Route path="parameters" element={<ParametersPage />} />
+            <Route path="caja" element={<CajaLayout />}>
+              <Route index element={<Navigate to="/caja/apertura" replace />} />
+              <Route path="apertura" element={<AperturaPage />} />
+              <Route path="cierre" element={<CierrePage />} />
+              <Route path="movimientos" element={<MovimientosPage />} />
+            </Route>
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Route>
         </Routes>

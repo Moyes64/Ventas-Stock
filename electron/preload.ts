@@ -116,6 +116,20 @@ const electronAPI = {
     update: (id: number, data: unknown) => invoke('parameters:update', id, data),
     delete: (id: number) => invoke('parameters:delete', id),
   },
+
+  // Caja
+  caja: {
+    openSession: (input: unknown) => invoke('caja:openSession', input),
+    getOpenSession: () => invoke('caja:getOpenSession'),
+    getSessionByDate: (date: string) => invoke('caja:getSessionByDate', date),
+    listSessions: (limit?: number) => invoke('caja:listSessions', limit),
+    getCierreSummary: (date: string) => invoke('caja:getCierreSummary', date),
+    closeSession: (date: string, cierreAmount: number) =>
+      invoke('caja:closeSession', date, cierreAmount),
+    listMovements: (date: string) => invoke('caja:listMovements', date),
+    createMovement: (input: unknown) => invoke('caja:createMovement', input),
+    deleteMovement: (id: number) => invoke('caja:deleteMovement', id),
+  },
 }
 
 contextBridge.exposeInMainWorld('electron', electronAPI)
