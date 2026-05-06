@@ -19,6 +19,10 @@ import type {
   DailySummaryReport,
   SalesSummary,
   Parameter,
+  CashSession,
+  CashMovement,
+  CierreSummary,
+  PaymentMethod,
 } from '../types/ipc'
 
 // Access the electron bridge exposed by preload
@@ -126,6 +130,7 @@ export const sales = {
     userId?: number
     invoiceType?: number
     isBlackSale?: boolean
+    paymentMethod?: PaymentMethod
     parameterIds?: number[]
     items: Array<{
       productId: number
@@ -192,4 +197,26 @@ export const parameters = {
   update: (id: number, data: Partial<{ descripcion: string; porcentaje: number; tipo: '+' | '-' }>) =>
     electron.parameters.update(id, data) as Promise<Parameter>,
   delete: (id: number) => electron.parameters.delete(id) as Promise<void>,
+}
+
+// Caja
+export const caja = {
+  openSession: (input: { sessionDate: string; aperturaAmount: number }) =>
+    electron.caja.openSession(input) as Promise<CashSession>,
+  getOpenSession: () =>
+    electron.caja.getOpenSession() as Promise<CashSession | undefined>,
+  getSessionByDate: (date: string) =>
+    electron.caja.getSessionByDate(date) as Promise<CashSession | undefined>,
+  listSessions: (limit?: number) =>
+    electron.caja.listSessions(limit) as Promise<CashSession[]>,
+  getCierreSummary: (date: string) =>
+    electron.caja.getCierreSummary(date) as Promise<CierreSummary>,
+  closeSession: (date: string, cierreAmount: number) =>
+    electron.caja.closeSession(date, cierreAmount) as Promise<CashSession>,
+  listMovements: (date: string) =>
+    electron.caja.listMovements(date) as Promise<CashMovement[]>,
+  createMovement: (input: { descripcion: string; tipo: 'ingreso' | 'egreso'; monto: number; movimientoDate?: string }) =>
+    electron.caja.createMovement(input) as Promise<CashMovement>,
+  deleteMovement: (id: number) =>
+    electron.caja.deleteMovement(id) as Promise<void>,
 }

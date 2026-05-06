@@ -1,4 +1,5 @@
 export type SaleStatus = 'PENDING_CAE' | 'AUTHORIZED' | 'REJECTED' | 'INTERNAL_RECEIPT'
+export type PaymentMethod = 'contado_efectivo' | 'transferencia' | 'debito' | 'credito'
 
 export interface SaleItem {
   id?: number
@@ -29,6 +30,7 @@ export interface Sale {
   taxAmount: number       // IVA on adjusted subtotal
   total: number           // subtotal + taxAmount
   discountAmount: number  // Net reduction in subtotal (positive = money saved)
+  paymentMethod: PaymentMethod
   saleDate: string
   invoiceType: number | null
   invoiceNumber: number | null
@@ -48,6 +50,7 @@ export interface CreateSaleInput {
   userId?: number
   invoiceType?: number
   isBlackSale?: boolean
+  paymentMethod?: PaymentMethod
   parameterIds?: number[]
   items: Array<{
     productId: number

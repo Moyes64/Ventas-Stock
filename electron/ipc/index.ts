@@ -10,6 +10,7 @@ import { registerPrintingHandlers } from './printing.handlers'
 import { registerReportingHandlers } from './reporting.handlers'
 import { registerBackupHandlers } from './backup.handlers'
 import { registerParameterHandlers } from './parameters.handlers'
+import { registerCajaHandlers } from './caja.handlers'
 
 export function registerAllIpcHandlers(db: Database): void {
   registerAuthHandlers(db)
@@ -23,4 +24,5 @@ export function registerAllIpcHandlers(db: Database): void {
   registerReportingHandlers(db)
   registerBackupHandlers()
   registerParameterHandlers(db)
+  registerCajaHandlers(db)
 }
