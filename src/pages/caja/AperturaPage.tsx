@@ -28,6 +28,9 @@ export default function AperturaPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const currency = (n: number) =>
+    new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(n)
+
   async function handleOpenSession() {
     const amount = parseFloat(aperturaAmount)
     if (isNaN(amount) || amount < 0) {
@@ -40,7 +43,7 @@ export default function AperturaPage() {
     try {
       const session = await caja.openSession({ sessionDate, aperturaAmount: amount })
       setExistingSession(session)
-      setSuccess(`✅ Apertura de caja registrada para el ${session.sessionDate} con $${session.aperturaAmount.toFixed(2)}`)
+      setSuccess(`✅ Apertura de caja registrada para el ${session.sessionDate} con ${currency(session.aperturaAmount)}`)
       setAperturaAmount('')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al abrir la caja')
@@ -48,9 +51,6 @@ export default function AperturaPage() {
       setLoading(false)
     }
   }
-
-  const currency = (n: number) =>
-    new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(n)
 
   return (
     <div className="caja-section">
