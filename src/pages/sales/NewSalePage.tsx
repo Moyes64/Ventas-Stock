@@ -433,6 +433,7 @@ export default function NewSalePage() {
                           value={item.quantity}
                           min="1"
                           onChange={e => updateQuantity(item.product.id, parseInt(e.target.value, 10))}
+                          onFocus={e => e.target.select()}
                           className="input input--qty"
                         />
                       </td>

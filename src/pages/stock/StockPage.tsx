@@ -124,6 +124,7 @@ function EntryForm({
                 type="number"
                 value={form.quantity}
                 onChange={e => setForm({ ...form, quantity: Math.max(1, parseInt(e.target.value, 10) || 1) })}
+                onFocus={e => e.target.select()}
                 min="1"
                 required
                 className="input"
@@ -299,6 +300,7 @@ function EditMovementForm({
                 type="number"
                 value={form.quantity}
                 onChange={e => { const val = parseInt(e.target.value, 10); setForm({ ...form, quantity: isNaN(val) ? form.quantity : Math.max(1, val) }) }}
+                onFocus={e => e.target.select()}
                 min="1"
                 required
                 className="input"
@@ -631,6 +633,7 @@ export default function StockPage() {
                             type="number"
                             value={editValue}
                             onChange={e => setEditValue(e.target.value)}
+                            onFocus={e => e.target.select()}
                             onKeyDown={e => handleKeyDown(e, item.productId)}
                             className="input input--stock-edit"
                             disabled={saving}

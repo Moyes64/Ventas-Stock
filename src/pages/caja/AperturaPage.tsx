@@ -99,6 +99,7 @@ export default function AperturaPage() {
               step="0.01"
               value={aperturaAmount}
               onChange={e => setAperturaAmount(e.target.value)}
+              onFocus={e => e.target.select()}
               placeholder="0.00"
               className="input"
             />

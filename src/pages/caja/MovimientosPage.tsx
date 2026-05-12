@@ -124,6 +124,7 @@ export default function MovimientosPage() {
               step="0.01"
               value={monto}
               onChange={e => setMonto(e.target.value)}
+              onFocus={e => e.target.select()}
               placeholder="0.00"
               className="input"
             />

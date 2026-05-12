@@ -324,6 +324,7 @@ function ProductForm({
                 type="number"
                 value={form.cost}
                 onChange={e => setForm({ ...form, cost: Number.isNaN(parseFloat(e.target.value)) ? form.cost : parseFloat(e.target.value) })}
+                onFocus={e => e.target.select()}
                 min="0"
                 step="0.01"
                 required
@@ -353,6 +354,7 @@ function ProductForm({
                 type="number"
                 value={form.gainPercent}
                 onChange={e => setForm({ ...form, gainPercent: Number.isNaN(parseFloat(e.target.value)) ? form.gainPercent : parseFloat(e.target.value) })}
+                onFocus={e => e.target.select()}
                 min="0"
                 step="0.1"
                 required
@@ -383,6 +385,7 @@ function ProductForm({
                 type="number"
                 value={form.stockMin}
                 onChange={e => setForm({ ...form, stockMin: Number.isNaN(parseInt(e.target.value, 10)) ? form.stockMin : parseInt(e.target.value, 10) })}
+                onFocus={e => e.target.select()}
                 min="0"
                 className="input"
                 placeholder="0"
