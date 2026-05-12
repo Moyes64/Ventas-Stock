@@ -172,13 +172,20 @@ export default function NewSalePage() {
   // ── Checkout ──────────────────────────────────────────────────────────────
 
   async function handleCheckout() {
-    if (cart.length === 0) {
+    const itemsForCheckout = cart.filter(item => item.quantity > 0)
+    if (itemsForCheckout.length === 0) {
       setError('El carrito está vacío')
       return
     }
-    if (cart.some(item => item.quantity <= 0)) {
-      setError('La cantidad de cada producto debe ser mayor a cero')
-      return
+    if (itemsForCheckout.length !== cart.length) {
+      setCart(itemsForCheckout)
+      setQuantityDrafts(prev => {
+        const next: Record<number, string> = {}
+        for (const item of itemsForCheckout) {
+          if (prev[item.product.id] !== undefined) next[item.product.id] = prev[item.product.id]
+        }
+        return next
+      })
     }
     setProcessing(true)
     setError(null)
@@ -189,7 +196,7 @@ export default function NewSalePage() {
         isBlackSale,
         paymentMethod,
         parameterIds: selectedParameters.map(p => p.id),
-        items: cart.map(item => ({
+        items: itemsForCheckout.map(item => ({
           productId: item.product.id,
           quantity: item.quantity,
           unitPrice: item.unitPrice,
