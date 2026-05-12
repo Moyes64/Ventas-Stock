@@ -456,7 +456,7 @@ export default function NewSalePage() {
                             setQuantityDrafts(prev => ({ ...prev, [item.product.id]: raw }))
                             if (raw.trim() === '') return
                             const parsed = parseInt(raw, 10)
-                            if (!Number.isNaN(parsed)) updateQuantity(item.product.id, parsed)
+                            if (!Number.isNaN(parsed) && parsed >= 0) updateQuantity(item.product.id, parsed)
                           }}
                           onBlur={() => {
                             const raw = quantityDrafts[item.product.id]
