@@ -154,10 +154,10 @@ function ProductForm({
     description: product?.description ?? '',
     supplierId: product?.supplierId ?? ('' as number | ''),
     supplierCode: product?.supplierCode ?? '',
-    cost: product?.cost ?? 0,
+    cost: String(product?.cost ?? 0),
     taxRateId: product?.taxRateId ?? 0,
-    gainPercent: product?.gainPercent ?? 0,
-    stockMin: product?.stockMin ?? 0,
+    gainPercent: String(product?.gainPercent ?? 0),
+    stockMin: String(product?.stockMin ?? 0),
   })
 
   const [saving, setSaving] = useState(false)
@@ -166,7 +166,13 @@ function ProductForm({
   // Derived: selected IVA percentage
   const selectedTaxRate = taxRates.find(t => t.id === Number(form.taxRateId))
   const ivaPct = selectedTaxRate?.percentage ?? 0
-  const computedPrice = calcSalePrice(form.cost, form.gainPercent, ivaPct)
+  const costValue = parseFloat(form.cost)
+  const gainPercentValue = parseFloat(form.gainPercent)
+  const stockMinValue = parseInt(form.stockMin, 10)
+  const normalizedCost = Number.isNaN(costValue) ? 0 : costValue
+  const normalizedGainPercent = Number.isNaN(gainPercentValue) ? 0 : gainPercentValue
+  const normalizedStockMin = Number.isNaN(stockMinValue) ? 0 : stockMinValue
+  const computedPrice = calcSalePrice(normalizedCost, normalizedGainPercent, ivaPct)
 
   useEffect(() => {
     async function loadData() {
@@ -198,6 +204,11 @@ function ProductForm({
     setSaving(true)
     setError(null)
     try {
+      if (normalizedCost < 0 || normalizedGainPercent < 0 || normalizedStockMin < 0) {
+        setError('Los valores numéricos no pueden ser negativos')
+        return
+      }
+
       if (product) {
         await catalog.updateProduct(product.id, {
           sku: form.sku,
@@ -206,11 +217,11 @@ function ProductForm({
           description: form.description,
           supplierId: form.supplierId === '' ? undefined : Number(form.supplierId),
           supplierCode: form.supplierCode,
-          cost: form.cost,
+          cost: normalizedCost,
           price: computedPrice,
           taxRateId: Number(form.taxRateId),
-          gainPercent: form.gainPercent,
-          stockMin: form.stockMin,
+          gainPercent: normalizedGainPercent,
+          stockMin: normalizedStockMin,
         })
       } else {
         await catalog.createProduct({
@@ -220,11 +231,11 @@ function ProductForm({
           description: form.description,
           supplierId: form.supplierId === '' ? undefined : Number(form.supplierId),
           supplierCode: form.supplierCode,
-          cost: form.cost,
+          cost: normalizedCost,
           price: computedPrice,
           taxRateId: Number(form.taxRateId),
-          gainPercent: form.gainPercent,
-          stockMin: form.stockMin,
+          gainPercent: normalizedGainPercent,
+          stockMin: normalizedStockMin,
         })
       }
       onSaved()
@@ -323,7 +334,8 @@ function ProductForm({
               <input
                 type="number"
                 value={form.cost}
-                onChange={e => setForm({ ...form, cost: Number.isNaN(parseFloat(e.target.value)) ? form.cost : parseFloat(e.target.value) })}
+                onChange={e => setForm({ ...form, cost: e.target.value })}
+                onBlur={e => { if (e.target.value.trim() === '') setForm({ ...form, cost: '0' }) }}
                 onFocus={e => e.target.select()}
                 min="0"
                 step="0.01"
@@ -353,7 +365,8 @@ function ProductForm({
               <input
                 type="number"
                 value={form.gainPercent}
-                onChange={e => setForm({ ...form, gainPercent: Number.isNaN(parseFloat(e.target.value)) ? form.gainPercent : parseFloat(e.target.value) })}
+                onChange={e => setForm({ ...form, gainPercent: e.target.value })}
+                onBlur={e => { if (e.target.value.trim() === '') setForm({ ...form, gainPercent: '0' }) }}
                 onFocus={e => e.target.select()}
                 min="0"
                 step="0.1"
@@ -374,7 +387,7 @@ function ProductForm({
                 title="Calculado: Costo × (1 + Ganancia%) × (1 + IVA%)"
               />
               <small className="hint">
-                {form.cost} × (1 + {form.gainPercent}%) × (1 + {ivaPct}%) = {currency(computedPrice)}
+                {normalizedCost} × (1 + {normalizedGainPercent}%) × (1 + {ivaPct}%) = {currency(computedPrice)}
               </small>
             </div>
 
@@ -384,7 +397,8 @@ function ProductForm({
               <input
                 type="number"
                 value={form.stockMin}
-                onChange={e => setForm({ ...form, stockMin: Number.isNaN(parseInt(e.target.value, 10)) ? form.stockMin : parseInt(e.target.value, 10) })}
+                onChange={e => setForm({ ...form, stockMin: e.target.value })}
+                onBlur={e => { if (e.target.value.trim() === '') setForm({ ...form, stockMin: '0' }) }}
                 onFocus={e => e.target.select()}
                 min="0"
                 className="input"

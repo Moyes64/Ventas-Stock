@@ -19,6 +19,7 @@ export default function NewSalePage() {
   const [customerList, setCustomerList] = useState<Customer[]>([])
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null)
   const [cart, setCart] = useState<CartItem[]>([])
+  const [quantityDrafts, setQuantityDrafts] = useState<Record<number, string>>({})
   const [processing, setProcessing] = useState(false)
   const [isBlackSale, setIsBlackSale] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('contado_efectivo')
@@ -69,6 +70,11 @@ export default function NewSalePage() {
   }
 
   function addToCart(product: Product) {
+    setQuantityDrafts(prev => {
+      const next = { ...prev }
+      delete next[product.id]
+      return next
+    })
     setCart(prev => {
       const existing = prev.find(item => item.product.id === product.id)
       if (existing) {
@@ -96,14 +102,16 @@ export default function NewSalePage() {
 
   function removeFromCart(productId: number) {
     setCart(prev => prev.filter(item => item.product.id !== productId))
+    setQuantityDrafts(prev => {
+      const next = { ...prev }
+      delete next[productId]
+      return next
+    })
     setError(null)
   }
 
   function updateQuantity(productId: number, quantity: number) {
-    if (quantity <= 0) {
-      removeFromCart(productId)
-      return
-    }
+    if (Number.isNaN(quantity) || quantity < 0) return
     setCart(prev =>
       prev.map(item =>
         item.product.id === productId
@@ -166,6 +174,10 @@ export default function NewSalePage() {
   async function handleCheckout() {
     if (cart.length === 0) {
       setError('El carrito está vacío')
+      return
+    }
+    if (cart.some(item => item.quantity <= 0)) {
+      setError('La cantidad de cada producto debe ser mayor a cero')
       return
     }
     setProcessing(true)
@@ -430,9 +442,28 @@ export default function NewSalePage() {
                       <td>
                         <input
                           type="number"
-                          value={item.quantity}
-                          min="1"
-                          onChange={e => updateQuantity(item.product.id, parseInt(e.target.value, 10))}
+                          value={quantityDrafts[item.product.id] ?? String(item.quantity)}
+                          min="0"
+                          onChange={e => {
+                            const raw = e.target.value
+                            setQuantityDrafts(prev => ({ ...prev, [item.product.id]: raw }))
+                            if (raw.trim() === '') return
+                            const parsed = parseInt(raw, 10)
+                            if (!Number.isNaN(parsed)) updateQuantity(item.product.id, parsed)
+                          }}
+                          onBlur={() => {
+                            const raw = quantityDrafts[item.product.id]
+                            if (raw === undefined) return
+                            if (raw.trim() === '') {
+                              setQuantityDrafts(prev => ({ ...prev, [item.product.id]: '0' }))
+                              updateQuantity(item.product.id, 0)
+                              return
+                            }
+                            const parsed = parseInt(raw, 10)
+                            const normalized = Number.isNaN(parsed) ? 0 : Math.max(0, parsed)
+                            setQuantityDrafts(prev => ({ ...prev, [item.product.id]: String(normalized) }))
+                            updateQuantity(item.product.id, normalized)
+                          }}
                           onFocus={e => e.target.select()}
                           className="input input--qty"
                         />
