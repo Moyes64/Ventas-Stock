@@ -172,6 +172,7 @@ export default function ParametersPage() {
                 type="number"
                 value={form.porcentaje}
                 onChange={e => setForm({ ...form, porcentaje: e.target.value })}
+                onFocus={e => e.target.select()}
                 className="input"
                 placeholder="0"
                 step="any"

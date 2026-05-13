@@ -27,7 +27,7 @@ function EntryForm({
 
   const [form, setForm] = useState({
     productId: '' as number | '',
-    quantity: 1,
+    quantity: '1',
     voucherType: 'FACTURA',
     voucherNumber: '',
     voucherDate: today,
@@ -58,6 +58,11 @@ function EntryForm({
       setError('Seleccione un producto')
       return
     }
+    const quantity = parseInt(form.quantity, 10)
+    if (Number.isNaN(quantity) || quantity <= 0) {
+      setError('La cantidad debe ser mayor a cero')
+      return
+    }
     if (form.supplierId === '') {
       setError('Seleccione un proveedor')
       return
@@ -76,7 +81,7 @@ function EntryForm({
       await stockApi.addMovement({
         productId: Number(form.productId),
         type: 'ENTRY',
-        quantity: form.quantity,
+        quantity,
         voucherType: form.voucherType,
         voucherNumber: form.voucherNumber.trim(),
         voucherDate: form.voucherDate,
@@ -123,7 +128,9 @@ function EntryForm({
               <input
                 type="number"
                 value={form.quantity}
-                onChange={e => setForm({ ...form, quantity: Math.max(1, parseInt(e.target.value, 10) || 1) })}
+                onChange={e => setForm({ ...form, quantity: e.target.value })}
+                onBlur={e => { if (e.target.value.trim() === '') setForm({ ...form, quantity: '0' }) }}
+                onFocus={e => e.target.select()}
                 min="1"
                 required
                 className="input"
@@ -210,7 +217,7 @@ function EditMovementForm({
   const [error, setError] = useState<string | null>(null)
 
   const [form, setForm] = useState({
-    quantity: movement.quantity,
+    quantity: String(movement.quantity),
     voucherType: movement.voucherType ?? 'FACTURA',
     voucherNumber: movement.voucherNumber ?? '',
     voucherDate: movement.voucherDate ?? '',
@@ -234,7 +241,8 @@ function EditMovementForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (form.quantity <= 0) {
+    const quantity = parseInt(form.quantity, 10)
+    if (Number.isNaN(quantity) || quantity <= 0) {
       setError('La cantidad debe ser mayor a cero')
       return
     }
@@ -246,7 +254,7 @@ function EditMovementForm({
     setError(null)
     try {
       await stockApi.updateMovement(movement.id, {
-        quantity: form.quantity,
+        quantity,
         voucherType: form.voucherType || null,
         voucherNumber: form.voucherNumber.trim() || null,
         voucherDate: form.voucherDate || null,
@@ -298,7 +306,9 @@ function EditMovementForm({
               <input
                 type="number"
                 value={form.quantity}
-                onChange={e => { const val = parseInt(e.target.value, 10); setForm({ ...form, quantity: isNaN(val) ? form.quantity : Math.max(1, val) }) }}
+                onChange={e => setForm({ ...form, quantity: e.target.value })}
+                onBlur={e => { if (e.target.value.trim() === '') setForm({ ...form, quantity: '0' }) }}
+                onFocus={e => e.target.select()}
                 min="1"
                 required
                 className="input"
@@ -631,6 +641,7 @@ export default function StockPage() {
                             type="number"
                             value={editValue}
                             onChange={e => setEditValue(e.target.value)}
+                            onFocus={e => e.target.select()}
                             onKeyDown={e => handleKeyDown(e, item.productId)}
                             className="input input--stock-edit"
                             disabled={saving}
