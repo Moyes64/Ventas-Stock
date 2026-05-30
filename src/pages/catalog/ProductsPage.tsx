@@ -132,6 +132,13 @@ function calcSalePrice(cost: number, gainPct: number, ivaPct: number): number {
   return cost * (1 + gainPct / 100) * (1 + ivaPct / 100)
 }
 
+/** Calculates gain percentage from sale price keeping cost and iva fixed */
+function calcGainPercentFromSalePrice(cost: number, salePrice: number, ivaPct: number): number {
+  const divisor = cost * (1 + ivaPct / 100)
+  if (divisor <= 0) return 0
+  return (salePrice / divisor - 1) * 100
+}
+
 function ProductForm({
   product,
   onClose,
@@ -157,6 +164,7 @@ function ProductForm({
     cost: String(product?.cost ?? 0),
     taxRateId: product?.taxRateId ?? 0,
     gainPercent: String(product?.gainPercent ?? 0),
+    price: String(product?.price ?? calcSalePrice(product?.cost ?? 0, product?.gainPercent ?? 0, 0)),
     stockMin: String(product?.stockMin ?? 0),
   })
 
@@ -168,11 +176,40 @@ function ProductForm({
   const ivaPct = selectedTaxRate?.percentage ?? 0
   const costValue = parseFloat(form.cost)
   const gainPercentValue = parseFloat(form.gainPercent)
+  const priceValue = parseFloat(form.price)
   const stockMinValue = parseInt(form.stockMin, 10)
   const normalizedCost = Number.isNaN(costValue) ? 0 : costValue
   const normalizedGainPercent = Number.isNaN(gainPercentValue) ? 0 : gainPercentValue
+  const normalizedPrice = Number.isNaN(priceValue) ? 0 : priceValue
   const normalizedStockMin = Number.isNaN(stockMinValue) ? 0 : stockMinValue
-  const computedPrice = calcSalePrice(normalizedCost, normalizedGainPercent, ivaPct)
+
+  function handleCostChange(value: string) {
+    const nextCost = parseFloat(value)
+    const normalizedNextCost = Number.isNaN(nextCost) ? 0 : nextCost
+    const nextPrice = calcSalePrice(normalizedNextCost, normalizedGainPercent, ivaPct)
+    setForm(prev => ({ ...prev, cost: value, price: String(nextPrice) }))
+  }
+
+  function handleTaxRateChange(nextTaxRateId: number) {
+    const nextTaxRate = taxRates.find(t => t.id === nextTaxRateId)
+    const nextIvaPct = nextTaxRate?.percentage ?? 0
+    const nextPrice = calcSalePrice(normalizedCost, normalizedGainPercent, nextIvaPct)
+    setForm(prev => ({ ...prev, taxRateId: nextTaxRateId, price: String(nextPrice) }))
+  }
+
+  function handleGainPercentChange(value: string) {
+    const nextGainPercent = parseFloat(value)
+    const normalizedNextGainPercent = Number.isNaN(nextGainPercent) ? 0 : nextGainPercent
+    const nextPrice = calcSalePrice(normalizedCost, normalizedNextGainPercent, ivaPct)
+    setForm(prev => ({ ...prev, gainPercent: value, price: String(nextPrice) }))
+  }
+
+  function handlePriceChange(value: string) {
+    const nextPrice = parseFloat(value)
+    const normalizedNextPrice = Number.isNaN(nextPrice) ? 0 : nextPrice
+    const nextGainPercent = calcGainPercentFromSalePrice(normalizedCost, normalizedNextPrice, ivaPct)
+    setForm(prev => ({ ...prev, price: value, gainPercent: String(nextGainPercent) }))
+  }
 
   useEffect(() => {
     async function loadData() {
@@ -204,7 +241,7 @@ function ProductForm({
     setSaving(true)
     setError(null)
     try {
-      if (normalizedCost < 0 || normalizedGainPercent < 0 || normalizedStockMin < 0) {
+    if (normalizedCost < 0 || normalizedGainPercent < 0 || normalizedPrice < 0 || normalizedStockMin < 0) {
         setError('Los valores numéricos no pueden ser negativos')
         return
       }
@@ -218,7 +255,7 @@ function ProductForm({
           supplierId: form.supplierId === '' ? undefined : Number(form.supplierId),
           supplierCode: form.supplierCode,
           cost: normalizedCost,
-          price: computedPrice,
+          price: normalizedPrice,
           taxRateId: Number(form.taxRateId),
           gainPercent: normalizedGainPercent,
           stockMin: normalizedStockMin,
@@ -232,7 +269,7 @@ function ProductForm({
           supplierId: form.supplierId === '' ? undefined : Number(form.supplierId),
           supplierCode: form.supplierCode,
           cost: normalizedCost,
-          price: computedPrice,
+          price: normalizedPrice,
           taxRateId: Number(form.taxRateId),
           gainPercent: normalizedGainPercent,
           stockMin: normalizedStockMin,
@@ -334,8 +371,8 @@ function ProductForm({
               <input
                 type="number"
                 value={form.cost}
-                onChange={e => setForm({ ...form, cost: e.target.value })}
-                onBlur={e => { if (e.target.value.trim() === '') setForm({ ...form, cost: '0' }) }}
+                onChange={e => handleCostChange(e.target.value)}
+                onBlur={e => { if (e.target.value.trim() === '') handleCostChange('0') }}
                 onFocus={e => e.target.select()}
                 min="0"
                 step="0.01"
@@ -349,7 +386,7 @@ function ProductForm({
               <label className="label">IVA (%) *</label>
               <select
                 value={form.taxRateId}
-                onChange={e => setForm({ ...form, taxRateId: Number(e.target.value) })}
+                onChange={e => handleTaxRateChange(Number(e.target.value))}
                 required
                 className="input"
               >
@@ -365,8 +402,8 @@ function ProductForm({
               <input
                 type="number"
                 value={form.gainPercent}
-                onChange={e => setForm({ ...form, gainPercent: e.target.value })}
-                onBlur={e => { if (e.target.value.trim() === '') setForm({ ...form, gainPercent: '0' }) }}
+                onChange={e => handleGainPercentChange(e.target.value)}
+                onBlur={e => { if (e.target.value.trim() === '') handleGainPercentChange('0') }}
                 onFocus={e => e.target.select()}
                 min="0"
                 step="0.1"
@@ -376,18 +413,22 @@ function ProductForm({
               />
             </div>
 
-            {/* Precio venta calculado */}
+            {/* Precio venta */}
             <div className="form-row">
               <label className="label">Precio venta (c/ IVA)</label>
               <input
-                type="text"
-                value={currency(computedPrice)}
-                readOnly
-                className="input input--readonly"
-                title="Calculado: Costo × (1 + Ganancia%) × (1 + IVA%)"
+                type="number"
+                value={form.price}
+                onChange={e => handlePriceChange(e.target.value)}
+                onBlur={e => { if (e.target.value.trim() === '') handlePriceChange('0') }}
+                onFocus={e => e.target.select()}
+                min="0"
+                step="0.01"
+                className="input"
+                title="Editable: al cambiar este valor se recalcula la ganancia (%)"
               />
               <small className="hint">
-                {normalizedCost} × (1 + {normalizedGainPercent}%) × (1 + {ivaPct}%) = {currency(computedPrice)}
+                {normalizedCost} × (1 + {normalizedGainPercent}%) × (1 + {ivaPct}%) = {currency(normalizedPrice)}
               </small>
             </div>
 
