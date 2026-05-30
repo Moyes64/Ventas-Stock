@@ -1,0 +1,103 @@
+name: Deploy Dev Environment
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-dev-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify PR/Push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Build
+        run: pnpm build
+
+  deploy-dev:
+    name: Deploy to Dev
+    runs-on: ubuntu-latest
+    needs: verify
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    environment: development
+
+    steps:
+      - name: Validate deployment configuration
+        env:
+          DEV_DEPLOY_HOST: ${{ secrets.DEV_DEPLOY_HOST }}
+          DEV_DEPLOY_USER: ${{ secrets.DEV_DEPLOY_USER }}
+          DEV_DEPLOY_SSH_KEY: ${{ secrets.DEV_DEPLOY_SSH_KEY }}
+          DEV_DEPLOY_PATH: ${{ vars.DEV_DEPLOY_PATH }}
+        run: |
+          set -eu
+          test -n "$DEV_DEPLOY_HOST" || (echo "Missing secret DEV_DEPLOY_HOST" && exit 1)
+          test -n "$DEV_DEPLOY_USER" || (echo "Missing secret DEV_DEPLOY_USER" && exit 1)
+          test -n "$DEV_DEPLOY_SSH_KEY" || (echo "Missing secret DEV_DEPLOY_SSH_KEY" && exit 1)
+          test -n "$DEV_DEPLOY_PATH" || (echo "Missing variable DEV_DEPLOY_PATH" && exit 1)
+
+      - name: Deploy using SSH
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          DEV_DEPLOY_BRANCH: ${{ vars.DEV_DEPLOY_BRANCH }}
+          DEV_DEPLOY_PATH: ${{ vars.DEV_DEPLOY_PATH }}
+          DEV_DEPLOY_RESTART_COMMAND: ${{ vars.DEV_DEPLOY_RESTART_COMMAND }}
+        with:
+          host: ${{ secrets.DEV_DEPLOY_HOST }}
+          username: ${{ secrets.DEV_DEPLOY_USER }}
+          key: ${{ secrets.DEV_DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEV_DEPLOY_PORT || '22' }}
+          script_stop: true
+          envs: DEV_DEPLOY_BRANCH,DEV_DEPLOY_PATH,DEV_DEPLOY_RESTART_COMMAND
+          script: |
+            set -eu
+            BRANCH="${DEV_DEPLOY_BRANCH:-main}"
+            PATH_TO_DEPLOY="$DEV_DEPLOY_PATH"
+
+            cd "$PATH_TO_DEPLOY"
+            git fetch origin
+            git checkout "$BRANCH"
+            git reset --hard "origin/$BRANCH"
+
+            corepack enable || true
+            corepack pnpm install --frozen-lockfile --ignore-scripts
+            corepack pnpm build
+
+            if [ -n "${DEV_DEPLOY_RESTART_COMMAND:-}" ]; then
+              sh -lc "$DEV_DEPLOY_RESTART_COMMAND"
+            fi

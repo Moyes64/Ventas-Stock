@@ -404,6 +404,31 @@ NewSalePage.handleCheckout()
 
 ---
 
+## 🚀 Deploy automático a entorno Dev (GitHub Actions)
+
+El workflow `.github/workflows/deploy-dev.yml` automatiza validación + deploy para entorno dev con este flujo:
+
+- **Pull Request a `main`**: corre `typecheck`, `lint` y `build` (sin deploy).
+- **Push a `main`**: corre validaciones y, si pasan, ejecuta deploy remoto por SSH.
+- **`workflow_dispatch`**: permite disparar el deploy manualmente desde Actions.
+
+### Variables (Repository/Environment Variables)
+
+- `DEV_DEPLOY_PATH` (**requerida**): ruta absoluta en el servidor dev donde está el repo.
+- `DEV_DEPLOY_BRANCH` (opcional, default `main`): rama a desplegar en el servidor.
+- `DEV_DEPLOY_RESTART_COMMAND` (opcional): comando para reiniciar el servicio en dev (por ejemplo `sudo systemctl restart ventas-stock-dev`).
+
+### Secrets (Repository/Environment Secrets)
+
+- `DEV_DEPLOY_HOST` (**requerido**): host/IP del servidor dev.
+- `DEV_DEPLOY_PORT` (opcional, default `22`): puerto SSH.
+- `DEV_DEPLOY_USER` (**requerido**): usuario SSH.
+- `DEV_DEPLOY_SSH_KEY` (**requerido**): clave privada SSH (PEM) para conectarse al servidor.
+
+> Recomendado: configurar estas variables/secrets en el **Environment `development`** de GitHub para segmentar permisos y proteger deploys.
+
+---
+
 ## 🔐 Seguridad
 
 - Los certificados AFIP **nunca deben commitearse** (están en `.gitignore`)
