@@ -1,20 +1,122 @@
 import { useEffect, useState } from 'react'
 import { reporting } from '../../lib/ipc'
-import type { DailySummaryReport } from '../../types/ipc'
+import { localToday, localFirstOfMonth, localCurrentMonth } from '../../lib/date'
+import type { DailySummaryReport, RankingItem } from '../../types/ipc'
 import { useHiddenOptions } from '../../context/HiddenOptionsContext'
+
+// ── SVG Pie Chart ──────────────────────────────────────────────────────────────
+const COLORS = [
+  '#4f8ef7','#f7874f','#4fd38e','#f74f7e','#d4e04f',
+  '#7c4ff7','#4fcff7','#f7c74f','#9bf74f','#f74fc4',
+]
+
+interface PieSlice { label: string; value: number; color: string }
+
+function PieChart({ items, label }: { items: RankingItem[]; label: string }) {
+  const total = items.reduce((s, i) => s + i.value, 0)
+  if (total === 0 || items.length === 0) {
+    return <div className="pie-empty">Sin datos</div>
+  }
+
+  const SIZE = 200
+  const CX = SIZE / 2
+  const CY = SIZE / 2
+  const R = 80
+
+  const slices: PieSlice[] = items.map((it, idx) => ({
+    label: it.productName,
+    value: it.value,
+    color: COLORS[idx % COLORS.length],
+  }))
+
+  // Build arc paths
+  let startAngle = -Math.PI / 2
+  const paths = slices.map((s, idx) => {
+    const angle = (s.value / total) * 2 * Math.PI
+    const endAngle = startAngle + angle
+    const x1 = CX + R * Math.cos(startAngle)
+    const y1 = CY + R * Math.sin(startAngle)
+    const x2 = CX + R * Math.cos(endAngle)
+    const y2 = CY + R * Math.sin(endAngle)
+    const largeArc = angle > Math.PI ? 1 : 0
+    const d = `M ${CX} ${CY} L ${x1} ${y1} A ${R} ${R} 0 ${largeArc} 1 ${x2} ${y2} Z`
+    startAngle = endAngle
+    return <path key={idx} d={d} fill={s.color} stroke="#fff" strokeWidth={1} />
+  })
+
+  return (
+    <div className="pie-wrapper">
+      <h3 className="pie-title">{label}</h3>
+      <div className="pie-body">
+        <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
+          {paths}
+        </svg>
+        <div className="pie-legend">
+          {slices.map((s, idx) => (
+            <div key={idx} className="pie-legend-item">
+              <span className="pie-legend-dot" style={{ background: s.color }} />
+              <span className="pie-legend-name" title={s.label}>
+                {s.label.length > 22 ? s.label.slice(0, 20) + '…' : s.label}
+              </span>
+              <span className="pie-legend-value">
+                {((s.value / total) * 100).toFixed(1)}%
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function ReportingPage() {
   const [summary, setSummary] = useState<DailySummaryReport[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const { isHiddenOptionsVisible } = useHiddenOptions()
-  const [dateFrom, setDateFrom] = useState(() => {
-    const d = new Date()
-    d.setDate(1)
-    return d.toISOString().slice(0, 10)
-  })
-  const [dateTo, setDateTo] = useState(new Date().toISOString().slice(0, 10))
+  const [dateFrom, setDateFrom] = useState(localFirstOfMonth)
+  const [dateTo, setDateTo] = useState(localToday)
   const [activeReport, setActiveReport] = useState<'daily' | 'products' | 'lowstock'>('daily')
+
+  // Ranking dashboard state
+  const [rankDateFrom, setRankDateFrom] = useState(localFirstOfMonth)
+  const [rankDateTo, setRankDateTo] = useState(localToday)
+  const [rankMonth, setRankMonth] = useState(localCurrentMonth)
+  const [rankFilterMode, setRankFilterMode] = useState<'range' | 'month'>('month')
+  const [rankingQty, setRankingQty] = useState<RankingItem[]>([])
+  const [rankingProfit, setRankingProfit] = useState<RankingItem[]>([])
+  const [rankLoading, setRankLoading] = useState(false)
+  const [rankError, setRankError] = useState<string | null>(null)
+
+  async function loadRanking(overrides?: { dateFrom?: string; dateTo?: string }) {
+    let from = overrides?.dateFrom ?? rankDateFrom
+    let to = overrides?.dateTo ?? rankDateTo
+    if (rankFilterMode === 'month') {
+      const [y, m] = rankMonth.split('-').map(Number)
+      const last = new Date(y, m, 0).getDate()
+      from = `${rankMonth}-01`
+      to = `${rankMonth}-${String(last).padStart(2, '0')}`
+    }
+    setRankLoading(true)
+    setRankError(null)
+    try {
+      const [qty, profit] = await Promise.all([
+        reporting.rankingPorCantidad({ dateFrom: from, dateTo: to }),
+        reporting.rankingPorGanancia({ dateFrom: from, dateTo: to }),
+      ])
+      setRankingQty(qty)
+      setRankingProfit(profit)
+    } catch (err) {
+      setRankError(err instanceof Error ? err.message : 'Error al cargar ranking')
+    } finally {
+      setRankLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activeReport === 'products') void loadRanking()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeReport])
 
   async function loadReport() {
     setLoading(true)
@@ -132,7 +234,117 @@ export default function ReportingPage() {
         </>
       )}
 
-      {activeReport === 'products' && <p className="page-subtitle">Próximamente: Reporte de productos más vendidos</p>}
+      {activeReport === 'products' && (
+        <div className="ranking-dashboard">
+          {/* Filtros */}
+          <div className="filter-bar filter-bar--wrap">
+            <label>
+              Filtrar por:
+              <select
+                value={rankFilterMode}
+                onChange={e => setRankFilterMode(e.target.value as 'range' | 'month')}
+                className="select"
+              >
+                <option value="month">Mes</option>
+                <option value="range">Rango de fechas</option>
+              </select>
+            </label>
+            {rankFilterMode === 'month' ? (
+              <label>
+                Mes:
+                <input
+                  type="month"
+                  value={rankMonth}
+                  onChange={e => setRankMonth(e.target.value)}
+                  className="input"
+                />
+              </label>
+            ) : (
+              <>
+                <label>
+                  Desde:
+                  <input type="date" value={rankDateFrom} onChange={e => setRankDateFrom(e.target.value)} className="input" />
+                </label>
+                <label>
+                  Hasta:
+                  <input type="date" value={rankDateTo} onChange={e => setRankDateTo(e.target.value)} className="input" />
+                </label>
+              </>
+            )}
+            <button onClick={() => { void loadRanking() }} className="btn btn-secondary">
+              🔍 Actualizar
+            </button>
+          </div>
+
+          {rankLoading && <p>Cargando ranking...</p>}
+          {rankError && <p className="error">{rankError}</p>}
+
+          {!rankLoading && (
+            <div className="ranking-charts">
+              <PieChart items={rankingQty} label="🏆 Top 10 — Cantidad vendida" />
+              <PieChart items={rankingProfit} label="💰 Top 10 — Ganancia neta" />
+            </div>
+          )}
+
+          {!rankLoading && (rankingQty.length > 0 || rankingProfit.length > 0) && (
+            <div className="ranking-tables">
+              {/* Tabla cantidad */}
+              <div className="ranking-table-block">
+                <h3 className="ranking-table-title">Cantidad vendida</h3>
+                <table className="table">
+                  <thead>
+                    <tr><th>#</th><th>Producto</th><th>SKU</th><th>Unidades</th></tr>
+                  </thead>
+                  <tbody>
+                    {rankingQty.map((r, idx) => (
+                      <tr key={r.productId}>
+                        <td>
+                          <span className="ranking-badge" style={{ background: COLORS[idx % COLORS.length] }}>
+                            {idx + 1}
+                          </span>
+                        </td>
+                        <td>{r.productName}</td>
+                        <td>{r.sku}</td>
+                        <td>{r.value.toLocaleString('es-AR')}</td>
+                      </tr>
+                    ))}
+                    {rankingQty.length === 0 && (
+                      <tr><td colSpan={4} className="empty-row">Sin datos</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Tabla ganancia */}
+              <div className="ranking-table-block">
+                <h3 className="ranking-table-title">Ganancia neta</h3>
+                <table className="table">
+                  <thead>
+                    <tr><th>#</th><th>Producto</th><th>SKU</th><th>Ganancia</th></tr>
+                  </thead>
+                  <tbody>
+                    {rankingProfit.map((r, idx) => (
+                      <tr key={r.productId}>
+                        <td>
+                          <span className="ranking-badge" style={{ background: COLORS[idx % COLORS.length] }}>
+                            {idx + 1}
+                          </span>
+                        </td>
+                        <td>{r.productName}</td>
+                        <td>{r.sku}</td>
+                        <td>{new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(r.value)}</td>
+                      </tr>
+                    ))}
+                    {rankingProfit.length === 0 && (
+                      <tr><td colSpan={4} className="empty-row">Sin datos</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
       {activeReport === 'lowstock' && <p className="page-subtitle">Próximamente: Reporte de stock bajo</p>}
 
       {isHiddenOptionsVisible && (

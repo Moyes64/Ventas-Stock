@@ -11,6 +11,16 @@ import { registerReportingHandlers } from './reporting.handlers'
 import { registerBackupHandlers } from './backup.handlers'
 import { registerParameterHandlers } from './parameters.handlers'
 import { registerCajaHandlers } from './caja.handlers'
+import { registerSyncHandlers } from './sync.handlers'
+import { registerSystemParamsHandlers } from './system-params.handlers'
+import { registerRemitoScannerHandlers } from './remito-scanner.handlers'
+import { registerPrinterConfigHandlers } from './printer-config.handlers'
+import { registerLabelConfigHandlers } from './label-config.handlers'
+import { registerCsrHandlers } from './csr.handlers'
+import { registerMailHandlers } from './mail.handlers'
+import { registerWebCatalogHandlers } from './web-catalog.handlers'
+import { registerCambiosHandlers } from './cambios.handlers'
+import { registerCreditsHandlers } from './credits.handlers'
 
 export function registerAllIpcHandlers(db: Database): void {
   registerAuthHandlers(db)
@@ -25,4 +35,14 @@ export function registerAllIpcHandlers(db: Database): void {
   registerBackupHandlers()
   registerParameterHandlers(db)
   registerCajaHandlers(db)
+  registerSyncHandlers(db)
+  registerSystemParamsHandlers(db)
+  registerRemitoScannerHandlers(db)
+  registerPrinterConfigHandlers()
+  registerLabelConfigHandlers()
+  registerCsrHandlers()
+  registerMailHandlers(db)
+  registerWebCatalogHandlers(db)
+  registerCambiosHandlers(db)
+  registerCreditsHandlers(db)
 }

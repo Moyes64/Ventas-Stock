@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { caja } from '../../lib/ipc'
+import { caja, printing } from '../../lib/ipc'
+import { localToday } from '../../lib/date'
 import type { CierreSummary } from '../../types/ipc'
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
@@ -10,7 +11,7 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
 }
 
 export default function CierrePage() {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localToday()
   const [selectedDate, setSelectedDate] = useState(today)
   const [summary, setSummary] = useState<CierreSummary | null>(null)
   const [loadingSum, setLoadingSum] = useState(false)
@@ -18,6 +19,9 @@ export default function CierrePage() {
   const [closing, setClosing] = useState(false)
   const [closeError, setCloseError] = useState<string | null>(null)
   const [closeSuccess, setCloseSuccess] = useState<string | null>(null)
+  const [showPrintPrompt, setShowPrintPrompt] = useState(false)
+  const [batchPrinting, setBatchPrinting] = useState(false)
+  const [batchMsg, setBatchMsg] = useState<string | null>(null)
 
   async function loadSummary(date: string) {
     setLoadingSum(true)
@@ -48,6 +52,7 @@ export default function CierrePage() {
     try {
       await caja.closeSession(selectedDate, summary.expectedTotal)
       setCloseSuccess(`✅ Cierre de caja registrado. Total: ${currency(summary.expectedTotal)}`)
+      setShowPrintPrompt(true)
       void loadSummary(selectedDate)
     } catch (err) {
       setCloseError(err instanceof Error ? err.message : 'Error al cerrar la caja')
@@ -152,6 +157,50 @@ export default function CierrePage() {
 
           {closeError && <p className="error">{closeError}</p>}
           {closeSuccess && <p className="success">{closeSuccess}</p>}
+
+          {/* Prompt de impresión post-cierre */}
+          {showPrintPrompt && (
+            <div className="print-prompt-card">
+              <p className="print-prompt-text">
+                🖨️ ¿Desea imprimir todos los comprobantes emitidos hoy ({selectedDate})?
+              </p>
+              <div className="print-prompt-actions">
+                <button
+                  className="btn btn-primary"
+                  disabled={batchPrinting}
+                  onClick={async () => {
+                    setBatchPrinting(true)
+                    setBatchMsg(null)
+                    try {
+                      const invoicesHoy = await printing.listForReprint({ dateFrom: selectedDate, dateTo: selectedDate })
+                      const ids = invoicesHoy.map(i => i.id)
+                      if (ids.length === 0) {
+                        setBatchMsg('No hay comprobantes para imprimir en esta fecha.')
+                      } else {
+                        const res = await printing.printBatch(ids)
+                        setBatchMsg(`✅ Impresos ${res.printed} de ${ids.length} comprobante${ids.length !== 1 ? 's' : ''}.`)
+                      }
+                    } catch (err) {
+                      setBatchMsg(`Error: ${err instanceof Error ? err.message : String(err)}`)
+                    } finally {
+                      setBatchPrinting(false)
+                      setShowPrintPrompt(false)
+                    }
+                  }}
+                >
+                  {batchPrinting ? '⏳ Imprimiendo...' : '🖨️ Sí, imprimir todos'}
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setShowPrintPrompt(false)}
+                  disabled={batchPrinting}
+                >
+                  No por ahora
+                </button>
+              </div>
+            </div>
+          )}
+          {batchMsg && <p className="success">{batchMsg}</p>}
 
           {summary.session.status === 'open' && !closeSuccess && (
             <button

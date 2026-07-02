@@ -25,4 +25,12 @@ export function registerReportingHandlers(db: Database): void {
   ipcMain.handle('reporting:dailySummary', (_event, filters: ReportFilters) => {
     return reportingService.dailySummary(filters)
   })
+
+  ipcMain.handle('reporting:rankingPorCantidad', (_event, filters: ReportFilters) => {
+    return reportingService.rankingPorCantidad(filters)
+  })
+
+  ipcMain.handle('reporting:rankingPorGanancia', (_event, filters: ReportFilters) => {
+    return reportingService.rankingPorGanancia(filters)
+  })
 }

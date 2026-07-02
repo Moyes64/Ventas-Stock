@@ -1,4 +1,5 @@
 import type { Database } from 'better-sqlite3'
+import { localToday } from '../../lib/date'
 import type {
   CashSession,
   CashMovement,
@@ -41,6 +42,17 @@ export class CajaRepository {
   findSessionByDate(date: string): CashSession | undefined {
     const row = this.db
       .prepare('SELECT * FROM cash_register_sessions WHERE session_date = ?')
+      .get(date) as SessionRow | undefined
+    return row ? this.mapSession(row) : undefined
+  }
+
+  findLastSessionBefore(date: string): CashSession | undefined {
+    const row = this.db
+      .prepare(
+        `SELECT * FROM cash_register_sessions
+         WHERE session_date < ?
+         ORDER BY session_date DESC LIMIT 1`
+      )
       .get(date) as SessionRow | undefined
     return row ? this.mapSession(row) : undefined
   }
@@ -108,7 +120,7 @@ export class CajaRepository {
         descripcion: data.descripcion,
         tipo: data.tipo,
         monto: data.monto,
-        movimientoDate: data.movimientoDate ?? new Date().toISOString().slice(0, 10),
+        movimientoDate: data.movimientoDate ?? localToday(),
       })
     return result.lastInsertRowid as number
   }
@@ -124,7 +136,7 @@ export class CajaRepository {
       .prepare(
         `SELECT payment_method, COALESCE(SUM(total), 0) AS total_amount
          FROM sales
-         WHERE sale_date = ? AND status != 'REJECTED'
+         WHERE sale_date = ? AND status != 'CANCELLED'
          GROUP BY payment_method`
       )
       .all(date) as Array<{ payment_method: string; total_amount: number }>

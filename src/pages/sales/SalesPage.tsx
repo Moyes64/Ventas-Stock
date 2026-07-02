@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { sales, printing } from '../../lib/ipc'
+import { sales, printing, systemParams, mail } from '../../lib/ipc'
+import { localToday } from '../../lib/date'
 import type { Sale } from '../../types/ipc'
 
 const STATUS_LABELS: Record<string, string> = {
@@ -21,9 +22,11 @@ export default function SalesPage() {
   const [saleList, setSaleList] = useState<Sale[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [dateFrom, setDateFrom] = useState(new Date().toISOString().slice(0, 10))
-  const [dateTo, setDateTo] = useState(new Date().toISOString().slice(0, 10))
+  const [dateFrom, setDateFrom] = useState(localToday)
+  const [dateTo, setDateTo] = useState(localToday)
   const [printingId, setPrintingId] = useState<number | null>(null)
+  const [changePrintingId, setChangePrintingId] = useState<number | null>(null)
+  const [mailingId, setMailingId] = useState<number | null>(null)
   const [printError, setPrintError] = useState<string | null>(null)
 
   async function loadSales() {
@@ -57,6 +60,33 @@ export default function SalesPage() {
       setPrintError(err instanceof Error ? err.message : 'Error al imprimir')
     } finally {
       setPrintingId(null)
+    }
+  }
+
+  async function handleSendMail(sale: Sale) {
+    if (!sale.customerEmail) return
+    setMailingId(sale.id)
+    setPrintError(null)
+    try {
+      const res = await mail.sendInvoice(sale.id, sale.customerEmail)
+      if (!res.success) setPrintError(res.error ?? 'Error al enviar email')
+    } catch (err) {
+      setPrintError(err instanceof Error ? err.message : 'Error al enviar email')
+    } finally {
+      setMailingId(null)
+    }
+  }
+
+  async function handlePrintChangeTicket(sale: Sale) {
+    setChangePrintingId(sale.id)
+    setPrintError(null)
+    try {
+      const res = await printing.printChangeTicket(sale.id)
+      if (!res.success) setPrintError(res.error ?? 'Error al imprimir ticket de cambio')
+    } catch (err) {
+      setPrintError(err instanceof Error ? err.message : 'Error al imprimir ticket de cambio')
+    } finally {
+      setChangePrintingId(null)
     }
   }
 
@@ -130,7 +160,7 @@ export default function SalesPage() {
                         <span className="text-muted">—</span>
                       )}
                     </td>
-                    <td>
+                    <td style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
                       <button
                         className="btn btn-secondary btn-sm"
                         onClick={() => void handlePrint(sale)}
@@ -139,6 +169,24 @@ export default function SalesPage() {
                       >
                         {printingId === sale.id ? '⏳' : '🖨️'}
                       </button>
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => void handlePrintChangeTicket(sale)}
+                        disabled={changePrintingId === sale.id}
+                        title="Imprimir Ticket de Cambio"
+                      >
+                        {changePrintingId === sale.id ? '⏳' : '🔄'}
+                      </button>
+                      {sale.customerEmail && (
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => void handleSendMail(sale)}
+                          disabled={mailingId === sale.id}
+                          title={`Enviar por email a ${sale.customerEmail}`}
+                        >
+                          {mailingId === sale.id ? '⏳' : '📧'}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

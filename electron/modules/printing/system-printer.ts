@@ -3,6 +3,8 @@ import os from 'os'
 import path from 'path'
 import fs from 'fs'
 import type { TicketData } from './types'
+import { PrinterConfigService, sendEscPos } from '../printer-config/service'
+import { buildEscPosTicket } from './escpos-ticket'
 
 function formatCurrency(n: number): string {
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(n)
@@ -74,9 +76,17 @@ function generateTicketHTML(ticketData: TicketData, documentType: 'invoice' | 'd
     .center { text-align: center; }
     .right  { text-align: right; }
     .bold   { font-weight: bold; }
-    .header { text-align: center; margin-bottom: 6px; }
-    .company-name { font-size: 13px; font-weight: bold; }
-    .company-info { font-size: 9px; margin-top: 1px; }
+    .header { margin-bottom: 6px; }
+    .company-name { font-size: 13px; font-weight: bold; text-align: center; }
+    .company-info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-size: 9px;
+      margin-top: 2px;
+    }
+    .company-info-row .left  { text-align: left; }
+    .company-info-row .right { text-align: right; }
     .doc-title {
       border: 1px solid #000;
       padding: 4px 6px;
@@ -153,9 +163,19 @@ function generateTicketHTML(ticketData: TicketData, documentType: 'invoice' | 'd
 <body>
   <div class="header">
     <div class="company-name">${escapeHtml(ticketData.companyName)}</div>
-    <div class="company-info">CUIT: ${escapeHtml(ticketData.companyCuit)}</div>
-    ${ticketData.companyAddress ? `<div class="company-info">${escapeHtml(ticketData.companyAddress)}</div>` : ''}
-    <div class="company-info">Cond. IVA: ${escapeHtml(ticketData.condicionIva)}</div>
+    <div class="company-info-row">
+      <span class="left">CUIT: ${escapeHtml(ticketData.companyCuit)}</span>
+      <span class="right">${ticketData.companyAddress ? escapeHtml(ticketData.companyAddress) : ''}</span>
+    </div>
+    <div class="company-info-row">
+      <span class="left">IVA: ${escapeHtml(ticketData.condicionIva)}</span>
+      <span class="right">${ticketData.inicioActividades ? `Inic.Act: ${escapeHtml(ticketData.inicioActividades)}` : ''}</span>
+    </div>
+    ${ticketData.condicionIIBB ? `
+    <div class="company-info-row">
+      <span class="left">IIBB: ${escapeHtml(ticketData.condicionIIBB)}</span>
+      <span class="right"></span>
+    </div>` : ''}
   </div>
 
   <div class="separator"></div>
@@ -227,6 +247,20 @@ export async function printSystemTicket(
   ticketData: TicketData,
   documentType: 'invoice' | 'delivery' = 'invoice',
 ): Promise<void> {
+  // Si la impresora térmica ESC/POS está habilitada y configurada, usarla directamente.
+  // Esto garantiza la misma densidad/calidad que el ticket de prueba ESC/POS.
+  const printerSvc = new PrinterConfigService()
+  const printerCfg = printerSvc.get()
+  const escPosReady = printerCfg.enabled && (
+    printerCfg.connectionType === 'usb' ? !!printerCfg.usbPrinterName : !!printerCfg.ip
+  )
+
+  if (escPosReady) {
+    const buf = buildEscPosTicket(ticketData, printerCfg.darkness)
+    await sendEscPos(printerCfg, buf)
+    return
+  }
+
   const html = generateTicketHTML(ticketData, documentType)
 
   // Write to a temp file so large base64 QR images don't overflow data: URIs

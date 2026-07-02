@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { invoicing as invoicingApi, printing } from '../../lib/ipc'
+import { localToday } from '../../lib/date'
 import type { Sale } from '../../types/ipc'
 import { useHiddenOptions } from '../../context/HiddenOptionsContext'
 
@@ -10,31 +11,58 @@ const STATUS_LABELS: Record<string, string> = {
   INTERNAL_RECEIPT: '📄 Comprobante Interno',
 }
 
+const STATUS_BADGE: Record<string, string> = {
+  AUTHORIZED: 'badge badge--success',
+  PENDING_CAE: 'badge badge--warning',
+  REJECTED: 'badge badge--danger',
+  INTERNAL_RECEIPT: 'badge badge--info',
+}
+
 export default function InvoicingPage() {
+  const today = localToday()
   const [invoices, setInvoices] = useState<Sale[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [dateFrom, setDateFrom] = useState(() => {
-    const d = new Date()
-    d.setDate(1)
-    return d.toISOString().slice(0, 10)
-  })
-  const [dateTo, setDateTo] = useState(new Date().toISOString().slice(0, 10))
+
+  // Filtros
+  const [dateFrom, setDateFrom] = useState(today)
+  const [dateTo, setDateTo] = useState(today)
   const [statusFilter, setStatusFilter] = useState('')
+  const [customerNameFilter, setCustomerNameFilter] = useState('')
+  const [customerDocFilter, setCustomerDocFilter] = useState('')
+  const [invoiceNumberFilter, setInvoiceNumberFilter] = useState('')
+  const [blackFilter, setBlackFilter] = useState<'all' | 'normal' | 'black'>('all')
+  const nameDebounce = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Acciones
   const [retrying, setRetrying] = useState<number | null>(null)
   const [printingId, setPrintingId] = useState<number | null>(null)
+  const [batchPrinting, setBatchPrinting] = useState(false)
   const [printError, setPrintError] = useState<string | null>(null)
-  const [blackFilter, setBlackFilter] = useState<'all' | 'normal' | 'black'>('all')
+  const [batchMsg, setBatchMsg] = useState<string | null>(null)
+  const [selected, setSelected] = useState<Set<number>>(new Set())
+
   const { isHiddenOptionsVisible } = useHiddenOptions()
 
-  async function loadInvoices() {
+  const currency = (n: number) =>
+    new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(n)
+
+  async function loadInvoices(overrides?: Partial<{
+    dateFrom: string; dateTo: string; status: string
+    customerName: string; customerDoc: string; invoiceNumber: string
+  }>) {
     setLoading(true)
     setError(null)
+    setSelected(new Set())
     try {
-      const data = await invoicingApi.list({
-        dateFrom,
-        dateTo,
-        status: statusFilter || undefined,
+      const invNum = parseInt(overrides?.invoiceNumber ?? invoiceNumberFilter, 10)
+      const data = await printing.listForReprint({
+        dateFrom: overrides?.dateFrom ?? dateFrom,
+        dateTo: overrides?.dateTo ?? dateTo,
+        status: (overrides?.status ?? statusFilter) || undefined,
+        customerName: (overrides?.customerName ?? customerNameFilter) || undefined,
+        customerDoc: (overrides?.customerDoc ?? customerDocFilter) || undefined,
+        invoiceNumber: !isNaN(invNum) && invNum > 0 ? invNum : undefined,
       })
       setInvoices(data)
     } catch (err) {
@@ -44,23 +72,26 @@ export default function InvoicingPage() {
     }
   }
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { void loadInvoices() }, [])
+  useEffect(() => { void loadInvoices() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Búsqueda por nombre con debounce 300ms
+  function handleNameChange(val: string) {
+    setCustomerNameFilter(val)
+    if (nameDebounce.current) clearTimeout(nameDebounce.current)
+    nameDebounce.current = setTimeout(() => {
+      void loadInvoices({ customerName: val })
+    }, 300)
+  }
 
   async function handleRetryCAE(saleId: number) {
     setRetrying(saleId)
     try {
       const result = await invoicingApi.retryCAE(saleId)
-      if (result.success) {
-        await loadInvoices()
-      } else {
-        setError(`Error AFIP: ${result.error}`)
-      }
+      if (result.success) { await loadInvoices() }
+      else setError(`Error AFIP: ${result.error}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al reintentar CAE')
-    } finally {
-      setRetrying(null)
-    }
+    } finally { setRetrying(null) }
   }
 
   async function handlePrint(inv: Sale) {
@@ -73,21 +104,54 @@ export default function InvoicingPage() {
       if (!res.success) setPrintError(res.error ?? 'Error al imprimir')
     } catch (err) {
       setPrintError(err instanceof Error ? err.message : 'Error al imprimir')
-    } finally {
-      setPrintingId(null)
+    } finally { setPrintingId(null) }
+  }
+
+  async function handleBatchPrint() {
+    const ids = selected.size > 0 ? Array.from(selected) : invoices.map(i => i.id)
+    if (ids.length === 0) return
+    setBatchPrinting(true)
+    setBatchMsg(null)
+    setPrintError(null)
+    try {
+      const res = await printing.printBatch(ids)
+      setBatchMsg(`✅ Impresas ${res.printed} de ${ids.length} facturas.` +
+        (res.errors.length > 0 ? ` Errores: ${res.errors.join('; ')}` : ''))
+    } catch (err) {
+      setPrintError(err instanceof Error ? err.message : 'Error al imprimir lote')
+    } finally { setBatchPrinting(false) }
+  }
+
+  function toggleSelect(id: number) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    if (selected.size === invoices.length) {
+      setSelected(new Set())
+    } else {
+      setSelected(new Set(invoices.map(i => i.id)))
     }
   }
 
-  const currency = (n: number) =>
-    new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(n)
+  const filtered = invoices.filter(inv => {
+    if (blackFilter === 'normal') return !inv.isBlackSale
+    if (blackFilter === 'black') return inv.isBlackSale
+    return true
+  })
 
   return (
     <div className="page">
       <div className="page-header">
-        <h1 className="page-title">Facturación Electrónica</h1>
+        <h1 className="page-title">🧾 Facturación / Reimpresión</h1>
       </div>
 
-      <div className="filter-bar">
+      {/* ── Filtros ─────────────────────────────────────────────────────── */}
+      <div className="filter-bar filter-bar--wrap">
         <label>
           Desde:
           <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="input" />
@@ -102,9 +166,39 @@ export default function InvoicingPage() {
             <option value="">Todos</option>
             <option value="AUTHORIZED">Autorizadas</option>
             <option value="PENDING_CAE">Pendientes CAE</option>
-            <option value="REJECTED">Rechazadas</option>
             <option value="INTERNAL_RECEIPT">Comprobantes Internos</option>
           </select>
+        </label>
+        <label>
+          Nombre cliente:
+          <input
+            type="text"
+            value={customerNameFilter}
+            onChange={e => handleNameChange(e.target.value)}
+            className="input"
+            placeholder="Buscar por nombre..."
+          />
+        </label>
+        <label>
+          Documento:
+          <input
+            type="text"
+            value={customerDocFilter}
+            onChange={e => setCustomerDocFilter(e.target.value)}
+            className="input"
+            placeholder="CUIT / DNI"
+          />
+        </label>
+        <label>
+          Nro. Factura:
+          <input
+            type="number"
+            value={invoiceNumberFilter}
+            onChange={e => setInvoiceNumberFilter(e.target.value)}
+            className="input"
+            placeholder="Ej: 1"
+            style={{ width: '90px' }}
+          />
         </label>
         {isHiddenOptionsVisible && (
           <label>
@@ -112,22 +206,51 @@ export default function InvoicingPage() {
             <select value={blackFilter} onChange={e => setBlackFilter(e.target.value as 'all' | 'normal' | 'black')} className="select">
               <option value="all">Todos</option>
               <option value="normal">Solo normales</option>
-              <option value="black">Solo N (sin IVA)</option>
+              <option value="black">Solo N</option>
             </select>
           </label>
         )}
-        <button onClick={() => { void loadInvoices() }} className="btn btn-secondary">Buscar</button>
+        <button onClick={() => { void loadInvoices() }} className="btn btn-secondary">🔍 Buscar</button>
+      </div>
+
+      {/* ── Acciones lote ───────────────────────────────────────────────── */}
+      <div className="batch-actions">
+        <span className="batch-count">
+          {filtered.length} comprobante{filtered.length !== 1 ? 's' : ''}
+          {selected.size > 0 && ` · ${selected.size} seleccionado${selected.size !== 1 ? 's' : ''}`}
+        </span>
+        <button
+          className="btn btn-primary"
+          onClick={() => { void handleBatchPrint() }}
+          disabled={batchPrinting || filtered.length === 0}
+          title={selected.size > 0 ? 'Imprimir seleccionados' : 'Imprimir todos los del listado'}
+        >
+          {batchPrinting
+            ? '⏳ Imprimiendo...'
+            : selected.size > 0
+              ? `🖨️ Imprimir seleccionados (${selected.size})`
+              : '🖨️ Imprimir todos'}
+        </button>
       </div>
 
       {loading && <p>Cargando...</p>}
       {error && <p className="error">{error}</p>}
       {printError && <p className="error">{printError}</p>}
+      {batchMsg && <p className="success">{batchMsg}</p>}
 
       {!loading && (
         <div className="table-container">
           <table className="table">
             <thead>
               <tr>
+                <th>
+                  <input
+                    type="checkbox"
+                    checked={selected.size === filtered.length && filtered.length > 0}
+                    onChange={toggleSelectAll}
+                    title="Seleccionar todos"
+                  />
+                </th>
                 <th>#</th>
                 <th>Fecha</th>
                 <th>Cliente</th>
@@ -140,17 +263,18 @@ export default function InvoicingPage() {
               </tr>
             </thead>
             <tbody>
-              {invoices
-                .filter(inv => {
-                  if (blackFilter === 'normal') return !inv.isBlackSale
-                  if (blackFilter === 'black') return inv.isBlackSale
-                  return true
-                })
-                .map(inv => (
-                <tr key={inv.id} className={inv.isBlackSale ? 'row--black-sale' : ''}>
+              {filtered.map(inv => (
+                <tr key={inv.id} className={`${inv.isBlackSale ? 'row--black-sale' : ''} ${selected.has(inv.id) ? 'row--selected' : ''}`}>
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={selected.has(inv.id)}
+                      onChange={() => toggleSelect(inv.id)}
+                    />
+                  </td>
                   <td>
                     {inv.id}
-                    {inv.isBlackSale && <span className="badge badge--black" title="Venta N (sin IVA)">N</span>}
+                    {inv.isBlackSale && <span className="badge badge--black" title="Venta N">N</span>}
                   </td>
                   <td>{inv.saleDate}</td>
                   <td>{inv.customerName ?? 'Consumidor Final'}</td>
@@ -162,23 +286,23 @@ export default function InvoicingPage() {
                   </td>
                   <td>{currency(inv.total)}</td>
                   <td>
-                    <span className="badge">
+                    <span className={STATUS_BADGE[inv.status] ?? 'badge'}>
                       {STATUS_LABELS[inv.status] ?? inv.status}
                     </span>
                   </td>
                   <td>
-                    {inv.cae ? (
-                      <span title={`Vto: ${inv.caeVto}`}>{inv.cae}</span>
-                    ) : (
-                      <span className="text-muted">{inv.afipError ? `❌ ${inv.afipError.slice(0, 40)}…` : '—'}</span>
-                    )}
+                    {inv.cae
+                      ? <span title={`Vto: ${inv.caeVto}`} style={{ fontSize: '0.8em' }}>{inv.cae}</span>
+                      : <span className="text-muted">{inv.afipError ? `❌ ${inv.afipError.slice(0, 30)}…` : '—'}</span>
+                    }
                   </td>
-                  <td>
+                  <td style={{ whiteSpace: 'nowrap' }}>
                     {!inv.isBlackSale && (inv.status === 'PENDING_CAE' || inv.status === 'INTERNAL_RECEIPT') && (
                       <button
                         className="btn btn-secondary btn-sm"
                         onClick={() => { void handleRetryCAE(inv.id) }}
                         disabled={retrying === inv.id}
+                        title="Reintentar CAE"
                       >
                         {retrying === inv.id ? '⏳' : '↺ CAE'}
                       </button>
@@ -187,15 +311,15 @@ export default function InvoicingPage() {
                       className="btn btn-secondary btn-sm"
                       onClick={() => void handlePrint(inv)}
                       disabled={printingId === inv.id}
-                      title={inv.status === 'AUTHORIZED' ? 'Imprimir Factura (Sistema)' : 'Imprimir Remito (Sistema)'}
+                      title="Reimprimir comprobante"
                     >
                       {printingId === inv.id ? '⏳' : '🖨️'}
                     </button>
                   </td>
                 </tr>
               ))}
-              {invoices.length === 0 && (
-                <tr><td colSpan={9} className="empty-row">Sin comprobantes</td></tr>
+              {filtered.length === 0 && (
+                <tr><td colSpan={10} className="empty-row">Sin comprobantes para los filtros seleccionados</td></tr>
               )}
             </tbody>
           </table>

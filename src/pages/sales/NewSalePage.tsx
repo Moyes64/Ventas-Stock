@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { catalog, customers, sales, printing, parameters as parametersApi } from '../../lib/ipc'
+import { catalog, customers, sales, printing, parameters as parametersApi, caja as cajaApi, mail, credits } from '../../lib/ipc'
 import type { Product, Customer, Sale, Parameter, PaymentMethod } from '../../types/ipc'
 import { useHiddenOptions } from '../../context/HiddenOptionsContext'
 
@@ -20,13 +20,21 @@ export default function NewSalePage() {
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null)
   const [cart, setCart] = useState<CartItem[]>([])
   const [quantityDrafts, setQuantityDrafts] = useState<Record<number, string>>({})
+  const [cajaChecked, setCajaChecked] = useState(false)
+  const [cajaAbierta, setCajaAbierta] = useState(false)
   const [processing, setProcessing] = useState(false)
   const [isBlackSale, setIsBlackSale] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('contado_efectivo')
+  const [montoEntregado, setMontoEntregado] = useState('')
+  const [creditBalance, setCreditBalance] = useState<number | null>(null)
   const [result, setResult] = useState<Sale | null>(null)
+  const [vueltoResult, setVueltoResult] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [printError, setPrintError] = useState<string | null>(null)
   const [isPrinting, setIsPrinting] = useState(false)
+  const [emailAddress, setEmailAddress] = useState('')
+  const [isSendingEmail, setIsSendingEmail] = useState(false)
+  const [emailMsg, setEmailMsg] = useState<string | null>(null)
   const { isHiddenOptionsVisible } = useHiddenOptions()
 
   // Parameters
@@ -35,6 +43,14 @@ export default function NewSalePage() {
   const [paramSelectValue, setParamSelectValue] = useState('')
 
   useEffect(() => {
+    // Verificar caja abierta al iniciar
+    void cajaApi.getOpenSession().then(session => {
+      setCajaAbierta(!!session)
+      setCajaChecked(true)
+    }).catch(() => {
+      setCajaAbierta(false)
+      setCajaChecked(true)
+    })
     // eslint-disable-next-line no-console
     customers.list().then(setCustomerList).catch(console.error)
     // eslint-disable-next-line no-console
@@ -45,6 +61,24 @@ export default function NewSalePage() {
   useEffect(() => {
     if (!isHiddenOptionsVisible) setIsBlackSale(false)
   }, [isHiddenOptionsVisible])
+
+  // Reset monto entregado when payment method changes away from efectivo
+  useEffect(() => {
+    if (paymentMethod !== 'contado_efectivo') setMontoEntregado('')
+  }, [paymentMethod])
+
+  // Cargar saldo de crédito cuando cambia el cliente
+  useEffect(() => {
+    if (selectedCustomerId) {
+      credits.getBalance(selectedCustomerId)
+        .then(b => setCreditBalance(b))
+        .catch(() => setCreditBalance(null))
+    } else {
+      setCreditBalance(null)
+      if (paymentMethod === 'credito_cliente') setPaymentMethod('contado_efectivo')
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCustomerId])
 
   async function handleSearch(query: string) {
     setSearchQuery(query)
@@ -169,6 +203,13 @@ export default function NewSalePage() {
   const adjustedTaxAmount = baseTaxAmount * adjustmentFactor
   const cartTotal = adjustedSubtotal + adjustedTaxAmount
 
+  // Calcular vuelto en tiempo real (debe ir DESPUÉS de cartTotal)
+  // Parsear monto formateado con puntos de miles y coma decimal: "1.500,50" → 1500.50
+  const montoEntregadoNum = parseFloat(montoEntregado.replace(/\./g, '').replace(',', '.')) || 0
+  const vuelto = paymentMethod === 'contado_efectivo' && montoEntregadoNum > 0
+    ? montoEntregadoNum - cartTotal
+    : null
+
   // ── Checkout ──────────────────────────────────────────────────────────────
 
   async function handleCheckout() {
@@ -176,6 +217,20 @@ export default function NewSalePage() {
     if (itemsForCheckout.length === 0) {
       setError('El carrito está vacío')
       return
+    }
+    if (paymentMethod === 'contado_efectivo' && montoEntregadoNum > 0 && montoEntregadoNum < cartTotal) {
+      setError('El monto entregado es menor al total de la venta')
+      return
+    }
+    if (paymentMethod === 'credito_cliente') {
+      if (!selectedCustomerId) {
+        setError('Seleccioná un cliente para usar crédito')
+        return
+      }
+      if (creditBalance !== null && creditBalance < cartTotal - 0.01) {
+        setError(`Saldo de crédito insuficiente. Disponible: ${currency(creditBalance)}`)
+        return
+      }
     }
     if (itemsForCheckout.length !== cart.length) {
       setCart(itemsForCheckout)
@@ -203,9 +258,21 @@ export default function NewSalePage() {
           taxRate: item.taxRate,
         })),
       })
+      // Descontar crédito si el método de pago es crédito_cliente
+      if (paymentMethod === 'credito_cliente' && selectedCustomerId) {
+        await credits.use(selectedCustomerId, cartTotal, saleResult.id)
+        const newBalance = await credits.getBalance(selectedCustomerId)
+        setCreditBalance(newBalance)
+      }
       setResult(saleResult)
+      setVueltoResult(vuelto !== null && vuelto > 0 ? vuelto : null)
       setCart([])
+      setMontoEntregado('')
       setSelectedParameters([])
+      setEmailMsg(null)
+      // Pre-llenar email del cliente si tiene uno registrado
+      const customerEmail = customerList.find(c => c.id === selectedCustomerId)?.email ?? ''
+      setEmailAddress(customerEmail)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al procesar la venta')
     } finally {
@@ -242,6 +309,53 @@ export default function NewSalePage() {
     }
   }
 
+  async function handleSendEmail(saleId: number) {
+    if (!emailAddress || !emailAddress.includes('@')) {
+      setEmailMsg('❌ Ingresá un email válido.')
+      return
+    }
+    setIsSendingEmail(true)
+    setEmailMsg(null)
+    try {
+      const res = await mail.sendInvoice(saleId, emailAddress)
+      setEmailMsg(res.success ? `✅ Factura enviada a ${emailAddress}` : `❌ ${res.error ?? 'Error al enviar'}`)
+    } catch (err) {
+      setEmailMsg(`❌ ${err instanceof Error ? err.message : 'Error al enviar'}`)
+    } finally {
+      setIsSendingEmail(false)
+    }
+  }
+
+  // ── Bloqueo si no hay caja abierta ────────────────────────────────────────
+
+  if (!cajaChecked) {
+    return (
+      <div className="page">
+        <p>Verificando estado de caja...</p>
+      </div>
+    )
+  }
+
+  if (!cajaAbierta) {
+    return (
+      <div className="page">
+        <div className="caja-bloqueada-card">
+          <div className="caja-bloqueada-icon">🔒</div>
+          <h2 className="caja-bloqueada-title">Caja sin apertura</h2>
+          <p className="caja-bloqueada-desc">
+            No se puede registrar una venta sin haber realizado la apertura de caja del día.
+          </p>
+          <button
+            className="btn btn-primary btn-lg"
+            onClick={() => navigate('/caja/apertura')}
+          >
+            🔓 Ir a Apertura de Caja
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   // ── Result screen ─────────────────────────────────────────────────────────
 
   if (result) {
@@ -274,7 +388,38 @@ export default function NewSalePage() {
               <p><strong>Total:</strong> {currency(result.total)}</p>
             </div>
           )}
+          {vueltoResult !== null && (
+            <div className="vuelto-result">
+              <span className="vuelto-result__label">💵 Vuelto a entregar</span>
+              <span className="vuelto-result__amount">{currency(vueltoResult)}</span>
+            </div>
+          )}
           {printError && <p className="error">{printError}</p>}
+
+          {result.status === 'AUTHORIZED' && (
+            <div className="email-invoice-box">
+              <label className="label">📧 Enviar factura por email</label>
+              <div className="email-invoice-row">
+                <input
+                  type="email"
+                  className="input"
+                  placeholder="cliente@ejemplo.com"
+                  value={emailAddress}
+                  onChange={e => { setEmailAddress(e.target.value); setEmailMsg(null) }}
+                />
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => void handleSendEmail(result.id)}
+                  disabled={isSendingEmail}
+                >
+                  {isSendingEmail ? '⏳ Enviando...' : 'Enviar'}
+                </button>
+              </div>
+              {emailMsg && <p className={emailMsg.startsWith('✅') ? 'field-hint' : 'error'} style={{ marginTop: 4 }}>{emailMsg}</p>}
+            </div>
+          )}
+
           <div className="action-buttons">
             {result.status === 'AUTHORIZED' ? (
               <button
@@ -372,8 +517,64 @@ export default function NewSalePage() {
               <option value="transferencia">🏦 Transferencia</option>
               <option value="debito">💳 Débito</option>
               <option value="credito">💳 Crédito</option>
+              {selectedCustomerId && creditBalance !== null && creditBalance > 0 && (
+                <option value="credito_cliente">🎁 Crédito del cliente ({currency(creditBalance)})</option>
+              )}
             </select>
           </div>
+
+          {paymentMethod === 'credito_cliente' && creditBalance !== null && (
+            <div style={{
+              padding: '10px 14px', borderRadius: '8px', fontSize: '13px',
+              backgroundColor: creditBalance >= cartTotal ? '#f0fdf4' : '#fef2f2',
+              border: `1px solid ${creditBalance >= cartTotal ? '#86efac' : '#fecaca'}`,
+              color: creditBalance >= cartTotal ? '#166534' : '#dc2626',
+            }}>
+              {creditBalance >= cartTotal
+                ? `✅ Saldo disponible: ${currency(creditBalance)} — cubre el total de la venta`
+                : `⚠️ Saldo insuficiente: ${currency(creditBalance)} — faltan ${currency(cartTotal - creditBalance)}`}
+            </div>
+          )}
+
+          {paymentMethod === 'contado_efectivo' && (
+            <div className="efectivo-panel">
+              <div className="efectivo-row">
+                <label className="label">Monto entregado por el cliente</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={montoEntregado}
+                  onChange={e => {
+                    // Solo dígitos y una coma/punto decimal
+                    const raw = e.target.value.replace(/[^\d,]/g, '')
+                    // Separar parte entera y decimal
+                    const parts = raw.split(',')
+                    const intPart = parts[0].replace(/\./g, '')
+                    const decPart = parts.length > 1 ? ',' + parts[1].slice(0, 2) : ''
+                    // Formatear parte entera con puntos de miles
+                    const formatted = intPart
+                      ? intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + decPart
+                      : decPart
+                    setMontoEntregado(formatted)
+                  }}
+                  onFocus={e => e.target.select()}
+                  placeholder="0"
+                  className="input input--monto"
+                />
+              </div>
+              {vuelto !== null && vuelto >= 0 && (
+                <div className="vuelto-display vuelto-display--ok">
+                  <span className="vuelto-display__label">💵 Vuelto a entregar</span>
+                  <span className="vuelto-display__amount">{currency(vuelto)}</span>
+                </div>
+              )}
+              {vuelto !== null && vuelto < 0 && (
+                <div className="vuelto-display vuelto-display--err">
+                  <span>⚠️ Monto insuficiente — faltan {currency(Math.abs(vuelto))}</span>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Parameters */}
           <div className="sale-params">

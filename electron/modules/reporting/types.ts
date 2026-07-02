@@ -45,3 +45,10 @@ export interface ReportFilters {
   productId?: number
   categoryId?: number
 }
+
+export interface RankingItem {
+  productId: number
+  productName: string
+  sku: string
+  value: number   // cantidad vendida ó ganancia neta según el reporte
+}

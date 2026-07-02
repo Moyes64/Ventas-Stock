@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { caja } from '../../lib/ipc'
+import { localToday } from '../../lib/date'
 import type { CashMovement } from '../../types/ipc'
 
 export default function MovimientosPage() {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localToday()
   const [selectedDate, setSelectedDate] = useState(today)
   const [movements, setMovements] = useState<CashMovement[]>([])
   const [loading, setLoading] = useState(false)

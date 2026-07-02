@@ -1,4 +1,4 @@
-import { solicitarCAE } from './wsfev1'
+import { solicitarCAE, getUltimoComprobante } from './wsfev1'
 import { loadAfipConfig } from './config'
 import { SaleRepository } from '../sales/repository'
 import type { Sale } from '../sales/types'
@@ -24,9 +24,20 @@ export class InvoicingService {
   async solicitarCAE(sale: Sale): Promise<CAEResponse> {
     const config = loadAfipConfig()
 
-    // Get next invoice number for this punto de venta + invoice type
     const invoiceType = sale.invoiceType ?? 11 // Default: Factura C
-    const nextNumber = this.saleRepo.getNextInvoiceNumber(config.puntoVenta, invoiceType)
+
+    // Consultar el último número autorizado en AFIP y usar último + 1
+    // Esto garantiza sincronía aunque haya habido ventas fallidas o reintentos
+    let nextNumber: number
+    try {
+      const ultimoAfip = await getUltimoComprobante(config.puntoVenta, invoiceType)
+      nextNumber = ultimoAfip + 1
+      console.log(`[InvoicingService] Próximo comprobante AFIP: ${nextNumber} (último autorizado: ${ultimoAfip})`)
+    } catch (err) {
+      // Si no se puede consultar AFIP, usar el contador local como fallback
+      nextNumber = this.saleRepo.getNextInvoiceNumber(config.puntoVenta, invoiceType)
+      console.warn(`[InvoicingService] No se pudo consultar FECompUltimoAutorizado, usando local: ${nextNumber}. Error: ${err instanceof Error ? err.message : String(err)}`)
+    }
 
     // Build AFIP request details
     const factura = this.buildFacturaDetalle(sale, nextNumber, config.puntoVenta)

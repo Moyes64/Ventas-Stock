@@ -89,6 +89,9 @@ const electronAPI = {
     buildTicketData: (saleId: number) => invoke('printing:buildTicketData', saleId),
     printInvoiceSystem: (saleId: number) => invoke('printing:printInvoiceSystem', saleId),
     printDeliveryNoteSystem: (saleId: number) => invoke('printing:printDeliveryNoteSystem', saleId),
+    printBatch: (saleIds: number[]) => invoke('printing:printBatch', saleIds),
+    listForReprint: (filters: unknown) => invoke('printing:listForReprint', filters),
+    printChangeTicket: (saleId: number) => invoke('printing:printChangeTicket', saleId),
   },
 
   // Reporting
@@ -98,6 +101,8 @@ const electronAPI = {
     lowStock: () => invoke('reporting:lowStock'),
     stockMovements: (filters: unknown) => invoke('reporting:stockMovements', filters),
     dailySummary: (filters: unknown) => invoke('reporting:dailySummary', filters),
+    rankingPorCantidad: (filters: unknown) => invoke('reporting:rankingPorCantidad', filters),
+    rankingPorGanancia: (filters: unknown) => invoke('reporting:rankingPorGanancia', filters),
   },
 
   // Backup
@@ -117,6 +122,85 @@ const electronAPI = {
     delete: (id: number) => invoke('parameters:delete', id),
   },
 
+  // System Params
+  systemParams: {
+    get: () => invoke('systemParams:get'),
+    save: (params: unknown) => invoke('systemParams:save', params),
+  },
+
+  // Pedido de Reposición
+  pedido: {
+    getSupplierProducts: (supplierId: number) => invoke('pedido:getSupplierProducts', supplierId),
+    saveFile: (content: string, defaultName: string) => invoke('pedido:saveFile', content, defaultName),
+  },
+
+  // Sync
+  sync: {
+    getConfig: () => invoke('sync:getConfig'),
+    saveConfig: (config: unknown) => invoke('sync:saveConfig', config),
+    triggerNow: () => invoke('sync:triggerNow'),
+    getLastResult: () => invoke('sync:getLastResult'),
+    pullOrders: () => invoke('sync:pullOrders'),
+    listWebOrders: () => invoke('sync:listWebOrders'),
+    markOrderProcessed: (externalId: string) => invoke('sync:markOrderProcessed', externalId),
+    printShippingLabel: (order: { customerName: string; deliveryAddress: string; externalId: string }) => invoke('sync:printShippingLabel', order),
+  },
+
+  // Remito Scanner
+  remitoScanner: {
+    selectImage: () => invoke<string | null>('remitoScanner:selectImage'),
+    scan: (imagePath: string) => invoke('remitoScanner:scan', imagePath),
+    getMappings: (supplierCodes: string[]) => invoke('remitoScanner:getMappings', supplierCodes),
+    saveMappings: (mappings: Array<{ supplierCode: string; productId: number }>) => invoke('remitoScanner:saveMappings', mappings),
+    listMappings: () => invoke('remitoScanner:listMappings'),
+    deleteMapping: (supplierCode: string) => invoke('remitoScanner:deleteMapping', supplierCode),
+  },
+
+  // Printer Config
+  printerConfig: {
+    get: () => invoke('printerConfig:get'),
+    save: (config: unknown) => invoke('printerConfig:save', config),
+    testConnection: (config: unknown) => invoke('printerConfig:testConnection', config),
+    printTest: (config: unknown) => invoke('printerConfig:printTest', config),
+    listPrinters: () => invoke('printerConfig:listPrinters'),
+  },
+
+  // Label Config
+  labelConfig: {
+    get: () => invoke('labelConfig:get'),
+    save: (config: unknown) => invoke('labelConfig:save', config),
+    print: (config: unknown, copies: number) => invoke('labelConfig:print', config, copies),
+    feed: (mm: number) => invoke('labelConfig:feed', mm),
+  },
+
+  // CSR / Certificados ARCA
+  csr: {
+    generate: (input: unknown) => invoke('csr:generate', input),
+    importCert: (ambiente: string) => invoke('csr:importCert', ambiente),
+  },
+
+  // Web Catalog
+  webCatalog: {
+    listCategories:   () => invoke('webCatalog:listCategories'),
+    saveCategory:     (id: number | null, input: unknown) => invoke('webCatalog:saveCategory', id, input),
+    deleteCategory:   (id: number) => invoke('webCatalog:deleteCategory', id),
+    listProducts:     () => invoke('webCatalog:listProducts'),
+    getProduct:       (productId: number) => invoke('webCatalog:getProduct', productId),
+    saveProduct:      (input: unknown) => invoke('webCatalog:saveProduct', input),
+    listUnpublished:   () => invoke('webCatalog:listUnpublished'),
+    getNextSortOrder:  (webCategoryId: number | null) => invoke('webCatalog:getNextSortOrder', webCategoryId),
+    uploadImage:      (productId: number, sortOrder: number) => invoke('webCatalog:uploadImage', productId, sortOrder),
+    deleteImage:      (imageId: number) => invoke('webCatalog:deleteImage', imageId),
+    reorderImages:    (productId: number, orderedIds: number[]) => invoke('webCatalog:reorderImages', productId, orderedIds),
+    getImageDataUrl:  (filename: string) => invoke<string | null>('webCatalog:getImageDataUrl', filename),
+    getImagesDir:     () => invoke<string>('webCatalog:getImagesDir'),
+  },
+
+  // Mail
+  mail: {
+    sendInvoice: (saleId: number, toEmail: string) => invoke('mail:sendInvoice', saleId, toEmail),
+  },
+
   // Caja
   caja: {
     openSession: (input: unknown) => invoke('caja:openSession', input),
@@ -129,6 +213,21 @@ const electronAPI = {
     listMovements: (date: string) => invoke('caja:listMovements', date),
     createMovement: (input: unknown) => invoke('caja:createMovement', input),
     deleteMovement: (id: number) => invoke('caja:deleteMovement', id),
+  },
+
+  // Crédito de clientes
+  credits: {
+    getBalance: (customerId: number) => invoke('credits:getBalance', customerId),
+    getHistory: (customerId: number) => invoke('credits:getHistory', customerId),
+    use: (customerId: number, amount: number, saleId: number) => invoke('credits:use', customerId, amount, saleId),
+    adjust: (customerId: number, amount: number, notes: string) => invoke('credits:adjust', customerId, amount, notes),
+  },
+
+  // Cambios y Devoluciones
+  cambios: {
+    preview: (rawQr: string) => invoke('cambios:preview', rawQr),
+    confirm: (rawQr: string, notes?: string) => invoke('cambios:confirm', rawQr, notes),
+    list: (limit?: number) => invoke('cambios:list', limit),
   },
 }
 

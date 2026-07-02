@@ -5,6 +5,7 @@ import type {
   StockReport,
   DailySummaryReport,
   ReportFilters,
+  RankingItem,
 } from './types'
 
 export class ReportingService {
@@ -77,6 +78,46 @@ export class ReportingService {
       .all(params) as ProductReport[]
 
     return rows
+  }
+
+  /** Top 10 productos por cantidad vendida */
+  rankingPorCantidad(filters: ReportFilters): RankingItem[] {
+    const params: Record<string, unknown> = {}
+    const conditions: string[] = ["s.status IN ('AUTHORIZED', 'INTERNAL_RECEIPT')"]
+    if (filters.dateFrom) { conditions.push('s.sale_date >= @dateFrom'); params.dateFrom = filters.dateFrom }
+    if (filters.dateTo)   { conditions.push('s.sale_date <= @dateTo');   params.dateTo   = filters.dateTo   }
+    const where = `WHERE ${conditions.join(' AND ')}`
+    return this.db.prepare(`
+      SELECT p.id AS productId, p.name AS productName, p.sku,
+             SUM(si.quantity) AS value
+      FROM sale_items si
+      JOIN products p ON p.id = si.product_id
+      JOIN sales s ON s.id = si.sale_id
+      ${where}
+      GROUP BY p.id
+      ORDER BY value DESC
+      LIMIT 10
+    `).all(params) as RankingItem[]
+  }
+
+  /** Top 10 productos por ganancia neta = (precio_venta - costo) * cantidad */
+  rankingPorGanancia(filters: ReportFilters): RankingItem[] {
+    const params: Record<string, unknown> = {}
+    const conditions: string[] = ["s.status IN ('AUTHORIZED', 'INTERNAL_RECEIPT')"]
+    if (filters.dateFrom) { conditions.push('s.sale_date >= @dateFrom'); params.dateFrom = filters.dateFrom }
+    if (filters.dateTo)   { conditions.push('s.sale_date <= @dateTo');   params.dateTo   = filters.dateTo   }
+    const where = `WHERE ${conditions.join(' AND ')}`
+    return this.db.prepare(`
+      SELECT p.id AS productId, p.name AS productName, p.sku,
+             SUM((si.unit_price - p.cost) * si.quantity) AS value
+      FROM sale_items si
+      JOIN products p ON p.id = si.product_id
+      JOIN sales s ON s.id = si.sale_id
+      ${where}
+      GROUP BY p.id
+      ORDER BY value DESC
+      LIMIT 10
+    `).all(params) as RankingItem[]
   }
 
   lowStockProducts(): StockReport[] {

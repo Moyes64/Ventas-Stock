@@ -40,7 +40,7 @@ export interface AfipQrPayload {
 
 /**
  * Generates the AFIP-compliant QR code for an authorized invoice.
- * Returns a base64-encoded PNG data URL.
+ * Returns a base64-encoded PNG data URL (used by the HTML ticket).
  */
 export async function generateAfipQR(payload: AfipQrPayload): Promise<string> {
   const jsonStr = JSON.stringify(payload)
@@ -54,6 +54,85 @@ export async function generateAfipQR(payload: AfipQrPayload): Promise<string> {
   })
 
   return dataUrl
+}
+
+/**
+ * Generates the AFIP QR code as an ESC/POS raster bitmap (GS v 0).
+ * No PNG decoding needed — works directly from the QR module matrix.
+ *
+ * @param scale - pixels per QR module (default 4 → ~25 mm on 203 dpi printer)
+ */
+export function generateQrEscPos(payload: AfipQrPayload, scale = 4): Buffer {
+  const jsonStr = JSON.stringify(payload)
+  const b64 = Buffer.from(jsonStr).toString('base64')
+  const url = `https://www.afip.gob.ar/fe/qr/?p=${b64}`
+
+  const qr = QRCode.create(url, { errorCorrectionLevel: 'M' })
+  const size    = qr.modules.size
+  const modules = qr.modules.data as Uint8Array
+
+  const pixelSize   = size * scale
+  const bytesPerRow = Math.ceil(pixelSize / 8)
+  const bitmap      = Buffer.alloc(bytesPerRow * pixelSize, 0x00)
+
+  for (let row = 0; row < size; row++) {
+    for (let col = 0; col < size; col++) {
+      if (!modules[row * size + col]) continue   // 0 = white, skip
+      for (let dy = 0; dy < scale; dy++) {
+        for (let dx = 0; dx < scale; dx++) {
+          const pr = row * scale + dy
+          const pc = col * scale + dx
+          bitmap[pr * bytesPerRow + (pc >> 3)] |= 0x80 >> (pc & 7)
+        }
+      }
+    }
+  }
+
+  // GS v 0: 1D 76 30 m xL xH yL yH <data>
+  const xL = bytesPerRow & 0xFF
+  const xH = (bytesPerRow >> 8) & 0xFF
+  const yL = pixelSize & 0xFF
+  const yH = (pixelSize >> 8) & 0xFF
+  return Buffer.concat([
+    Buffer.from([0x1D, 0x76, 0x30, 0x00, xL, xH, yL, yH]),
+    bitmap,
+  ])
+}
+
+/**
+ * Builds an ESC/POS raster bitmap from any plain text string.
+ * Used for non-AFIP QR codes (e.g. ticket de cambio).
+ */
+export function generateQrEscPosFromText(text: string, scale = 4): Buffer {
+  const qr = QRCode.create(text, { errorCorrectionLevel: 'M' })
+  const size    = qr.modules.size
+  const modules = qr.modules.data as Uint8Array
+
+  const pixelSize   = size * scale
+  const bytesPerRow = Math.ceil(pixelSize / 8)
+  const bitmap      = Buffer.alloc(bytesPerRow * pixelSize, 0x00)
+
+  for (let row = 0; row < size; row++) {
+    for (let col = 0; col < size; col++) {
+      if (!modules[row * size + col]) continue
+      for (let dy = 0; dy < scale; dy++) {
+        for (let dx = 0; dx < scale; dx++) {
+          const pr = row * scale + dy
+          const pc = col * scale + dx
+          bitmap[pr * bytesPerRow + (pc >> 3)] |= 0x80 >> (pc & 7)
+        }
+      }
+    }
+  }
+
+  const xL = bytesPerRow & 0xFF
+  const xH = (bytesPerRow >> 8) & 0xFF
+  const yL = pixelSize & 0xFF
+  const yH = (pixelSize >> 8) & 0xFF
+  return Buffer.concat([
+    Buffer.from([0x1D, 0x76, 0x30, 0x00, xL, xH, yL, yH]),
+    bitmap,
+  ])
 }
 
 /**

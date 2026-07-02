@@ -15,20 +15,35 @@ interface NavGroup {
 }
 
 const navItems: NavItem[] = [
-  { to: '/dashboard',   label: 'Inicio',       icon: '🏠' },
-  { to: '/sales',       label: 'Ventas',        icon: '🛒' },
-  { to: '/catalog',     label: 'Catálogo',      icon: '📦' },
-  { to: '/customers',   label: 'Clientes',      icon: '👥' },
-  { to: '/suppliers',   label: 'Proveedores',   icon: '🏭' },
-  { to: '/stock',       label: 'Stock',         icon: '📊' },
-  { to: '/invoicing',   label: 'Facturación',   icon: '🧾' },
-  { to: '/reporting',   label: 'Reportes',      icon: '📈' },
-  { to: '/backup',      label: 'Respaldos',     icon: '💾' },
-  { to: '/users',       label: 'Usuarios',      icon: '⚙️' },
-  { to: '/parameters',  label: 'Parámetros',    icon: '🔧' },
+  { to: '/dashboard',     label: 'Inicio',                  icon: '🏠' },
+  { to: '/sales',         label: 'Ventas',                  icon: '🛒' },
+  { to: '/catalog',       label: 'Catálogo',                icon: '📦' },
+  { to: '/customers',     label: 'Clientes',                icon: '👥' },
+  { to: '/suppliers',     label: 'Proveedores',             icon: '🏭' },
+  { to: '/invoicing',     label: 'Facturación',             icon: '🧾' },
+  { to: '/reporting',     label: 'Reportes',                icon: '📈' },
+  { to: '/backup',        label: 'Respaldos',               icon: '💾' },
+  { to: '/users',         label: 'Usuarios',                icon: '⚙️' },
+  { to: '/web-catalog',   label: 'Catálogo Web',            icon: '🛍️' },
+  { to: '/web-orders',   label: 'Órdenes Web',             icon: '📬' },
+  { to: '/sync',          label: 'Sync Web',                icon: '🌐' },
+  { to: '/cambios',       label: 'Cambios y Devoluciones',  icon: '🔄' },
+  { to: '/system-params',     label: 'Parámetros del sistema', icon: '🛠️' },
+  { to: '/printer-settings',  label: 'Impresora',              icon: '🖨️' },
+  { to: '/labels',            label: 'Etiquetas',              icon: '🏷️' },
 ]
 
 const navGroups: NavGroup[] = [
+  {
+    label: 'Stock',
+    icon: '📊',
+    prefix: '/stock',
+    items: [
+      { to: '/stock',                label: 'Stock',                icon: '📊' },
+      { to: '/stock/pedido',         label: 'Pedido de reposición', icon: '📋' },
+      { to: '/stock/remito-scanner', label: 'Escáner de Remitos',   icon: '🤖' },
+    ],
+  },
   {
     label: 'Caja',
     icon: '💰',
@@ -37,6 +52,7 @@ const navGroups: NavGroup[] = [
       { to: '/caja/apertura',    label: 'Apertura',    icon: '🔓' },
       { to: '/caja/cierre',      label: 'Cierre',      icon: '🔒' },
       { to: '/caja/movimientos', label: 'Movimientos', icon: '📋' },
+      { to: '/parameters',       label: 'Parámetros',  icon: '🔧' },
     ],
   },
 ]
@@ -46,7 +62,7 @@ export default function Sidebar() {
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {}
     for (const group of navGroups) {
-      initial[group.prefix] = location.pathname.startsWith(group.prefix)
+      initial[group.prefix] = group.items.some(item => location.pathname.startsWith(item.to))
     }
     return initial
   })
@@ -77,7 +93,7 @@ export default function Sidebar() {
 
         {navGroups.map(group => {
           const isOpen = openGroups[group.prefix] ?? false
-          const isGroupActive = location.pathname.startsWith(group.prefix)
+          const isGroupActive = group.items.some(item => location.pathname.startsWith(item.to))
           return (
             <div key={group.prefix} className="sidebar-group">
               <button

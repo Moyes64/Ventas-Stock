@@ -1,4 +1,5 @@
 import type { Database } from 'better-sqlite3'
+import { localToday } from '../../lib/date'
 import { CajaRepository } from './repository'
 import type {
   CashSession,
@@ -25,12 +26,22 @@ export class CajaService {
       throw new Error('La fecha de apertura es obligatoria')
     }
 
+    // Verificar si ya existe sesión para la fecha solicitada
     const existing = this.repo.findSessionByDate(input.sessionDate)
     if (existing) {
       if (existing.status === 'open') {
         throw new Error(`Ya existe una apertura de caja abierta para la fecha ${input.sessionDate}`)
       }
       throw new Error(`Ya existe un cierre de caja para la fecha ${input.sessionDate}`)
+    }
+
+    // Verificar que el día anterior esté cerrado (salvo que sea el primer uso)
+    const lastSession = this.repo.findLastSessionBefore(input.sessionDate)
+    if (lastSession && lastSession.status === 'open') {
+      throw new Error(
+        `No se puede abrir la caja del ${input.sessionDate} porque la sesión del ${lastSession.sessionDate} aún está abierta. ` +
+        `Realizá primero el cierre de esa jornada.`
+      )
     }
 
     const id = this.repo.createSession(input)
@@ -117,7 +128,7 @@ export class CajaService {
       throw new Error('El monto debe ser un número mayor a cero')
     }
 
-    const date = input.movimientoDate ?? new Date().toISOString().slice(0, 10)
+    const date = input.movimientoDate ?? localToday()
     const session = this.repo.findSessionByDate(date)
 
     const id = this.repo.createMovement(input, session?.id ?? null)

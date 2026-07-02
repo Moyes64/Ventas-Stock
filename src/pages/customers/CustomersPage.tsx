@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { customers as customersApi } from '../../lib/ipc'
-import type { Customer } from '../../types/ipc'
+import { customers as customersApi, credits } from '../../lib/ipc'
+import type { Customer, CreditRecord } from '../../types/ipc'
 
 export default function CustomersPage() {
   const [customerList, setCustomerList] = useState<Customer[]>([])
@@ -9,6 +9,10 @@ export default function CustomersPage() {
   const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [editCustomer, setEditCustomer] = useState<Customer | null>(null)
+  const [creditCustomer, setCreditCustomer] = useState<Customer | null>(null)
+  const [creditBalance, setCreditBalance] = useState<number>(0)
+  const [creditHistory, setCreditHistory] = useState<CreditRecord[]>([])
+  const [loadingCredit, setLoadingCredit] = useState(false)
 
   async function loadCustomers() {
     setLoading(true)
@@ -35,6 +39,29 @@ export default function CustomersPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al eliminar')
     }
+  }
+
+  async function handleShowCredit(c: Customer) {
+    setCreditCustomer(c)
+    setLoadingCredit(true)
+    const [bal, hist] = await Promise.all([
+      credits.getBalance(c.id),
+      credits.getHistory(c.id),
+    ])
+    setCreditBalance(bal)
+    setCreditHistory(hist)
+    setLoadingCredit(false)
+  }
+
+  function fmtDate(iso: string) {
+    return new Date(iso).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  }
+
+  const currency = (n: number) =>
+    new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(n)
+
+  const TYPE_LABELS: Record<string, string> = {
+    CAMBIO: '🔄 Cambio', DEVOLUCION: '↩️ Devolución', USO: '🛒 Uso en venta', AJUSTE: '✏️ Ajuste',
   }
 
   return (
@@ -70,6 +97,7 @@ export default function CustomersPage() {
                 <th>Cond. IVA</th>
                 <th>Email</th>
                 <th>Teléfono</th>
+                <th>Crédito</th>
                 <th>Acciones</th>
               </tr>
             </thead>
@@ -85,6 +113,13 @@ export default function CustomersPage() {
                   <td>
                     <button
                       className="btn btn-secondary btn-sm"
+                      onClick={() => void handleShowCredit(c)}
+                      title="Ver crédito"
+                    >🎁</button>
+                  </td>
+                  <td>
+                    <button
+                      className="btn btn-secondary btn-sm"
                       onClick={() => { setEditCustomer(c); setShowForm(true) }}
                     >Editar</button>
                     <button
@@ -95,7 +130,7 @@ export default function CustomersPage() {
                 </tr>
               ))}
               {customerList.length === 0 && (
-                <tr><td colSpan={7} className="empty-row">Sin clientes</td></tr>
+                <tr><td colSpan={9} className="empty-row">Sin clientes</td></tr>
               )}
             </tbody>
           </table>
@@ -108,6 +143,70 @@ export default function CustomersPage() {
           onClose={() => setShowForm(false)}
           onSaved={() => { void loadCustomers() }}
         />
+      )}
+
+      {creditCustomer && (
+        <div style={{
+          position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+        }}>
+          <div style={{
+            backgroundColor: 'white', borderRadius: '12px', padding: '28px',
+            width: '480px', maxHeight: '80vh', display: 'flex', flexDirection: 'column',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+              <div>
+                <h2 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '2px' }}>
+                  🎁 Crédito de {creditCustomer.name}
+                </h2>
+                <p style={{ fontSize: '12px', color: '#6b7280' }}>Historial de movimientos</p>
+              </div>
+              <button onClick={() => setCreditCustomer(null)}
+                style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#9ca3af' }}>×</button>
+            </div>
+
+            <div style={{
+              padding: '14px', borderRadius: '8px', marginBottom: '16px',
+              backgroundColor: creditBalance > 0 ? '#f0fdf4' : '#f9fafb',
+              border: `1px solid ${creditBalance > 0 ? '#86efac' : '#e5e7eb'}`,
+              textAlign: 'center',
+            }}>
+              <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>Saldo disponible</div>
+              <div style={{ fontSize: '24px', fontWeight: 800, color: creditBalance > 0 ? '#16a34a' : '#374151' }}>
+                {currency(creditBalance)}
+              </div>
+            </div>
+
+            {loadingCredit ? (
+              <p style={{ fontSize: '13px', color: '#9ca3af', textAlign: 'center', padding: '24px 0' }}>Cargando...</p>
+            ) : creditHistory.length === 0 ? (
+              <p style={{ fontSize: '13px', color: '#9ca3af', textAlign: 'center', padding: '24px 0' }}>Sin movimientos</p>
+            ) : (
+              <div style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {creditHistory.map(rec => (
+                  <div key={rec.id} style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    padding: '8px 10px', borderRadius: '6px', backgroundColor: '#f9fafb',
+                    border: '1px solid #f3f4f6', fontSize: '12px',
+                  }}>
+                    <div>
+                      <div style={{ fontWeight: 600 }}>{TYPE_LABELS[rec.type] ?? rec.type}</div>
+                      {rec.notes && <div style={{ color: '#6b7280' }}>{rec.notes}</div>}
+                      <div style={{ color: '#9ca3af' }}>{fmtDate(rec.created_at)}</div>
+                    </div>
+                    <div style={{
+                      fontWeight: 700, fontSize: '13px',
+                      color: rec.amount >= 0 ? '#16a34a' : '#dc2626',
+                    }}>
+                      {rec.amount >= 0 ? '+' : ''}{currency(rec.amount)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   )

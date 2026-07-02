@@ -125,6 +125,7 @@ export class StockRepository {
 
   getMovements(filters: {
     productId?: number
+    supplierId?: number
     dateFrom?: string
     dateTo?: string
     limit?: number
@@ -135,6 +136,10 @@ export class StockRepository {
     if (filters.productId) {
       conditions.push('sm.product_id = @productId')
       params.productId = filters.productId
+    }
+    if (filters.supplierId) {
+      conditions.push('sm.supplier_id = @supplierId')
+      params.supplierId = filters.supplierId
     }
     if (filters.dateFrom) {
       conditions.push('sm.created_at >= @dateFrom')

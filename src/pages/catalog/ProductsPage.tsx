@@ -132,6 +132,12 @@ function calcSalePrice(cost: number, gainPct: number, ivaPct: number): number {
   return cost * (1 + gainPct / 100) * (1 + ivaPct / 100)
 }
 
+/** Derives gain% from a manually entered sale price */
+function calcGainFromPrice(cost: number, price: number, ivaPct: number): number {
+  if (cost <= 0) return 0
+  return Math.round((price / (cost * (1 + ivaPct / 100)) - 1) * 10000) / 100
+}
+
 function ProductForm({
   product,
   onClose,
@@ -157,6 +163,7 @@ function ProductForm({
     cost: String(product?.cost ?? 0),
     taxRateId: product?.taxRateId ?? 0,
     gainPercent: String(product?.gainPercent ?? 0),
+    priceInput: String(product?.price ?? 0),
     stockMin: String(product?.stockMin ?? 0),
   })
 
@@ -172,6 +179,8 @@ function ProductForm({
   const normalizedCost = Number.isNaN(costValue) ? 0 : costValue
   const normalizedGainPercent = Number.isNaN(gainPercentValue) ? 0 : gainPercentValue
   const normalizedStockMin = Number.isNaN(stockMinValue) ? 0 : stockMinValue
+  const priceInputValue = parseFloat(form.priceInput)
+  const normalizedPrice = Number.isNaN(priceInputValue) ? 0 : priceInputValue
   const computedPrice = calcSalePrice(normalizedCost, normalizedGainPercent, ivaPct)
 
   useEffect(() => {
@@ -187,7 +196,11 @@ function ProductForm({
         if (isNew && rates.length > 0 && form.taxRateId === 0) {
           // Prefer 21% if available, otherwise first rate
           const def = rates.find(r => r.percentage === 21) ?? rates[0]
-          setForm(f => ({ ...f, taxRateId: def.id }))
+          setForm(f => ({
+            ...f,
+            taxRateId: def.id,
+            priceInput: String(calcSalePrice(parseFloat(f.cost) || 0, parseFloat(f.gainPercent) || 0, def.percentage)),
+          }))
         }
       } catch {
         // non-critical; form still works without dropdown data
@@ -218,7 +231,7 @@ function ProductForm({
           supplierId: form.supplierId === '' ? undefined : Number(form.supplierId),
           supplierCode: form.supplierCode,
           cost: normalizedCost,
-          price: computedPrice,
+          price: normalizedPrice,
           taxRateId: Number(form.taxRateId),
           gainPercent: normalizedGainPercent,
           stockMin: normalizedStockMin,
@@ -232,7 +245,7 @@ function ProductForm({
           supplierId: form.supplierId === '' ? undefined : Number(form.supplierId),
           supplierCode: form.supplierCode,
           cost: normalizedCost,
-          price: computedPrice,
+          price: normalizedPrice,
           taxRateId: Number(form.taxRateId),
           gainPercent: normalizedGainPercent,
           stockMin: normalizedStockMin,
@@ -334,8 +347,12 @@ function ProductForm({
               <input
                 type="number"
                 value={form.cost}
-                onChange={e => setForm({ ...form, cost: e.target.value })}
-                onBlur={e => { if (e.target.value.trim() === '') setForm({ ...form, cost: '0' }) }}
+                onChange={e => {
+                  const val = e.target.value
+                  const newPrice = calcSalePrice(parseFloat(val) || 0, normalizedGainPercent, ivaPct)
+                  setForm(f => ({ ...f, cost: val, priceInput: String(newPrice) }))
+                }}
+                onBlur={e => { if (e.target.value.trim() === '') setForm(f => ({ ...f, cost: '0' })) }}
                 onFocus={e => e.target.select()}
                 min="0"
                 step="0.01"
@@ -349,7 +366,12 @@ function ProductForm({
               <label className="label">IVA (%) *</label>
               <select
                 value={form.taxRateId}
-                onChange={e => setForm({ ...form, taxRateId: Number(e.target.value) })}
+                onChange={e => {
+                  const newId = Number(e.target.value)
+                  const newPct = taxRates.find(t => t.id === newId)?.percentage ?? 0
+                  const newPrice = calcSalePrice(normalizedCost, normalizedGainPercent, newPct)
+                  setForm(f => ({ ...f, taxRateId: newId, priceInput: String(newPrice) }))
+                }}
                 required
                 className="input"
               >
@@ -365,29 +387,43 @@ function ProductForm({
               <input
                 type="number"
                 value={form.gainPercent}
-                onChange={e => setForm({ ...form, gainPercent: e.target.value })}
-                onBlur={e => { if (e.target.value.trim() === '') setForm({ ...form, gainPercent: '0' }) }}
+                onChange={e => {
+                  const val = e.target.value
+                  const newPrice = calcSalePrice(normalizedCost, parseFloat(val) || 0, ivaPct)
+                  setForm(f => ({ ...f, gainPercent: val, priceInput: String(newPrice) }))
+                }}
+                onBlur={e => { if (e.target.value.trim() === '') setForm(f => ({ ...f, gainPercent: '0' })) }}
                 onFocus={e => e.target.select()}
                 min="0"
-                step="0.1"
+                step="any"
                 required
                 className="input"
                 placeholder="Ej: 50"
               />
             </div>
 
-            {/* Precio venta calculado */}
+            {/* Precio venta */}
             <div className="form-row">
               <label className="label">Precio venta (c/ IVA)</label>
               <input
-                type="text"
-                value={currency(computedPrice)}
-                readOnly
-                className="input input--readonly"
-                title="Calculado: Costo × (1 + Ganancia%) × (1 + IVA%)"
+                type="number"
+                value={form.priceInput}
+                onChange={e => {
+                  const val = e.target.value
+                  const newGain = calcGainFromPrice(normalizedCost, parseFloat(val) || 0, ivaPct)
+                  setForm(f => ({ ...f, priceInput: val, gainPercent: String(newGain) }))
+                }}
+                onBlur={e => { if (e.target.value.trim() === '') setForm(f => ({ ...f, priceInput: '0' })) }}
+                onFocus={e => e.target.select()}
+                min="0"
+                step="0.01"
+                required
+                className="input"
+                title="Ingresá el precio deseado y la Ganancia% se ajustará automáticamente"
               />
               <small className="hint">
-                {normalizedCost} × (1 + {normalizedGainPercent}%) × (1 + {ivaPct}%) = {currency(computedPrice)}
+                {normalizedCost} × (1 + {normalizedGainPercent}%) × (1 + {ivaPct}%)
+                · Modificar el precio ajusta la Ganancia%
               </small>
             </div>
 

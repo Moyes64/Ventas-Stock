@@ -18,6 +18,8 @@ export interface TicketData {
   companyCuit: string
   companyAddress: string
   condicionIva: string
+  inicioActividades?: string   // DD/MM/AAAA
+  condicionIIBB?: string       // 'Exento' | 'Nro XXXXXX'
   puntoVenta: number
   // Invoice info
   invoiceType: string   // 'FACTURA C', 'FACTURA A', etc.
@@ -46,6 +48,7 @@ export interface TicketData {
   cae?: string
   caeVto?: string
   qrBase64?: string
+  qrPayload?: import('./qr-generator').AfipQrPayload
   // Status
   isAuthorized: boolean
   internalReceiptNumber?: number

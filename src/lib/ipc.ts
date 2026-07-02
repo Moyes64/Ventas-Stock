@@ -4,6 +4,11 @@
  */
 
 import type {
+  SystemParams,
+  PrinterConfig,
+  PrinterTestResult,
+  ConnectionType,
+  PedidoProduct,
   LoginResult,
   User,
   Role,
@@ -18,11 +23,16 @@ import type {
   BackupInfo,
   DailySummaryReport,
   SalesSummary,
+  RankingItem,
   Parameter,
   CashSession,
   CashMovement,
   CierreSummary,
   PaymentMethod,
+  SyncConfig,
+  SyncResult,
+  RemitoScanResult,
+  RemitoMapping,
 } from '../types/ipc'
 
 // Access the electron bridge exposed by preload
@@ -92,6 +102,7 @@ export const stock = {
     electron.stock.getCurrent(productId) as Promise<number>,
   getMovements: (filters: {
     productId?: number
+    supplierId?: number
     dateFrom?: string
     dateTo?: string
     limit?: number
@@ -163,6 +174,14 @@ export const printing = {
     electron.printing.printInvoiceSystem(saleId) as Promise<{ success: boolean; error?: string }>,
   printDeliveryNoteSystem: (saleId: number) =>
     electron.printing.printDeliveryNoteSystem(saleId) as Promise<{ success: boolean; error?: string }>,
+  printBatch: (saleIds: number[]) =>
+    electron.printing.printBatch(saleIds) as Promise<{ success: boolean; printed: number; errors: string[] }>,
+  listForReprint: (filters: {
+    dateFrom?: string; dateTo?: string; status?: string
+    customerName?: string; customerDoc?: string; invoiceNumber?: number
+  }) => electron.printing.listForReprint(filters) as Promise<Sale[]>,
+  printChangeTicket: (saleId: number) =>
+    electron.printing.printChangeTicket(saleId) as Promise<{ success: boolean; error?: string }>,
 }
 
 // Reporting
@@ -176,6 +195,10 @@ export const reporting = {
     electron.reporting.stockMovements(filters) as Promise<unknown[]>,
   dailySummary: (filters: { dateFrom?: string; dateTo?: string }) =>
     electron.reporting.dailySummary(filters) as Promise<DailySummaryReport[]>,
+  rankingPorCantidad: (filters: { dateFrom?: string; dateTo?: string }) =>
+    electron.reporting.rankingPorCantidad(filters) as Promise<RankingItem[]>,
+  rankingPorGanancia: (filters: { dateFrom?: string; dateTo?: string }) =>
+    electron.reporting.rankingPorGanancia(filters) as Promise<RankingItem[]>,
 }
 
 // Backup
@@ -197,6 +220,120 @@ export const parameters = {
   update: (id: number, data: Partial<{ descripcion: string; porcentaje: number; tipo: '+' | '-' }>) =>
     electron.parameters.update(id, data) as Promise<Parameter>,
   delete: (id: number) => electron.parameters.delete(id) as Promise<void>,
+}
+
+// System Params
+export const systemParams = {
+  get: () => electron.systemParams.get() as Promise<SystemParams>,
+  save: (params: SystemParams) => electron.systemParams.save(params) as Promise<void>,
+}
+
+// Pedido de Reposición
+export const pedido = {
+  getSupplierProducts: (supplierId: number) =>
+    electron.pedido.getSupplierProducts(supplierId) as Promise<PedidoProduct[]>,
+  saveFile: (content: string, defaultName: string) =>
+    electron.pedido.saveFile(content, defaultName) as Promise<{ success: boolean; filePath?: string; canceled?: boolean; error?: string }>,
+}
+
+// Label Config
+export const labelConfig = {
+  get: () => electron.labelConfig.get() as Promise<import('../types/ipc').LabelConfig>,
+  save: (config: import('../types/ipc').LabelConfig) =>
+    electron.labelConfig.save(config) as Promise<void>,
+  print: (config: import('../types/ipc').LabelConfig, copies: number) =>
+    electron.labelConfig.print(config, copies) as Promise<{ success: boolean; error?: string }>,
+  feed: (mm: number) =>
+    electron.labelConfig.feed(mm) as Promise<{ success: boolean; error?: string }>,
+}
+
+// Printer Config
+export const printerConfig = {
+  get: () => electron.printerConfig.get() as Promise<PrinterConfig>,
+  save: (config: PrinterConfig) => electron.printerConfig.save(config) as Promise<void>,
+  testConnection: (config: PrinterConfig) =>
+    electron.printerConfig.testConnection(config) as Promise<PrinterTestResult>,
+  printTest: (config: PrinterConfig) =>
+    electron.printerConfig.printTest(config) as Promise<PrinterTestResult>,
+  listPrinters: () => electron.printerConfig.listPrinters() as Promise<string[]>,
+}
+
+// Re-export type for page use
+export type { ConnectionType }
+
+// Remito Scanner
+export const remitoScanner = {
+  selectImage: () => electron.remitoScanner.selectImage() as Promise<string | null>,
+  scan: (imagePath: string) => electron.remitoScanner.scan(imagePath) as Promise<RemitoScanResult>,
+  getMappings: (codes: string[]) =>
+    electron.remitoScanner.getMappings(codes) as Promise<Record<string, { productId: number; productName: string }>>,
+  saveMappings: (mappings: Array<{ supplierCode: string; productId: number }>) =>
+    electron.remitoScanner.saveMappings(mappings) as Promise<void>,
+  listMappings: () => electron.remitoScanner.listMappings() as Promise<RemitoMapping[]>,
+  deleteMapping: (supplierCode: string) => electron.remitoScanner.deleteMapping(supplierCode) as Promise<void>,
+}
+
+// Sync
+export const sync = {
+  getConfig: () => electron.sync.getConfig() as Promise<SyncConfig>,
+  saveConfig: (config: SyncConfig) => electron.sync.saveConfig(config) as Promise<void>,
+  triggerNow: () => electron.sync.triggerNow() as Promise<SyncResult>,
+  getLastResult: () => electron.sync.getLastResult() as Promise<SyncResult | null>,
+  pullOrders: () => electron.sync.pullOrders() as Promise<import('../types/ipc').PullResult>,
+  listWebOrders: () => electron.sync.listWebOrders() as Promise<unknown[]>,
+  markOrderProcessed: (externalId: string) => electron.sync.markOrderProcessed(externalId) as Promise<void>,
+  printShippingLabel: (order: { customerName: string; deliveryAddress: string; externalId: string }) =>
+    electron.sync.printShippingLabel(order) as Promise<{ success: boolean; error?: string }>,
+}
+
+// Web Catalog
+import type { WebCategory, WebProduct, WebProductImage, UnpublishedProduct } from '../types/ipc'
+
+export const webCatalog = {
+  listCategories:  () => electron.webCatalog.listCategories() as Promise<WebCategory[]>,
+  saveCategory:    (id: number | null, input: Partial<WebCategory>) =>
+    electron.webCatalog.saveCategory(id, input) as Promise<WebCategory>,
+  deleteCategory:  (id: number) => electron.webCatalog.deleteCategory(id) as Promise<void>,
+  listProducts:    () => electron.webCatalog.listProducts() as Promise<WebProduct[]>,
+  getProduct:      (productId: number) => electron.webCatalog.getProduct(productId) as Promise<WebProduct | null>,
+  saveProduct:     (input: Partial<WebProduct>) => electron.webCatalog.saveProduct(input) as Promise<WebProduct>,
+  listUnpublished:  () => electron.webCatalog.listUnpublished() as Promise<UnpublishedProduct[]>,
+  getNextSortOrder: (webCategoryId: number | null) => electron.webCatalog.getNextSortOrder(webCategoryId) as Promise<number>,
+  uploadImage:     (productId: number, sortOrder: number) =>
+    electron.webCatalog.uploadImage(productId, sortOrder) as Promise<{ success: boolean; image?: WebProductImage; error?: string }>,
+  deleteImage:     (imageId: number) => electron.webCatalog.deleteImage(imageId) as Promise<{ success: boolean }>,
+  reorderImages:   (productId: number, orderedIds: number[]) =>
+    electron.webCatalog.reorderImages(productId, orderedIds) as Promise<{ success: boolean }>,
+  getImageDataUrl: (filename: string) => electron.webCatalog.getImageDataUrl(filename) as Promise<string | null>,
+  getImagesDir:    () => electron.webCatalog.getImagesDir() as Promise<string>,
+}
+
+// Mail
+export const mail = {
+  sendInvoice: (saleId: number, toEmail: string) =>
+    electron.mail.sendInvoice(saleId, toEmail) as Promise<{ success: boolean; error?: string }>,
+}
+
+// Crédito de clientes
+export const credits = {
+  getBalance: (customerId: number) =>
+    electron.credits.getBalance(customerId) as Promise<number>,
+  getHistory: (customerId: number) =>
+    electron.credits.getHistory(customerId) as Promise<import('../types/ipc').CreditRecord[]>,
+  use: (customerId: number, amount: number, saleId: number) =>
+    electron.credits.use(customerId, amount, saleId) as Promise<{ ok: boolean; error?: string; newBalance: number }>,
+  adjust: (customerId: number, amount: number, notes: string) =>
+    electron.credits.adjust(customerId, amount, notes) as Promise<{ ok: boolean; error?: string }>,
+}
+
+// Cambios y Devoluciones
+export const cambios = {
+  preview: (rawQr: string) =>
+    electron.cambios.preview(rawQr) as Promise<import('../types/ipc').ExchangePreview>,
+  confirm: (rawQr: string, notes?: string) =>
+    electron.cambios.confirm(rawQr, notes) as Promise<{ ok: boolean; error?: string; creditId?: number }>,
+  list: (limit?: number) =>
+    electron.cambios.list(limit) as Promise<import('../types/ipc').ExchangeRecord[]>,
 }
 
 // Caja

@@ -1,4 +1,5 @@
 import type { Database } from 'better-sqlite3'
+import { localToday } from '../../lib/date'
 import type { Sale, SaleItem, AppliedParameter, CreateSaleInput } from './types'
 
 interface SaleRow {
@@ -22,6 +23,7 @@ interface SaleRow {
   created_at: string
   updated_at: string
   customer_name?: string
+  customer_email?: string
 }
 
 interface SaleItemRow {
@@ -50,7 +52,7 @@ export class SaleRepository {
   findById(id: number): Sale | undefined {
     const row = this.db
       .prepare(
-        `SELECT s.*, c.name AS customer_name
+        `SELECT s.*, c.name AS customer_name, c.email AS customer_email
          FROM sales s
          LEFT JOIN customers c ON c.id = s.customer_id
          WHERE s.id = ?`
@@ -63,7 +65,15 @@ export class SaleRepository {
     return { ...this.mapRow(row), items, appliedParameters }
   }
 
-  list(filters: { dateFrom?: string; dateTo?: string; status?: string; limit?: number }): Sale[] {
+  list(filters: {
+    dateFrom?: string
+    dateTo?: string
+    status?: string
+    limit?: number
+    customerName?: string
+    customerDoc?: string
+    invoiceNumber?: number
+  }): Sale[] {
     const conditions: string[] = []
     const params: Record<string, unknown> = {}
 
@@ -79,13 +89,25 @@ export class SaleRepository {
       conditions.push('s.status = @status')
       params.status = filters.status
     }
+    if (filters.customerName) {
+      conditions.push('c.name LIKE @customerName')
+      params.customerName = `%${filters.customerName}%`
+    }
+    if (filters.customerDoc) {
+      conditions.push('c.cuit_dni LIKE @customerDoc')
+      params.customerDoc = `%${filters.customerDoc}%`
+    }
+    if (filters.invoiceNumber) {
+      conditions.push('s.invoice_number = @invoiceNumber')
+      params.invoiceNumber = filters.invoiceNumber
+    }
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
-    const limit = filters.limit ?? 200
+    const limit = filters.limit ?? 500
 
     const rows = this.db
       .prepare(
-        `SELECT s.*, c.name AS customer_name
+        `SELECT s.*, c.name AS customer_name, c.email AS customer_email
          FROM sales s
          LEFT JOIN customers c ON c.id = s.customer_id
          ${where}
@@ -111,8 +133,8 @@ export class SaleRepository {
     }
   ): number {
     const insertSale = this.db.prepare(
-      `INSERT INTO sales (customer_id, user_id, invoice_type, subtotal, tax_amount, total, discount_amount, is_black_sale, payment_method)
-       VALUES (@customerId, @userId, @invoiceType, @subtotal, @taxAmount, @total, @discountAmount, @isBlackSale, @paymentMethod)`
+      `INSERT INTO sales (customer_id, user_id, invoice_type, subtotal, tax_amount, total, discount_amount, is_black_sale, payment_method, sale_date)
+       VALUES (@customerId, @userId, @invoiceType, @subtotal, @taxAmount, @total, @discountAmount, @isBlackSale, @paymentMethod, @saleDate)`
     )
 
     const insertItem = this.db.prepare(
@@ -136,6 +158,7 @@ export class SaleRepository {
         discountAmount: data.discountAmount,
         isBlackSale: data.isBlackSale ? 1 : 0,
         paymentMethod: data.paymentMethod ?? 'contado_efectivo',
+        saleDate: localToday(),   // fecha local ART, no UTC
       })
       const id = r.lastInsertRowid as number
 
@@ -194,7 +217,7 @@ export class SaleRepository {
     this.db
       .prepare(
         `UPDATE sales
-         SET afip_error = @error, status = 'REJECTED', updated_at = datetime('now')
+         SET afip_error = @error, updated_at = datetime('now')
          WHERE id = @id`
       )
       .run({ id, error })
@@ -252,6 +275,7 @@ export class SaleRepository {
       id: row.id,
       customerId: row.customer_id,
       customerName: row.customer_name,
+      customerEmail: row.customer_email,
       userId: row.user_id,
       status: row.status as Sale['status'],
       subtotal: row.subtotal,

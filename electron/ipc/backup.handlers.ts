@@ -4,7 +4,7 @@ import { BackupService } from '../modules/backup/service'
 export function registerBackupHandlers(): void {
   const backupService = new BackupService()
 
-  ipcMain.handle('backup:create', () => {
+  ipcMain.handle('backup:create', async () => {
     return backupService.createBackup()
   })
 
