@@ -37,6 +37,7 @@ export default function InvoicingPage() {
   // Acciones
   const [retrying, setRetrying] = useState<number | null>(null)
   const [printingId, setPrintingId] = useState<number | null>(null)
+  const [changePrintingId, setChangePrintingId] = useState<number | null>(null)
   const [batchPrinting, setBatchPrinting] = useState(false)
   const [printError, setPrintError] = useState<string | null>(null)
   const [batchMsg, setBatchMsg] = useState<string | null>(null)
@@ -105,6 +106,17 @@ export default function InvoicingPage() {
     } catch (err) {
       setPrintError(err instanceof Error ? err.message : 'Error al imprimir')
     } finally { setPrintingId(null) }
+  }
+
+  async function handlePrintChangeTicket(inv: Sale) {
+    setChangePrintingId(inv.id)
+    setPrintError(null)
+    try {
+      const res = await printing.printChangeTicket(inv.id)
+      if (!res.success) setPrintError(res.error ?? 'Error al imprimir ticket de cambio')
+    } catch (err) {
+      setPrintError(err instanceof Error ? err.message : 'Error al imprimir ticket de cambio')
+    } finally { setChangePrintingId(null) }
   }
 
   async function handleBatchPrint() {
@@ -314,6 +326,14 @@ export default function InvoicingPage() {
                       title="Reimprimir comprobante"
                     >
                       {printingId === inv.id ? '⏳' : '🖨️'}
+                    </button>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => void handlePrintChangeTicket(inv)}
+                      disabled={changePrintingId === inv.id}
+                      title="Imprimir Ticket de Cambio"
+                    >
+                      {changePrintingId === inv.id ? '⏳' : '🔄'}
                     </button>
                   </td>
                 </tr>

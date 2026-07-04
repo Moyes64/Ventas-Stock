@@ -32,7 +32,17 @@ certs/*.pem
 certs/*.key
 certs/*.p12
 certs/*.pfx
+certs/Certificados Ambiente de Prueba/
 !certs/.gitkeep
+
+# Secrets
+/ClaveAPI.txt
+
+# Nested backup checkout (has its own .git, .env, node_modules)
+/Ventas-Stock/
+
+# Hostinger deployment (contains DB credentials; manage separately)
+/hostinger/
 
 # Logs
 logs/
