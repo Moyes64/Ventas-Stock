@@ -75,6 +75,8 @@ const electronAPI = {
     get: (id: number) => invoke('sales:get', id),
     list: (filters: unknown) => invoke('sales:list', filters),
     listPendingCAE: () => invoke('sales:listPendingCAE'),
+    updatePaymentMethod: (id: number, paymentMethod: string) =>
+      invoke('sales:updatePaymentMethod', id, paymentMethod),
   },
 
   // Invoicing

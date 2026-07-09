@@ -154,6 +154,8 @@ export const sales = {
   list: (filters: { dateFrom?: string; dateTo?: string; status?: string; limit?: number }) =>
     electron.sales.list(filters) as Promise<Sale[]>,
   listPendingCAE: () => electron.sales.listPendingCAE() as Promise<Sale[]>,
+  updatePaymentMethod: (id: number, paymentMethod: PaymentMethod) =>
+    electron.sales.updatePaymentMethod(id, paymentMethod) as Promise<Sale>,
 }
 
 // Invoicing

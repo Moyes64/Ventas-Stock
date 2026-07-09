@@ -30,6 +30,13 @@ export class SaleService {
     return this.saleRepo.findPendingCAE()
   }
 
+  updatePaymentMethod(id: number, paymentMethod: Sale['paymentMethod']): Sale {
+    this.saleRepo.updatePaymentMethod(id, paymentMethod)
+    const sale = this.saleRepo.findById(id)
+    if (!sale) throw new Error(`Venta no encontrada: ${id}`)
+    return sale
+  }
+
   /**
    * End-to-end sale creation flow:
    *

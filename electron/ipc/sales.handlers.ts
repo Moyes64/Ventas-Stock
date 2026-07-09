@@ -29,4 +29,11 @@ export function registerSalesHandlers(db: Database): void {
   ipcMain.handle('sales:listPendingCAE', () => {
     return saleService.findPendingCAE()
   })
+
+  ipcMain.handle(
+    'sales:updatePaymentMethod',
+    (_event, id: number, paymentMethod: 'contado_efectivo' | 'transferencia' | 'debito' | 'credito') => {
+      return saleService.updatePaymentMethod(id, paymentMethod)
+    }
+  )
 }

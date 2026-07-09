@@ -1,8 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
-import { invoicing as invoicingApi, printing } from '../../lib/ipc'
+import { invoicing as invoicingApi, printing, sales as salesApi } from '../../lib/ipc'
 import { localToday } from '../../lib/date'
-import type { Sale } from '../../types/ipc'
+import type { PaymentMethod, Sale } from '../../types/ipc'
 import { useHiddenOptions } from '../../context/HiddenOptionsContext'
+
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  contado_efectivo: '💵 Contado Efectivo',
+  transferencia: '🏦 Transferencia',
+  debito: '💳 Débito',
+  credito: '💳 Crédito',
+  credito_cliente: '🎁 Crédito del cliente',
+}
+
+const EDITABLE_PAYMENT_METHODS: PaymentMethod[] = ['contado_efectivo', 'transferencia', 'debito', 'credito']
 
 const STATUS_LABELS: Record<string, string> = {
   AUTHORIZED: '✅ Autorizada',
@@ -42,6 +52,8 @@ export default function InvoicingPage() {
   const [printError, setPrintError] = useState<string | null>(null)
   const [batchMsg, setBatchMsg] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<number>>(new Set())
+  const [editingPaymentId, setEditingPaymentId] = useState<number | null>(null)
+  const [savingPaymentId, setSavingPaymentId] = useState<number | null>(null)
 
   const { isHiddenOptionsVisible } = useHiddenOptions()
 
@@ -117,6 +129,20 @@ export default function InvoicingPage() {
     } catch (err) {
       setPrintError(err instanceof Error ? err.message : 'Error al imprimir ticket de cambio')
     } finally { setChangePrintingId(null) }
+  }
+
+  async function handleUpdatePaymentMethod(saleId: number, paymentMethod: PaymentMethod) {
+    setSavingPaymentId(saleId)
+    setError(null)
+    try {
+      const updated = await salesApi.updatePaymentMethod(saleId, paymentMethod)
+      setInvoices(prev => prev.map(inv => (inv.id === saleId ? { ...inv, paymentMethod: updated.paymentMethod } : inv)))
+      setEditingPaymentId(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al actualizar el modo de pago')
+    } finally {
+      setSavingPaymentId(null)
+    }
   }
 
   async function handleBatchPrint() {
@@ -269,6 +295,7 @@ export default function InvoicingPage() {
                 <th>Tipo</th>
                 <th>Nro. Comprobante</th>
                 <th>Total</th>
+                <th>Modo de pago</th>
                 <th>Estado</th>
                 <th>CAE</th>
                 <th>Acciones</th>
@@ -297,6 +324,33 @@ export default function InvoicingPage() {
                       : '—'}
                   </td>
                   <td>{currency(inv.total)}</td>
+                  <td>
+                    {editingPaymentId === inv.id ? (
+                      <select
+                        className="select"
+                        autoFocus
+                        value={inv.paymentMethod}
+                        disabled={savingPaymentId === inv.id}
+                        onChange={e => { void handleUpdatePaymentMethod(inv.id, e.target.value as PaymentMethod) }}
+                        onBlur={() => setEditingPaymentId(null)}
+                      >
+                        {inv.paymentMethod === 'credito_cliente' && (
+                          <option value="credito_cliente">{PAYMENT_METHOD_LABELS.credito_cliente}</option>
+                        )}
+                        {EDITABLE_PAYMENT_METHODS.map(pm => (
+                          <option key={pm} value={pm}>{PAYMENT_METHOD_LABELS[pm]}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span
+                        onClick={() => setEditingPaymentId(inv.id)}
+                        style={{ cursor: 'pointer' }}
+                        title="Editar modo de pago"
+                      >
+                        {savingPaymentId === inv.id ? '⏳' : (PAYMENT_METHOD_LABELS[inv.paymentMethod] ?? inv.paymentMethod)} ✏️
+                      </span>
+                    )}
+                  </td>
                   <td>
                     <span className={STATUS_BADGE[inv.status] ?? 'badge'}>
                       {STATUS_LABELS[inv.status] ?? inv.status}
@@ -339,7 +393,7 @@ export default function InvoicingPage() {
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={10} className="empty-row">Sin comprobantes para los filtros seleccionados</td></tr>
+                <tr><td colSpan={11} className="empty-row">Sin comprobantes para los filtros seleccionados</td></tr>
               )}
             </tbody>
           </table>

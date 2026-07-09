@@ -213,6 +213,14 @@ export class SaleRepository {
     }
   }
 
+  updatePaymentMethod(id: number, paymentMethod: Sale['paymentMethod']): void {
+    this.db
+      .prepare(
+        `UPDATE sales SET payment_method = @paymentMethod, updated_at = datetime('now') WHERE id = @id`
+      )
+      .run({ id, paymentMethod })
+  }
+
   updateAfipError(id: number, error: string): void {
     this.db
       .prepare(
