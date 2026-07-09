@@ -7,6 +7,34 @@ import { PrinterConfigService } from '../modules/printer-config/service'
 import { sendEscPos } from '../modules/printer-config/service'
 import { SystemParamsService } from '../modules/system-params/service'
 
+async function printChangeTicketForSale(db: Database, saleId: number): Promise<void> {
+  const { SaleRepository } = await import('../modules/sales/repository')
+  const saleRepo = new SaleRepository(db)
+  const sale = saleRepo.findById(saleId)
+  if (!sale) throw new Error(`Venta no encontrada: ${saleId}`)
+
+  const params = new SystemParamsService().get()
+  const printerCfg = new PrinterConfigService().get()
+
+  const data = {
+    saleId: sale.id,
+    saleDate: sale.saleDate,
+    companyName: params.denominacion || 'Comercio',
+    customerId: sale.customerId ?? null,
+    customerName: sale.customerName ?? 'Consumidor Final',
+    items: (sale.items ?? []).map((i) => ({
+      productId:   i.productId,
+      productName: (i as { productName?: string }).productName ?? `Producto #${i.productId}`,
+      quantity:    i.quantity,
+      unitPrice:   i.unitPrice,
+    })),
+    diasCambio: params.diasCambio ?? 30,
+  }
+
+  const buffer = buildChangeTicketBuffer(data)
+  await sendEscPos(printerCfg, buffer)
+}
+
 export function registerPrintingHandlers(db: Database): void {
   const printingService = new PrintingService(db)
 
@@ -44,6 +72,7 @@ export function registerPrintingHandlers(db: Database): void {
 
       const ticketData = await printingService.buildTicketData(sale)
       await printSystemTicket(ticketData, 'invoice')
+      await printChangeTicketForSale(db, saleId)
       return { success: true }
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : String(err) }
@@ -77,7 +106,9 @@ export function registerPrintingHandlers(db: Database): void {
         const sale = saleRepo.findById(saleId)
         if (!sale) { errors.push(`Venta ${saleId} no encontrada`); continue }
         const ticketData = await printingService.buildTicketData(sale)
-        await printSystemTicket(ticketData, sale.status === 'AUTHORIZED' ? 'invoice' : 'delivery')
+        const isInvoice = sale.status === 'AUTHORIZED'
+        await printSystemTicket(ticketData, isInvoice ? 'invoice' : 'delivery')
+        if (isInvoice) await printChangeTicketForSale(db, saleId)
         printed++
       } catch (err) {
         errors.push(`Venta ${saleId}: ${err instanceof Error ? err.message : String(err)}`)
@@ -90,31 +121,7 @@ export function registerPrintingHandlers(db: Database): void {
   // Ticket de cambio: imprime un slip ESC/POS con QR por cada ítem de la venta
   ipcMain.handle('printing:printChangeTicket', async (_event, saleId: number) => {
     try {
-      const { SaleRepository } = await import('../modules/sales/repository')
-      const saleRepo = new SaleRepository(db)
-      const sale = saleRepo.findById(saleId)
-      if (!sale) return { success: false, error: `Venta no encontrada: ${saleId}` }
-
-      const params = new SystemParamsService().get()
-      const printerCfg = new PrinterConfigService().get()
-
-      const data = {
-        saleId: sale.id,
-        saleDate: sale.saleDate,
-        companyName: params.denominacion || 'Comercio',
-        customerId: sale.customerId ?? null,
-        customerName: sale.customerName ?? 'Consumidor Final',
-        items: (sale.items ?? []).map((i) => ({
-          productId:   i.productId,
-          productName: (i as { productName?: string }).productName ?? `Producto #${i.productId}`,
-          quantity:    i.quantity,
-          unitPrice:   i.unitPrice,
-        })),
-        diasCambio: params.diasCambio ?? 30,
-      }
-
-      const buffer = buildChangeTicketBuffer(data)
-      await sendEscPos(printerCfg, buffer)
+      await printChangeTicketForSale(db, saleId)
       return { success: true }
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : String(err) }
