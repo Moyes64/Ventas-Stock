@@ -9,7 +9,7 @@ import type { Database } from 'better-sqlite3'
 import { app } from 'electron'
 import { localToday } from '../../lib/date'
 import type {
-  SyncConfig, SyncPayload, SyncResult, SyncStockItem, SyncVentasHoy, SyncCaja,
+  SyncConfig, SyncPayload, SyncResult, SyncStockItem, SyncVentasHoy, SyncSaleHistory, SyncCaja,
   SyncWebCategory, SyncWebProduct, SyncWebImage, WebOrder, PullResult,
 } from './types'
 import { SystemParamsService } from '../system-params/service'
@@ -125,6 +125,7 @@ export class SyncService {
       empresa,
       stock: this.buildStock(),
       ventasHoy: this.buildVentasHoy(today),
+      salesHistory: this.buildSalesHistory(),
       caja: this.buildCaja(today),
       webCategories: this.buildWebCategories(),
       webProducts: this.buildWebProducts(),
@@ -513,8 +514,47 @@ export class SyncService {
         total: r.total,
         paymentMethod: r.payment_method,
         status: r.status,
+        items: this.getSaleItems(r.id),
       })),
     }
+  }
+
+  private getSaleItems(saleId: number): Array<{ productName: string; quantity: number }> {
+    const items = this.db.prepare(`
+      SELECT si.quantity, p.name AS product_name
+      FROM sale_items si
+      JOIN products p ON p.id = si.product_id
+      WHERE si.sale_id = ?
+    `).all(saleId) as Array<{ quantity: number; product_name: string }>
+
+    return items.map(i => ({ productName: i.product_name, quantity: i.quantity }))
+  }
+
+  private buildSalesHistory(): SyncSaleHistory[] {
+    const rows = this.db
+      .prepare(
+        `SELECT id, sale_date, created_at, total, payment_method, status
+         FROM sales WHERE status != 'CANCELLED'
+         ORDER BY created_at DESC`
+      )
+      .all() as Array<{
+        id: number
+        sale_date: string
+        created_at: string
+        total: number
+        payment_method: string
+        status: string
+      }>
+
+    return rows.map(r => ({
+      id: r.id,
+      date: r.sale_date,
+      time: r.created_at.slice(11, 16),
+      total: r.total,
+      paymentMethod: r.payment_method,
+      status: r.status,
+      items: this.getSaleItems(r.id),
+    }))
   }
 
   private buildCaja(date: string): SyncCaja {

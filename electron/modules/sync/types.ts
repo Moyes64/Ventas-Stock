@@ -26,7 +26,18 @@ export interface SyncVentasHoy {
     total: number
     paymentMethod: string
     status: string
+    items: Array<{ productName: string; quantity: number }>
   }>
+}
+
+export interface SyncSaleHistory {
+  id: number
+  date: string          // YYYY-MM-DD
+  time: string          // HH:MM
+  total: number
+  paymentMethod: string
+  status: string
+  items: Array<{ productName: string; quantity: number }>
 }
 
 export interface SyncCaja {
@@ -107,6 +118,7 @@ export interface SyncPayload {
   empresa: string
   stock: SyncStockItem[]
   ventasHoy: SyncVentasHoy
+  salesHistory: SyncSaleHistory[]
   caja: SyncCaja
   webCategories: SyncWebCategory[]
   webProducts: SyncWebProduct[]
