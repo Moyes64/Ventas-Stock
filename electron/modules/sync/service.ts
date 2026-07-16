@@ -310,6 +310,12 @@ export class SyncService {
   }
 
   private processWebOrder(order: WebOrder): void {
+    // Idempotencia: si esta orden ya fue importada (p. ej. el servidor la
+    // volvió a marcar 'paid' por un reenvío de webhook de MercadoPago),
+    // no crear una venta ni descontar stock por segunda vez.
+    const already = this.db.prepare(`SELECT 1 FROM web_orders_processed WHERE external_id=?`).get(order.externalId)
+    if (already) return
+
     this.db.transaction(() => {
       // Crear o actualizar cliente
       let customerId: number | null = null
