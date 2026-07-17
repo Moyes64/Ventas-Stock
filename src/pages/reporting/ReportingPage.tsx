@@ -570,7 +570,7 @@ export default function ReportingPage() {
                 {purchasesReport.incompleteCount > 0 && (
                   <div className="stat-card stat-card--warning">
                     <div className="stat-value">{purchasesReport.incompleteCount}</div>
-                    <div className="stat-label">Ingresos sin comprobante</div>
+                    <div className="stat-label">Ingresos con datos faltantes</div>
                   </div>
                 )}
               </div>
@@ -636,10 +636,12 @@ export default function ReportingPage() {
 
           {!purchasesLoading && incompleteEntries.length > 0 && (
             <div className="purchases-incomplete-section">
-              <h3 className="purchases-incomplete-section__title">⚠️ Ingresos sin comprobante — completar información</h3>
+              <h3 className="purchases-incomplete-section__title">⚠️ Ingresos con datos faltantes — completar información</h3>
               <p className="page-subtitle">
-                Estos ingresos de stock no tienen remito/factura asociado. Completá los datos para que
-                se reflejen correctamente en el reporte de arriba.
+                A estos ingresos de stock les falta el número de remito/factura y/o el proveedor.
+                Mientras no tengan proveedor asignado, van a aparecer agrupados como &ldquo;Sin proveedor&rdquo;
+                en el reporte de arriba en vez de sumarse al proveedor correspondiente. Completá los
+                datos para corregirlo.
               </p>
               <IncompleteEntriesTable
                 entries={incompleteEntries}

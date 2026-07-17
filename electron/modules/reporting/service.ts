@@ -328,7 +328,8 @@ export class ReportingService {
       this.db
         .prepare(
           `SELECT COUNT(*) AS c FROM stock_movements
-           WHERE type = 'ENTRY' AND (voucher_number IS NULL OR TRIM(voucher_number) = '')`
+           WHERE type = 'ENTRY'
+             AND (voucher_number IS NULL OR TRIM(voucher_number) = '' OR supplier_id IS NULL)`
         )
         .get() as { c: number }
     ).c
@@ -336,12 +337,17 @@ export class ReportingService {
     return { suppliers, grandTotalCost, grandTotalPrice, incompleteCount }
   }
 
-  /** Ingresos (ENTRY) sin número de comprobante — candidatos a completar manualmente. */
+  /**
+   * Ingresos (ENTRY) a los que les falta el número de comprobante y/o el proveedor —
+   * candidatos a completar manualmente. Es clave detectar también los que tienen
+   * comprobante pero no proveedor: sin esto quedan agrupados como "Sin proveedor"
+   * en purchasesBySupplier sin forma de corregirlos desde este reporte.
+   */
   incompleteEntries(filters: { dateFrom?: string; dateTo?: string }): IncompleteEntry[] {
     const params: Record<string, unknown> = {}
     const conditions: string[] = [
       `sm.type = 'ENTRY'`,
-      `(sm.voucher_number IS NULL OR TRIM(sm.voucher_number) = '')`,
+      `(sm.voucher_number IS NULL OR TRIM(sm.voucher_number) = '' OR sm.supplier_id IS NULL)`,
     ]
 
     if (filters.dateFrom) {
