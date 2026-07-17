@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { reporting } from '../../lib/ipc'
+import { reporting, suppliers, stock } from '../../lib/ipc'
 import { localToday, localFirstOfMonth, localCurrentMonth } from '../../lib/date'
-import type { DailySummaryReport, RankingItem } from '../../types/ipc'
+import type { DailySummaryReport, RankingItem, PurchasesReport, IncompleteEntry, Supplier } from '../../types/ipc'
 import { useHiddenOptions } from '../../context/HiddenOptionsContext'
 
 // ── SVG Pie Chart ──────────────────────────────────────────────────────────────
@@ -69,6 +69,143 @@ function PieChart({ items, label }: { items: RankingItem[]; label: string }) {
   )
 }
 
+interface EntryDraft {
+  voucherType: string
+  voucherNumber: string
+  voucherDate: string
+  supplierId: number | ''
+}
+
+function IncompleteEntriesTable({
+  entries,
+  suppliersList,
+  onSaved,
+}: {
+  entries: IncompleteEntry[]
+  suppliersList: Supplier[]
+  onSaved: () => void
+}) {
+  const [drafts, setDrafts] = useState<Record<number, EntryDraft>>({})
+  const [savingId, setSavingId] = useState<number | null>(null)
+  const [rowError, setRowError] = useState<Record<number, string>>({})
+
+  useEffect(() => {
+    const initial: Record<number, EntryDraft> = {}
+    for (const e of entries) {
+      initial[e.movementId] = {
+        voucherType: e.voucherType ?? 'Remito',
+        voucherNumber: e.voucherNumber ?? '',
+        voucherDate: e.voucherDate ?? '',
+        supplierId: e.supplierId ?? '',
+      }
+    }
+    setDrafts(initial)
+  }, [entries])
+
+  function updateDraft(id: number, patch: Partial<EntryDraft>) {
+    setDrafts(prev => ({ ...prev, [id]: { ...prev[id], ...patch } }))
+  }
+
+  async function handleSave(id: number) {
+    const d = drafts[id]
+    if (!d) return
+    setSavingId(id)
+    setRowError(prev => ({ ...prev, [id]: '' }))
+    try {
+      await stock.updateMovement(id, {
+        voucherType: d.voucherType || null,
+        voucherNumber: d.voucherNumber || null,
+        voucherDate: d.voucherDate || null,
+        supplierId: d.supplierId === '' ? null : d.supplierId,
+      })
+      onSaved()
+    } catch (err) {
+      setRowError(prev => ({ ...prev, [id]: err instanceof Error ? err.message : 'Error al guardar' }))
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  return (
+    <div className="table-container">
+      <table className="table">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Producto</th>
+            <th>Cant.</th>
+            <th>Proveedor</th>
+            <th>Tipo</th>
+            <th>Número</th>
+            <th>Fecha comprobante</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {entries.map(e => {
+            const d = drafts[e.movementId]
+            if (!d) return null
+            return (
+              <tr key={e.movementId}>
+                <td className="text-muted" style={{ fontSize: '0.85em' }}>{e.createdAt.slice(0, 10)}</td>
+                <td>{e.productName}</td>
+                <td>{e.quantity}</td>
+                <td>
+                  <select
+                    className="input input--select-sm"
+                    value={d.supplierId}
+                    onChange={ev => updateDraft(e.movementId, { supplierId: ev.target.value === '' ? '' : parseInt(ev.target.value) })}
+                  >
+                    <option value="">— Sin proveedor —</option>
+                    {suppliersList.map(s => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                </td>
+                <td>
+                  <input
+                    className="input input--select-sm"
+                    value={d.voucherType}
+                    onChange={ev => updateDraft(e.movementId, { voucherType: ev.target.value })}
+                  />
+                </td>
+                <td>
+                  <input
+                    className="input input--select-sm"
+                    value={d.voucherNumber}
+                    onChange={ev => updateDraft(e.movementId, { voucherNumber: ev.target.value })}
+                  />
+                </td>
+                <td>
+                  <input
+                    type="date"
+                    className="input input--select-sm"
+                    value={d.voucherDate}
+                    onChange={ev => updateDraft(e.movementId, { voucherDate: ev.target.value })}
+                  />
+                </td>
+                <td>
+                  <button
+                    className="btn btn-secondary"
+                    style={{ fontSize: '0.8em', padding: '2px 8px' }}
+                    onClick={() => void handleSave(e.movementId)}
+                    disabled={savingId === e.movementId}
+                  >
+                    {savingId === e.movementId ? '⏳' : '💾 Guardar'}
+                  </button>
+                  {rowError[e.movementId] && (
+                    <div className="error" style={{ fontSize: '0.75em' }}>{rowError[e.movementId]}</div>
+                  )}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 export default function ReportingPage() {
   const [summary, setSummary] = useState<DailySummaryReport[]>([])
   const [loading, setLoading] = useState(false)
@@ -76,7 +213,17 @@ export default function ReportingPage() {
   const { isHiddenOptionsVisible } = useHiddenOptions()
   const [dateFrom, setDateFrom] = useState(localFirstOfMonth)
   const [dateTo, setDateTo] = useState(localToday)
-  const [activeReport, setActiveReport] = useState<'daily' | 'products' | 'lowstock'>('daily')
+  const [activeReport, setActiveReport] = useState<'daily' | 'products' | 'purchases' | 'lowstock'>('daily')
+
+  // Purchases (compras por proveedor) state
+  const [purchaseDateFrom, setPurchaseDateFrom] = useState(localFirstOfMonth)
+  const [purchaseDateTo, setPurchaseDateTo] = useState(localToday)
+  const [purchaseSupplierId, setPurchaseSupplierId] = useState<number | ''>('')
+  const [suppliersList, setSuppliersList] = useState<Supplier[]>([])
+  const [purchasesReport, setPurchasesReport] = useState<PurchasesReport | null>(null)
+  const [purchasesLoading, setPurchasesLoading] = useState(false)
+  const [purchasesError, setPurchasesError] = useState<string | null>(null)
+  const [incompleteEntries, setIncompleteEntries] = useState<IncompleteEntry[]>([])
 
   // Ranking dashboard state
   const [rankDateFrom, setRankDateFrom] = useState(localFirstOfMonth)
@@ -118,6 +265,36 @@ export default function ReportingPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeReport])
 
+  async function loadPurchases() {
+    setPurchasesLoading(true)
+    setPurchasesError(null)
+    try {
+      const [report, incomplete] = await Promise.all([
+        reporting.purchasesBySupplier({
+          dateFrom: purchaseDateFrom,
+          dateTo: purchaseDateTo,
+          supplierId: purchaseSupplierId === '' ? undefined : purchaseSupplierId,
+        }),
+        reporting.incompleteEntries({ dateFrom: purchaseDateFrom, dateTo: purchaseDateTo }),
+      ])
+      setPurchasesReport(report)
+      setIncompleteEntries(incomplete)
+    } catch (err) {
+      setPurchasesError(err instanceof Error ? err.message : 'Error al cargar el reporte de compras')
+    } finally {
+      setPurchasesLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void suppliers.list(true).then(setSuppliersList)
+  }, [])
+
+  useEffect(() => {
+    if (activeReport === 'purchases') void loadPurchases()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeReport])
+
   async function loadReport() {
     setLoading(true)
     setError(null)
@@ -148,13 +325,13 @@ export default function ReportingPage() {
       </div>
 
       <div className="tab-bar">
-        {(['daily', 'products', 'lowstock'] as const).map(t => (
+        {(['daily', 'products', 'purchases', 'lowstock'] as const).map(t => (
           <button
             key={t}
             className={`tab ${activeReport === t ? 'tab--active' : ''}`}
             onClick={() => setActiveReport(t)}
           >
-            {t === 'daily' ? 'Resumen Diario' : t === 'products' ? 'Productos' : 'Stock Bajo'}
+            {t === 'daily' ? 'Resumen Diario' : t === 'products' ? 'Productos' : t === 'purchases' ? '🛒 Compras' : 'Stock Bajo'}
           </button>
         ))}
       </div>
@@ -345,6 +522,135 @@ export default function ReportingPage() {
           )}
         </div>
       )}
+      {activeReport === 'purchases' && (
+        <div className="purchases-report">
+          <div className="filter-bar filter-bar--wrap">
+            <label>
+              Desde:
+              <input type="date" value={purchaseDateFrom} onChange={e => setPurchaseDateFrom(e.target.value)} className="input" />
+            </label>
+            <label>
+              Hasta:
+              <input type="date" value={purchaseDateTo} onChange={e => setPurchaseDateTo(e.target.value)} className="input" />
+            </label>
+            <label>
+              Proveedor:
+              <select
+                className="input"
+                value={purchaseSupplierId}
+                onChange={e => setPurchaseSupplierId(e.target.value === '' ? '' : parseInt(e.target.value))}
+              >
+                <option value="">Todos</option>
+                {suppliersList.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </label>
+            <button onClick={() => { void loadPurchases() }} className="btn btn-secondary">🔍 Generar</button>
+          </div>
+
+          {purchasesLoading && <p>Cargando...</p>}
+          {purchasesError && <p className="error">{purchasesError}</p>}
+
+          {!purchasesLoading && purchasesReport && (
+            <>
+              <div className="stats-grid">
+                <div className="stat-card">
+                  <div className="stat-value">{currency(purchasesReport.grandTotalCost)}</div>
+                  <div className="stat-label">Total a costo (lo que cobra el proveedor)</div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-value">{currency(purchasesReport.grandTotalPrice)}</div>
+                  <div className="stat-label">Total valorizado a precio de venta</div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-value">{currency(purchasesReport.grandTotalPrice - purchasesReport.grandTotalCost)}</div>
+                  <div className="stat-label">Margen potencial</div>
+                </div>
+                {purchasesReport.incompleteCount > 0 && (
+                  <div className="stat-card stat-card--warning">
+                    <div className="stat-value">{purchasesReport.incompleteCount}</div>
+                    <div className="stat-label">Ingresos sin comprobante</div>
+                  </div>
+                )}
+              </div>
+
+              {purchasesReport.suppliers.length === 0 && (
+                <p className="empty-row">Sin ingresos de mercadería para el período seleccionado</p>
+              )}
+
+              {purchasesReport.suppliers.map(sg => (
+                <details
+                  key={sg.supplierId ?? 'none'}
+                  className="purchases-supplier-block"
+                  open={purchasesReport.suppliers.length <= 3}
+                >
+                  <summary className="purchases-supplier-summary">
+                    <span className="purchases-supplier-name">{sg.supplierName}</span>
+                    <span className="purchases-supplier-totals">
+                      Costo: <strong>{currency(sg.totalCost)}</strong> · Precio venta: <strong>{currency(sg.totalPrice)}</strong>
+                    </span>
+                  </summary>
+                  {sg.vouchers.map((vg, vidx) => (
+                    <div key={vidx} className="purchases-voucher-block">
+                      <div className="purchases-voucher-header">
+                        <span>{vg.voucherType || 'Comprobante'} {vg.voucherNumber || '(sin número)'} {vg.voucherDate ? `— ${vg.voucherDate}` : ''}</span>
+                        <span className="purchases-voucher-totals">
+                          Costo: {currency(vg.totalCost)} · Precio: {currency(vg.totalPrice)}
+                        </span>
+                      </div>
+                      <div className="table-container">
+                        <table className="table">
+                          <thead>
+                            <tr>
+                              <th>Producto</th>
+                              <th>SKU</th>
+                              <th>Cant.</th>
+                              <th>Costo unit.</th>
+                              <th>Subtotal costo</th>
+                              <th>Precio unit.</th>
+                              <th>Subtotal precio</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {vg.items.map(it => (
+                              <tr key={it.movementId}>
+                                <td>{it.productName}</td>
+                                <td>{it.sku}</td>
+                                <td>{it.quantity}</td>
+                                <td>{currency(it.unitCost)}</td>
+                                <td>{currency(it.subtotalCost)}</td>
+                                <td>{currency(it.unitPrice)}</td>
+                                <td>{currency(it.subtotalPrice)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ))}
+                </details>
+              ))}
+            </>
+          )}
+
+          {!purchasesLoading && incompleteEntries.length > 0 && (
+            <div className="purchases-incomplete-section">
+              <h3 className="purchases-incomplete-section__title">⚠️ Ingresos sin comprobante — completar información</h3>
+              <p className="page-subtitle">
+                Estos ingresos de stock no tienen remito/factura asociado. Completá los datos para que
+                se reflejen correctamente en el reporte de arriba.
+              </p>
+              <IncompleteEntriesTable
+                entries={incompleteEntries}
+                suppliersList={suppliersList}
+                onSaved={() => { void loadPurchases() }}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
       {activeReport === 'lowstock' && <p className="page-subtitle">Próximamente: Reporte de stock bajo</p>}
 
       {isHiddenOptionsVisible && (

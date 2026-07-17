@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { catalog, suppliers as suppliersApi } from '../../lib/ipc'
+import { calcSalePrice, calcGainFromPrice } from '../../lib/pricing'
 import type { Product, TaxRate, Supplier } from '../../types/ipc'
 
 export default function ProductsPage() {
@@ -125,17 +126,6 @@ export default function ProductsPage() {
       )}
     </div>
   )
-}
-
-/** Calculates sale price: costo * (1 + ganancia/100) * (1 + iva/100) */
-function calcSalePrice(cost: number, gainPct: number, ivaPct: number): number {
-  return cost * (1 + gainPct / 100) * (1 + ivaPct / 100)
-}
-
-/** Derives gain% from a manually entered sale price */
-function calcGainFromPrice(cost: number, price: number, ivaPct: number): number {
-  if (cost <= 0) return 0
-  return Math.round((price / (cost * (1 + ivaPct / 100)) - 1) * 10000) / 100
 }
 
 function ProductForm({

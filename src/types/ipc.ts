@@ -213,6 +213,56 @@ export interface RankingItem {
   value: number
 }
 
+export interface PurchaseItem {
+  movementId: number
+  productId: number
+  productName: string
+  sku: string
+  quantity: number
+  unitCost: number
+  unitPrice: number
+  subtotalCost: number
+  subtotalPrice: number
+}
+
+export interface PurchaseVoucherGroup {
+  voucherType: string | null
+  voucherNumber: string | null
+  voucherDate: string | null
+  items: PurchaseItem[]
+  totalCost: number
+  totalPrice: number
+}
+
+export interface PurchaseSupplierGroup {
+  supplierId: number | null
+  supplierName: string
+  vouchers: PurchaseVoucherGroup[]
+  totalCost: number
+  totalPrice: number
+}
+
+export interface PurchasesReport {
+  suppliers: PurchaseSupplierGroup[]
+  grandTotalCost: number
+  grandTotalPrice: number
+  incompleteCount: number
+}
+
+export interface IncompleteEntry {
+  movementId: number
+  productId: number
+  productName: string
+  quantity: number
+  createdAt: string
+  supplierId: number | null
+  supplierName: string | null
+  voucherType: string | null
+  voucherNumber: string | null
+  voucherDate: string | null
+  notes: string
+}
+
 export interface Parameter {
   id: number
   descripcion: string

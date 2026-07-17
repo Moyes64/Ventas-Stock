@@ -33,4 +33,15 @@ export function registerReportingHandlers(db: Database): void {
   ipcMain.handle('reporting:rankingPorGanancia', (_event, filters: ReportFilters) => {
     return reportingService.rankingPorGanancia(filters)
   })
+
+  ipcMain.handle('reporting:purchasesBySupplier', (_event, filters: ReportFilters) => {
+    return reportingService.purchasesBySupplier(filters)
+  })
+
+  ipcMain.handle(
+    'reporting:incompleteEntries',
+    (_event, filters: { dateFrom?: string; dateTo?: string }) => {
+      return reportingService.incompleteEntries(filters)
+    }
+  )
 }

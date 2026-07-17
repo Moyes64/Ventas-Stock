@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { remitoScanner, stock, catalog, suppliers } from '../../lib/ipc'
 import { localToday } from '../../lib/date'
-import type { RemitoExtracted, RemitoItem, MatchSource, Product, TaxRate } from '../../types/ipc'
+import { calcSalePrice, calcGainFromPrice } from '../../lib/pricing'
+import type { RemitoExtracted, RemitoItem, MatchSource, Product, TaxRate, Supplier } from '../../types/ipc'
 
 interface NewProductForm {
   name: string
@@ -9,6 +10,7 @@ interface NewProductForm {
   barcode: string
   price: string
   cost: string
+  gainPercent: string
   taxRateId: string
   supplierId: number | null
 }
@@ -44,11 +46,13 @@ export default function RemitoScannerPage() {
   const [voucherNumber, setVoucherNumber] = useState('')
   const [voucherDate, setVoucherDate] = useState(localToday())
   const [notes, setNotes] = useState('')
+  const [supplierId, setSupplierId] = useState<number | null>(null)
 
   const [taxRates, setTaxRates] = useState<TaxRate[]>([])
+  const [suppliersList, setSuppliersList] = useState<Supplier[]>([])
   // índice del ítem que tiene abierto el formulario de alta, null = ninguno
   const [newProductIdx, setNewProductIdx] = useState<number | null>(null)
-  const [newProductForm, setNewProductForm] = useState<NewProductForm>({ name: '', sku: '', barcode: '', price: '', cost: '', taxRateId: '' })
+  const [newProductForm, setNewProductForm] = useState<NewProductForm>({ name: '', sku: '', barcode: '', price: '', cost: '', gainPercent: '0', taxRateId: '', supplierId: null })
   const [creatingProduct, setCreatingProduct] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
 
@@ -57,8 +61,12 @@ export default function RemitoScannerPage() {
   const [savedCount, setSavedCount] = useState(0)
   const [newMappingsCount, setNewMappingsCount] = useState(0)
 
+  // IVA% del formulario de alta de producto, usado para auto-calcular el precio de venta
+  const newProductIvaPct = taxRates.find(t => t.id === Number(newProductForm.taxRateId))?.percentage ?? 0
+
   useEffect(() => {
     void catalog.getTaxRates().then(r => setTaxRates(r as TaxRate[]))
+    void suppliers.list(true).then(setSuppliersList)
   }, [])
 
   async function handleSelectImage() {
@@ -119,9 +127,17 @@ export default function RemitoScannerPage() {
                  matchSource: null, confirmedQty: item.cantidad, include: false }
       })
 
+      // Buscar proveedor por nombre detectado en el remito
+      let matchedSupplierId: number | null = null
+      if (ext.proveedor) {
+        const found = await suppliers.search(ext.proveedor)
+        if (found.length > 0) matchedSupplierId = found[0].id
+      }
+
       setExtracted(ext)
       setVoucherNumber(ext.numeroRemito)
       setVoucherDate(ext.fecha || localToday())
+      setSupplierId(matchedSupplierId)
       setItems(matched)
       setStep('review')
     } catch (e) {
@@ -135,23 +151,19 @@ export default function RemitoScannerPage() {
     setItems(prev => prev.map((it, i) => i === idx ? { ...it, ...patch } : it))
   }
 
-  async function openNewProductForm(idx: number) {
+  function openNewProductForm(idx: number) {
     const item = items[idx]
     setNewProductIdx(idx)
     setCreateError(null)
-    // Buscar proveedor por nombre detectado en el remito
-    let supplierId: number | null = null
-    if (extracted?.proveedor) {
-      const found = await suppliers.search(extracted.proveedor)
-      if (found.length > 0) supplierId = found[0].id
-    }
+    const defaultTaxRate = taxRates.find(t => t.percentage === 21) ?? taxRates[0]
     setNewProductForm({
       name: item.descripcion ?? '',
       sku: item.articulo ?? '',
       barcode: item.codigoBarras ?? '',
       price: '',
       cost: '',
-      taxRateId: taxRates[0]?.id?.toString() ?? '',
+      gainPercent: '0',
+      taxRateId: defaultTaxRate?.id?.toString() ?? '',
       supplierId,
     })
   }
@@ -159,8 +171,15 @@ export default function RemitoScannerPage() {
   async function handleCreateProduct() {
     if (newProductIdx === null) return
     const f = newProductForm
-    if (!f.name.trim() || !f.sku.trim() || !f.price || !f.cost || !f.taxRateId) {
-      setCreateError('Completá nombre, SKU, precio, costo e IVA.')
+    const missing: string[] = []
+    if (!f.name.trim()) missing.push('nombre')
+    if (!f.sku.trim()) missing.push('SKU')
+    if (!f.supplierId) missing.push('proveedor')
+    if (!f.price) missing.push('precio')
+    if (!f.cost) missing.push('costo')
+    if (!f.taxRateId) missing.push('IVA')
+    if (missing.length > 0) {
+      setCreateError(`Completá: ${missing.join(', ')}.`)
       return
     }
     setCreatingProduct(true)
@@ -175,7 +194,7 @@ export default function RemitoScannerPage() {
         taxRateId: parseInt(f.taxRateId),
         supplierId: f.supplierId,
         supplierCode: items[newProductIdx].articulo ?? '',
-        gainPercent: 0,
+        gainPercent: parseFloat(f.gainPercent) || 0,
         stockMin: 0,
       }) as number
       // Recargar lista de productos
@@ -228,12 +247,13 @@ export default function RemitoScannerPage() {
       for (const it of toSave) {
         await stock.addMovement({
           productId: it.productId!,
-          type: 'entrada',
+          type: 'ENTRY',
           quantity: it.confirmedQty,
           notes: notes || `Remito ${voucherNumber}`,
           voucherType: voucherType || undefined,
           voucherNumber: voucherNumber || undefined,
           voucherDate: voucherDate || undefined,
+          supplierId: supplierId ?? undefined,
         })
       }
       setSavedCount(toSave.length)
@@ -249,6 +269,7 @@ export default function RemitoScannerPage() {
     setStep('upload'); setImagePath(null); setExtracted(null)
     setItems([]); setScanError(null); setSaveError(null)
     setVoucherNumber(''); setVoucherDate(localToday()); setNotes('')
+    setSupplierId(null)
     setSavedCount(0); setNewMappingsCount(0)
   }
 
@@ -313,6 +334,19 @@ export default function RemitoScannerPage() {
               <div className="form-group">
                 <label className="label">Proveedor detectado</label>
                 <input type="text" value={extracted.proveedor} readOnly className="input input--readonly" />
+              </div>
+              <div className="form-group">
+                <label className="label">Proveedor (sistema) *</label>
+                <select
+                  className="input"
+                  value={supplierId ?? ''}
+                  onChange={e => setSupplierId(e.target.value === '' ? null : parseInt(e.target.value))}
+                >
+                  <option value="">— Sin coincidencia, seleccioná uno —</option>
+                  {suppliersList.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
               </div>
               <div className="form-group">
                 <label className="label">Tipo comprobante</label>
@@ -396,7 +430,7 @@ export default function RemitoScannerPage() {
                           type="button"
                           className="btn btn-secondary"
                           style={{ marginTop: 4, fontSize: '0.78em', padding: '2px 8px' }}
-                          onClick={() => void openNewProductForm(idx)}
+                          onClick={() => openNewProductForm(idx)}
                         >
                           ➕ Dar de alta
                         </button>
@@ -410,6 +444,16 @@ export default function RemitoScannerPage() {
                             <input className="input" value={newProductForm.name}
                               onChange={e => setNewProductForm(f => ({ ...f, name: e.target.value }))} />
                           </div>
+                          <div className="form-group" style={{ marginBottom: 4 }}>
+                            <label className="label">Proveedor *</label>
+                            <select className="input" value={newProductForm.supplierId ?? ''}
+                              onChange={e => setNewProductForm(f => ({ ...f, supplierId: e.target.value === '' ? null : parseInt(e.target.value) }))}>
+                              <option value="">— Seleccionar —</option>
+                              {suppliersList.map(s => (
+                                <option key={s.id} value={s.id}>{s.name}</option>
+                              ))}
+                            </select>
+                          </div>
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
                             <div className="form-group">
                               <label className="label">SKU *</label>
@@ -422,25 +466,47 @@ export default function RemitoScannerPage() {
                                 onChange={e => setNewProductForm(f => ({ ...f, barcode: e.target.value }))} />
                             </div>
                             <div className="form-group">
-                              <label className="label">Precio *</label>
-                              <input className="input" type="number" min={0} value={newProductForm.price}
-                                onChange={e => setNewProductForm(f => ({ ...f, price: e.target.value }))} />
-                            </div>
-                            <div className="form-group">
                               <label className="label">Costo *</label>
                               <input className="input" type="number" min={0} value={newProductForm.cost}
-                                onChange={e => setNewProductForm(f => ({ ...f, cost: e.target.value }))} />
+                                onChange={e => {
+                                  const val = e.target.value
+                                  const newPrice = calcSalePrice(parseFloat(val) || 0, parseFloat(newProductForm.gainPercent) || 0, newProductIvaPct)
+                                  setNewProductForm(f => ({ ...f, cost: val, price: String(newPrice) }))
+                                }} />
+                            </div>
+                            <div className="form-group">
+                              <label className="label">Ganancia (%)</label>
+                              <input className="input" type="number" min={0} value={newProductForm.gainPercent}
+                                onChange={e => {
+                                  const val = e.target.value
+                                  const newPrice = calcSalePrice(parseFloat(newProductForm.cost) || 0, parseFloat(val) || 0, newProductIvaPct)
+                                  setNewProductForm(f => ({ ...f, gainPercent: val, price: String(newPrice) }))
+                                }} />
                             </div>
                           </div>
-                          <div className="form-group" style={{ marginBottom: 6 }}>
+                          <div className="form-group" style={{ marginBottom: 4 }}>
                             <label className="label">IVA *</label>
                             <select className="input" value={newProductForm.taxRateId}
-                              onChange={e => setNewProductForm(f => ({ ...f, taxRateId: e.target.value }))}>
+                              onChange={e => {
+                                const newId = e.target.value
+                                const newPct = taxRates.find(t => t.id === Number(newId))?.percentage ?? 0
+                                const newPrice = calcSalePrice(parseFloat(newProductForm.cost) || 0, parseFloat(newProductForm.gainPercent) || 0, newPct)
+                                setNewProductForm(f => ({ ...f, taxRateId: newId, price: String(newPrice) }))
+                              }}>
                               <option value="">— Seleccionar —</option>
                               {taxRates.map(t => (
                                 <option key={t.id} value={t.id}>{t.name} ({t.percentage}%)</option>
                               ))}
                             </select>
+                          </div>
+                          <div className="form-group" style={{ marginBottom: 6 }}>
+                            <label className="label">Precio venta (c/ IVA) *</label>
+                            <input className="input" type="number" min={0} value={newProductForm.price}
+                              onChange={e => {
+                                const val = e.target.value
+                                const newGain = calcGainFromPrice(parseFloat(newProductForm.cost) || 0, parseFloat(val) || 0, newProductIvaPct)
+                                setNewProductForm(f => ({ ...f, price: val, gainPercent: String(newGain) }))
+                              }} />
                           </div>
                           {createError && <p className="error" style={{ fontSize: '0.8em', marginBottom: 4 }}>{createError}</p>}
                           <div style={{ display: 'flex', gap: 6 }}>

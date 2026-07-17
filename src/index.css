@@ -1585,6 +1585,62 @@ code {
   color: #fff;
 }
 
+/* ── Purchases Report ───────────────────────────────────────────────────────── */
+.purchases-supplier-block {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.purchases-supplier-summary {
+  cursor: pointer;
+  padding: 12px 16px;
+  background: var(--color-surface-alt, #f5f5f5);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-weight: 600;
+  list-style: none;
+}
+
+.purchases-supplier-summary::-webkit-details-marker { display: none; }
+
+.purchases-supplier-name { font-size: 15px; }
+
+.purchases-supplier-totals { font-weight: 400; font-size: 13px; color: var(--color-text-muted); }
+
+.purchases-voucher-block { padding: 12px 16px; border-top: 1px solid var(--color-border); }
+
+.purchases-voucher-header {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 13px;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.purchases-voucher-totals { font-weight: 400; color: var(--color-text-muted); }
+
+.purchases-incomplete-section {
+  margin-top: 24px;
+  padding: 16px 20px;
+  background: #fef9c3;
+  border: 1px solid #f5d90a;
+  border-radius: var(--radius);
+}
+.purchases-incomplete-section__title {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: #713f12;
+}
+.purchases-incomplete-section .page-subtitle { color: #92660c; }
+
 /* ── Remito Scanner ─────────────────────────────────────────────────────────── */
 .scanner-upload-section { max-width: 560px; }
 
