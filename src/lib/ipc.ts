@@ -104,7 +104,7 @@ export const stock = {
     electron.stock.getCurrent(productId) as Promise<number>,
   getMovements: (filters: {
     productId?: number
-    supplierId?: number
+    supplierId?: number | 'none'
     dateFrom?: string
     dateTo?: string
     limit?: number

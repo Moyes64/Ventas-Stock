@@ -125,7 +125,7 @@ export class StockRepository {
 
   getMovements(filters: {
     productId?: number
-    supplierId?: number
+    supplierId?: number | 'none'
     dateFrom?: string
     dateTo?: string
     limit?: number
@@ -137,7 +137,9 @@ export class StockRepository {
       conditions.push('sm.product_id = @productId')
       params.productId = filters.productId
     }
-    if (filters.supplierId) {
+    if (filters.supplierId === 'none') {
+      conditions.push('sm.supplier_id IS NULL')
+    } else if (filters.supplierId) {
       conditions.push('sm.supplier_id = @supplierId')
       params.supplierId = filters.supplierId
     }

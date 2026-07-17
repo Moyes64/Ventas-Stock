@@ -432,7 +432,7 @@ export default function StockPage() {
 
   // Movements filter state
   const [suppliersList, setSuppliersList] = useState<Supplier[]>([])
-  const [mvtFilterSupplierId, setMvtFilterSupplierId] = useState<number | ''>('')
+  const [mvtFilterSupplierId, setMvtFilterSupplierId] = useState<number | 'none' | ''>('')
   const [mvtFilterDateFrom, setMvtFilterDateFrom] = useState('')
   const [mvtFilterDateTo, setMvtFilterDateTo] = useState('')
   const [mvtLoading, setMvtLoading] = useState(false)
@@ -483,7 +483,7 @@ export default function StockPage() {
     }
   }
 
-  async function loadMovements(filters: { supplierId?: number; dateFrom?: string; dateTo?: string } = {}) {
+  async function loadMovements(filters: { supplierId?: number | 'none'; dateFrom?: string; dateTo?: string } = {}) {
     setMvtLoading(true)
     try {
       const mvts = await stockApi.getMovements({
@@ -807,9 +807,13 @@ export default function StockPage() {
               <select
                 className="input"
                 value={mvtFilterSupplierId}
-                onChange={e => setMvtFilterSupplierId(e.target.value === '' ? '' : Number(e.target.value))}
+                onChange={e => {
+                  const v = e.target.value
+                  setMvtFilterSupplierId(v === '' ? '' : v === 'none' ? 'none' : Number(v))
+                }}
               >
                 <option value="">— Todos los proveedores —</option>
+                <option value="none">— Sin proveedor —</option>
                 {suppliersList.map(s => (
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
