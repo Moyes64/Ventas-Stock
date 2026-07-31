@@ -122,6 +122,14 @@ export class FinanceRepository {
     return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10)
   }
 
+  /** Fecha a partir de la cual arranca la contabilidad societaria (ver migración 020). */
+  getFoundingDate(): string {
+    const row = this.db
+      .prepare('SELECT founding_date FROM finance_settings WHERE id = 1')
+      .get() as { founding_date: string } | undefined
+    return row?.founding_date ?? '2026-08-01'
+  }
+
   findAccountByName(name: string): FinanceAccount | undefined {
     const row = this.db
       .prepare('SELECT * FROM finance_accounts WHERE name = ? AND active = 1')
@@ -277,13 +285,16 @@ export class FinanceRepository {
     return row.total
   }
 
-  sumFinanceMovementsByPartner(categoriaId: number, partnerId: number): number {
+  sumFinanceMovementsByPartner(categoriaId: number, partnerId: number, dateFrom?: string): number {
+    const conditions = ["tipo = 'egreso'", 'categoria_id = @categoriaId', 'partner_id = @partnerId']
+    const params: Record<string, unknown> = { categoriaId, partnerId }
+    if (dateFrom !== undefined) {
+      conditions.push('fecha >= @dateFrom')
+      params.dateFrom = dateFrom
+    }
     const row = this.db
-      .prepare(
-        `SELECT COALESCE(SUM(monto), 0) AS total FROM finance_movements
-         WHERE tipo = 'egreso' AND categoria_id = @categoriaId AND partner_id = @partnerId`
-      )
-      .get({ categoriaId, partnerId }) as { total: number }
+      .prepare(`SELECT COALESCE(SUM(monto), 0) AS total FROM finance_movements WHERE ${conditions.join(' AND ')}`)
+      .get(params) as { total: number }
     return row.total
   }
 

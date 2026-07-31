@@ -17,8 +17,16 @@ export default function FinanceDashboardPage() {
   const [dateFrom, setDateFrom] = useState(localFirstOfMonth)
   const [dateTo, setDateTo] = useState(localToday)
   const [groupBy, setGroupBy] = useState<'day' | 'month'>('month')
+  const [foundingDate, setFoundingDate] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    void finance.getFoundingDate().then(fd => {
+      setFoundingDate(fd)
+      setDateFrom(prev => (prev < fd ? fd : prev))
+    })
+  }, [])
 
   async function loadAll() {
     setLoading(true)
@@ -72,11 +80,21 @@ export default function FinanceDashboardPage() {
         </div>
       </div>
 
+      {foundingDate && (
+        <p className="page-subtitle">📅 Contabilidad iniciada el {foundingDate} — no se pueden ver ni cargar datos anteriores.</p>
+      )}
+
       {/* Filtros de período */}
       <div className="filter-bar filter-bar--wrap">
         <label>
           Desde:
-          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="input" />
+          <input
+            type="date"
+            value={dateFrom}
+            min={foundingDate ?? undefined}
+            onChange={e => setDateFrom(e.target.value)}
+            className="input"
+          />
         </label>
         <label>
           Hasta:

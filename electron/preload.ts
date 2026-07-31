@@ -239,6 +239,7 @@ const electronAPI = {
   finance: {
     listPartners: () => invoke('finance:listPartners'),
     listAccounts: () => invoke('finance:listAccounts'),
+    getFoundingDate: () => invoke('finance:getFoundingDate'),
     listCategories: (appliesTo?: string) => invoke('finance:listCategories', appliesTo),
     createCategory: (input: unknown) => invoke('finance:createCategory', input),
     listMovements: (filters?: unknown) => invoke('finance:listMovements', filters),

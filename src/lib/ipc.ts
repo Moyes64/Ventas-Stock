@@ -382,6 +382,7 @@ export const caja = {
 export const finance = {
   listPartners: () => electron.finance.listPartners() as Promise<FinancePartner[]>,
   listAccounts: () => electron.finance.listAccounts() as Promise<FinanceAccount[]>,
+  getFoundingDate: () => electron.finance.getFoundingDate() as Promise<string>,
   listCategories: (appliesTo?: FinanceCategoryAppliesTo) =>
     electron.finance.listCategories(appliesTo) as Promise<FinanceCategory[]>,
   createCategory: (input: CreateFinanceCategoryInput) =>

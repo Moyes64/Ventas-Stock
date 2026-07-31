@@ -20,6 +20,10 @@ export function registerFinanceHandlers(db: Database): void {
     return financeService.listAccounts()
   })
 
+  ipcMain.handle('finance:getFoundingDate', () => {
+    return financeService.getFoundingDate()
+  })
+
   ipcMain.handle('finance:listCategories', (_event, appliesTo?: FinanceCategoryAppliesTo) => {
     return financeService.listCategories(appliesTo)
   })

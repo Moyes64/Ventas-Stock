@@ -1,4 +1,5 @@
 import type { Database } from 'better-sqlite3'
+import { localToday } from '../../lib/date'
 import { FinanceRepository } from './repository'
 import type {
   FinancePartner,
@@ -43,6 +44,17 @@ export class FinanceService {
     return this.repo.findCashAccount()
   }
 
+  /** Fecha a partir de la cual arranca la contabilidad societaria. */
+  getFoundingDate(): string {
+    return this.repo.getFoundingDate()
+  }
+
+  /** Nunca deja que una fecha "desde" quede antes de la fecha fundacional. */
+  private clampDateFrom(dateFrom?: string): string {
+    const foundingDate = this.repo.getFoundingDate()
+    return dateFrom && dateFrom > foundingDate ? dateFrom : foundingDate
+  }
+
   listCategories(appliesTo?: FinanceCategoryAppliesTo): FinanceCategory[] {
     return this.repo.listCategories(appliesTo)
   }
@@ -61,7 +73,10 @@ export class FinanceService {
   // ── Movimientos ───────────────────────────────────────────────────────────
 
   listMovements(filters?: MovementFilters): FinanceMovement[] {
-    return this.repo.listMovements(filters)
+    return this.repo.listMovements({
+      ...filters,
+      dateFrom: this.clampDateFrom(filters?.dateFrom),
+    })
   }
 
   createMovement(input: CreateMovementInput): FinanceMovement {
@@ -71,6 +86,14 @@ export class FinanceService {
     if (!input.descripcion?.trim()) throw new Error('La descripción es obligatoria')
     if (input.tipo !== 'ingreso' && input.tipo !== 'egreso') {
       throw new Error('El tipo debe ser "ingreso" o "egreso"')
+    }
+
+    const foundingDate = this.repo.getFoundingDate()
+    const fecha = input.fecha ?? localToday()
+    if (fecha < foundingDate) {
+      throw new Error(
+        `No se pueden cargar movimientos anteriores al ${foundingDate} — la contabilidad de Finanzas arranca esa fecha.`
+      )
     }
 
     const account = this.repo.findAccountById(input.accountId)
@@ -158,16 +181,17 @@ export class FinanceService {
   getAccountBalances(): AccountBalance[] {
     const accounts = this.repo.listAccounts()
     const cashAccount = this.repo.findCashAccount()
+    const foundingDate = this.repo.getFoundingDate()
 
     return accounts.map(account => {
       let balance: number
       if (cashAccount && account.id === cashAccount.id) {
         const anchor = this.repo.getLatestCajaAnchor()
-        balance = anchor
+        balance = anchor && anchor.date >= foundingDate
           ? anchor.amount + this.repo.sumFinanceMovementsNet(account.id, anchor.date)
-          : this.repo.sumFinanceMovementsNet(account.id)
+          : this.repo.sumFinanceMovementsNet(account.id, foundingDate)
       } else {
-        balance = this.repo.sumFinanceMovementsNet(account.id)
+        balance = this.repo.sumFinanceMovementsNet(account.id, foundingDate)
       }
       return {
         accountId: account.id,
@@ -180,31 +204,32 @@ export class FinanceService {
 
   getCashFlowSummary(dateFrom: string, dateTo: string, groupBy: 'day' | 'month' = 'month', accountId?: number): CashFlowPoint[] {
     return this.repo
-      .cashFlowByFinanceMovements(dateFrom, dateTo, groupBy, accountId)
+      .cashFlowByFinanceMovements(this.clampDateFrom(dateFrom), dateTo, groupBy, accountId)
       .sort((a, b) => a.period.localeCompare(b.period))
   }
 
   getExpensesByCategory(dateFrom: string, dateTo: string, accountId?: number): CategoryExpense[] {
-    return this.repo.expensesByCategory(dateFrom, dateTo, accountId)
+    return this.repo.expensesByCategory(this.clampDateFrom(dateFrom), dateTo, accountId)
   }
 
   getPartnersEquity(): PartnerEquity[] {
     const partners = this.repo.listPartners()
     const retiroCategoria = this.repo.findCategoryByName(RETIRO_SOCIO_CATEGORIA)
+    const foundingDate = this.repo.getFoundingDate()
 
     // Nota: el monto de apertura inicial de Caja no entra acá — es plata que ya
     // existía, no utilidad generada por el negocio.
-    const totalIngresos = this.repo.sumFinanceMovementsByTipo('ingreso')
+    const totalIngresos = this.repo.sumFinanceMovementsByTipo('ingreso', undefined, foundingDate)
     const totalEgresosSinRetiros = retiroCategoria
-      ? this.repo.sumFinanceMovementsByTipo('egreso', undefined, undefined, undefined, retiroCategoria.id)
-      : this.repo.sumFinanceMovementsByTipo('egreso')
+      ? this.repo.sumFinanceMovementsByTipo('egreso', undefined, foundingDate, undefined, retiroCategoria.id)
+      : this.repo.sumFinanceMovementsByTipo('egreso', undefined, foundingDate)
 
     const utilidadNetaTotal = totalIngresos - totalEgresosSinRetiros
 
     return partners.map(partner => {
       const utilidadAcumulada = (partner.ownershipPct / 100) * utilidadNetaTotal
       const retirosRealizados = retiroCategoria
-        ? this.repo.sumFinanceMovementsByPartner(retiroCategoria.id, partner.id)
+        ? this.repo.sumFinanceMovementsByPartner(retiroCategoria.id, partner.id, foundingDate)
         : 0
       return {
         partnerId: partner.id,

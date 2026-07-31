@@ -20,6 +20,7 @@ export default function MovementsPage() {
   const [movements, setMovements] = useState<FinanceMovement[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [foundingDate, setFoundingDate] = useState<string | null>(null)
 
   // Filtros
   const [filterDateFrom, setFilterDateFrom] = useState(localFirstOfMonth)
@@ -45,17 +46,21 @@ export default function MovementsPage() {
   const permiteProveedor = categoriaSeleccionada?.name === PAGO_PROVEEDORES
 
   async function loadCatalogs() {
-    const [accs, cats, parts, sups] = await Promise.all([
+    const [accs, cats, parts, sups, fd] = await Promise.all([
       finance.listAccounts(),
       finance.listCategories(),
       finance.listPartners(),
       suppliers.list(true),
+      finance.getFoundingDate(),
     ])
     setAccounts(accs)
     setCategories(cats)
     setPartners(parts)
     setSuppliersList(sups)
     if (accs.length > 0) setAccountId(accs[0].id)
+    setFoundingDate(fd)
+    setFilterDateFrom(prev => (prev < fd ? fd : prev))
+    setFecha(prev => (prev < fd ? fd : prev))
   }
 
   async function loadMovements() {
@@ -202,7 +207,13 @@ export default function MovementsPage() {
           </div>
           <div className="form-group">
             <label className="label">Fecha</label>
-            <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} className="input" />
+            <input
+              type="date"
+              value={fecha}
+              min={foundingDate ?? undefined}
+              onChange={e => setFecha(e.target.value)}
+              className="input"
+            />
           </div>
         </div>
 
@@ -274,11 +285,21 @@ export default function MovementsPage() {
         {saveError && <p className="error">{saveError}</p>}
       </div>
 
+      {foundingDate && (
+        <p className="page-subtitle">📅 Contabilidad iniciada el {foundingDate} — no se pueden ver ni cargar movimientos anteriores.</p>
+      )}
+
       {/* Filtros */}
       <div className="filter-bar filter-bar--wrap">
         <label>
           Desde:
-          <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} className="input" />
+          <input
+            type="date"
+            value={filterDateFrom}
+            min={foundingDate ?? undefined}
+            onChange={e => setFilterDateFrom(e.target.value)}
+            className="input"
+          />
         </label>
         <label>
           Hasta:
