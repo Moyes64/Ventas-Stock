@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { stock as stockApi, suppliers as suppliersApi, catalog } from '../../lib/ipc'
+import { stock as stockApi, suppliers as suppliersApi, catalog, printing as printingApi } from '../../lib/ipc'
 import type { StockItem, StockMovement, Supplier, Product } from '../../types/ipc'
 
 const MOVEMENT_TYPE_LABELS: Record<string, string> = {
@@ -429,6 +429,7 @@ export default function StockPage() {
   const [filterLow, setFilterLow] = useState(false)
   const [filterSearch, setFilterSearch] = useState('')
   const [showEntryForm, setShowEntryForm] = useState(false)
+  const [printingReport, setPrintingReport] = useState(false)
 
   // Movements filter state
   const [suppliersList, setSuppliersList] = useState<Supplier[]>([])
@@ -581,6 +582,24 @@ export default function StockPage() {
     }
   }
 
+  async function handlePrintStockReport() {
+    setPrintingReport(true)
+    try {
+      const result = await printingApi.printStockReport()
+      if (result.success) {
+        setToast({ type: 'success', text: `Listado enviado a la impresora (${result.count ?? stockItems.length} artículos)` })
+      } else {
+        setToast({ type: 'error', text: result.error ?? 'Error al imprimir el listado' })
+      }
+    } catch (err) {
+      setToast({ type: 'error', text: err instanceof Error ? err.message : 'Error al imprimir el listado' })
+    } finally {
+      setPrintingReport(false)
+      if (toastTimerRef.current !== null) clearTimeout(toastTimerRef.current)
+      toastTimerRef.current = setTimeout(() => setToast(null), 4000)
+    }
+  }
+
   const displayedItems = stockItems
     .filter(i => !filterLow || i.isLow)
     .filter(i => {
@@ -600,6 +619,9 @@ export default function StockPage() {
         <div className="page-header-actions">
           <button className="btn btn-primary" onClick={() => setShowEntryForm(true)}>+ Ingresar Stock</button>
           <button className="btn btn-secondary" onClick={() => void loadData()}>↺ Actualizar</button>
+          <button className="btn btn-secondary" disabled={printingReport} onClick={() => void handlePrintStockReport()}>
+            🖨️ {printingReport ? 'Imprimiendo…' : 'Imprimir listado'}
+          </button>
         </div>
       </div>
 

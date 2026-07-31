@@ -3,9 +3,13 @@ import type { Database } from 'better-sqlite3'
 import { PrintingService } from '../modules/printing/service'
 import { printSystemTicket } from '../modules/printing/system-printer'
 import { buildChangeTicketBuffer } from '../modules/printing/escpos-change-ticket'
+import { buildStockReportBuffer } from '../modules/printing/escpos-stock-report'
+import { buildPriceReportBuffer } from '../modules/printing/escpos-price-report'
 import { PrinterConfigService } from '../modules/printer-config/service'
 import { sendEscPos } from '../modules/printer-config/service'
 import { SystemParamsService } from '../modules/system-params/service'
+import { StockService } from '../modules/stock/service'
+import { ProductService } from '../modules/catalog/service'
 
 async function printChangeTicketForSale(db: Database, saleId: number): Promise<void> {
   const { SaleRepository } = await import('../modules/sales/repository')
@@ -123,6 +127,48 @@ export function registerPrintingHandlers(db: Database): void {
     try {
       await printChangeTicketForSale(db, saleId)
       return { success: true }
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  // Listado completo de stock (para control físico manual)
+  ipcMain.handle('printing:printStockReport', async () => {
+    try {
+      const printerCfg = new PrinterConfigService().get()
+      const isReady = printerCfg.connectionType === 'usb'
+        ? !!printerCfg.usbPrinterName
+        : !!printerCfg.ip
+      if (!printerCfg.enabled || !isReady) {
+        return { success: false, error: 'La impresora térmica no está configurada. Revisá Configuración → Impresora.' }
+      }
+
+      const stockService = new StockService(db)
+      const items = stockService.getStockItems()
+      const buffer = buildStockReportBuffer(items)
+      await sendEscPos(printerCfg, buffer)
+      return { success: true, count: items.length }
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  // Listado de precios: producto, costo, ganancia y precio al público
+  ipcMain.handle('printing:printPriceReport', async () => {
+    try {
+      const printerCfg = new PrinterConfigService().get()
+      const isReady = printerCfg.connectionType === 'usb'
+        ? !!printerCfg.usbPrinterName
+        : !!printerCfg.ip
+      if (!printerCfg.enabled || !isReady) {
+        return { success: false, error: 'La impresora térmica no está configurada. Revisá Configuración → Impresora.' }
+      }
+
+      const productService = new ProductService(db)
+      const products = productService.list()
+      const buffer = buildPriceReportBuffer(products)
+      await sendEscPos(printerCfg, buffer)
+      return { success: true, count: products.length }
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : String(err) }
     }
