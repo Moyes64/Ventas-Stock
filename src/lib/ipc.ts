@@ -28,13 +28,24 @@ import type {
   IncompleteEntry,
   Parameter,
   CashSession,
-  CashMovement,
   CierreSummary,
   PaymentMethod,
   SyncConfig,
   SyncResult,
   RemitoScanResult,
   RemitoMapping,
+  FinancePartner,
+  FinanceAccount,
+  FinanceCategory,
+  FinanceCategoryAppliesTo,
+  FinanceMovement,
+  CreateFinanceMovementInput,
+  FinanceMovementFilters,
+  CreateFinanceCategoryInput,
+  FinanceAccountBalance,
+  FinanceCashFlowPoint,
+  FinanceCategoryExpense,
+  FinancePartnerEquity,
 } from '../types/ipc'
 
 // Access the electron bridge exposed by preload
@@ -158,6 +169,7 @@ export const sales = {
   listPendingCAE: () => electron.sales.listPendingCAE() as Promise<Sale[]>,
   updatePaymentMethod: (id: number, paymentMethod: PaymentMethod) =>
     electron.sales.updatePaymentMethod(id, paymentMethod) as Promise<Sale>,
+  cancelSale: (id: number) => electron.sales.cancelSale(id) as Promise<Sale>,
 }
 
 // Invoicing
@@ -186,6 +198,10 @@ export const printing = {
   }) => electron.printing.listForReprint(filters) as Promise<Sale[]>,
   printChangeTicket: (saleId: number) =>
     electron.printing.printChangeTicket(saleId) as Promise<{ success: boolean; error?: string }>,
+  printStockReport: () =>
+    electron.printing.printStockReport() as Promise<{ success: boolean; error?: string; count?: number }>,
+  printPriceReport: () =>
+    electron.printing.printPriceReport() as Promise<{ success: boolean; error?: string; count?: number }>,
 }
 
 // Reporting
@@ -358,10 +374,27 @@ export const caja = {
     electron.caja.getCierreSummary(date) as Promise<CierreSummary>,
   closeSession: (date: string, cierreAmount: number) =>
     electron.caja.closeSession(date, cierreAmount) as Promise<CashSession>,
-  listMovements: (date: string) =>
-    electron.caja.listMovements(date) as Promise<CashMovement[]>,
-  createMovement: (input: { descripcion: string; tipo: 'ingreso' | 'egreso'; monto: number; movimientoDate?: string }) =>
-    electron.caja.createMovement(input) as Promise<CashMovement>,
-  deleteMovement: (id: number) =>
-    electron.caja.deleteMovement(id) as Promise<void>,
+  reopenSession: (date: string) =>
+    electron.caja.reopenSession(date) as Promise<CashSession>,
+}
+
+// Finanzas (ingresos/egresos multi-cuenta y patrimonio de socios)
+export const finance = {
+  listPartners: () => electron.finance.listPartners() as Promise<FinancePartner[]>,
+  listAccounts: () => electron.finance.listAccounts() as Promise<FinanceAccount[]>,
+  listCategories: (appliesTo?: FinanceCategoryAppliesTo) =>
+    electron.finance.listCategories(appliesTo) as Promise<FinanceCategory[]>,
+  createCategory: (input: CreateFinanceCategoryInput) =>
+    electron.finance.createCategory(input) as Promise<FinanceCategory>,
+  listMovements: (filters?: FinanceMovementFilters) =>
+    electron.finance.listMovements(filters) as Promise<FinanceMovement[]>,
+  createMovement: (input: CreateFinanceMovementInput) =>
+    electron.finance.createMovement(input) as Promise<FinanceMovement>,
+  deleteMovement: (id: number) => electron.finance.deleteMovement(id) as Promise<void>,
+  getAccountBalances: () => electron.finance.getAccountBalances() as Promise<FinanceAccountBalance[]>,
+  getCashFlowSummary: (dateFrom: string, dateTo: string, groupBy?: 'day' | 'month', accountId?: number) =>
+    electron.finance.getCashFlowSummary(dateFrom, dateTo, groupBy, accountId) as Promise<FinanceCashFlowPoint[]>,
+  getExpensesByCategory: (dateFrom: string, dateTo: string, accountId?: number) =>
+    electron.finance.getExpensesByCategory(dateFrom, dateTo, accountId) as Promise<FinanceCategoryExpense[]>,
+  getPartnersEquity: () => electron.finance.getPartnersEquity() as Promise<FinancePartnerEquity[]>,
 }

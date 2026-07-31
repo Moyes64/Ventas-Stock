@@ -1,5 +1,19 @@
-export type SaleStatus = 'PENDING_CAE' | 'AUTHORIZED' | 'REJECTED' | 'INTERNAL_RECEIPT'
-export type PaymentMethod = 'contado_efectivo' | 'transferencia' | 'debito' | 'credito'
+export type SaleStatus =
+  | 'PENDING_CAE'
+  | 'AUTHORIZED'
+  | 'REJECTED'
+  | 'INTERNAL_RECEIPT'
+  | 'WEB_ORDER'
+  | 'PROCESSED'
+  | 'CANCELLED'
+export type PaymentMethod =
+  | 'contado_efectivo'
+  | 'transferencia'
+  | 'debito'
+  | 'credito'
+  | 'credito_cliente'
+  | 'WEB_ORDER'
+  | 'mercadopago'
 
 export interface SaleItem {
   id?: number

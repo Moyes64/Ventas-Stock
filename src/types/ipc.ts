@@ -129,8 +129,22 @@ export interface StockMovement {
   supplierName: string | null
 }
 
-export type SaleStatus = 'PENDING_CAE' | 'AUTHORIZED' | 'REJECTED' | 'INTERNAL_RECEIPT'
-export type PaymentMethod = 'contado_efectivo' | 'transferencia' | 'debito' | 'credito' | 'credito_cliente'
+export type SaleStatus =
+  | 'PENDING_CAE'
+  | 'AUTHORIZED'
+  | 'REJECTED'
+  | 'INTERNAL_RECEIPT'
+  | 'WEB_ORDER'
+  | 'PROCESSED'
+  | 'CANCELLED'
+export type PaymentMethod =
+  | 'contado_efectivo'
+  | 'transferencia'
+  | 'debito'
+  | 'credito'
+  | 'credito_cliente'
+  | 'WEB_ORDER'
+  | 'mercadopago'
 
 export interface SaleItem {
   id?: number
@@ -273,7 +287,6 @@ export interface Parameter {
 }
 
 export type SessionStatus = 'open' | 'closed'
-export type MovimientoTipo = 'ingreso' | 'egreso'
 
 export interface CashSession {
   id: number
@@ -283,16 +296,6 @@ export interface CashSession {
   status: SessionStatus
   createdAt: string
   updatedAt: string
-}
-
-export interface CashMovement {
-  id: number
-  sessionId: number | null
-  descripcion: string
-  tipo: MovimientoTipo
-  monto: number
-  movimientoDate: string
-  createdAt: string
 }
 
 // ── System Params ─────────────────────────────────────────────────────────
@@ -538,5 +541,103 @@ export interface CierreSummary {
     debito: number
     credito: number
   }
-  movements: CashMovement[]
+  movements: FinanceMovement[]
+}
+
+// ── Finanzas (ingresos/egresos multi-cuenta y patrimonio de socios) ───────
+
+export type FinanceMovementTipo = 'ingreso' | 'egreso'
+export type FinanceAccountType = 'efectivo' | 'mercadopago' | 'banco'
+export type FinanceCategoryAppliesTo = 'ingreso' | 'egreso' | 'ambos'
+
+export interface FinancePartner {
+  id: number
+  name: string
+  ownershipPct: number
+  active: boolean
+  createdAt: string
+}
+
+export interface FinanceAccount {
+  id: number
+  name: string
+  type: FinanceAccountType
+  active: boolean
+  createdAt: string
+}
+
+export interface FinanceCategory {
+  id: number
+  name: string
+  appliesTo: FinanceCategoryAppliesTo
+  active: boolean
+}
+
+export interface FinanceMovement {
+  id: number
+  accountId: number
+  tipo: FinanceMovementTipo
+  categoriaId: number | null
+  monto: number
+  descripcion: string
+  fecha: string
+  partnerId: number | null
+  supplierId: number | null
+  saleId: number | null
+  createdAt: string
+}
+
+export interface CreateFinanceMovementInput {
+  accountId: number
+  tipo: FinanceMovementTipo
+  categoriaId?: number | null
+  monto: number
+  descripcion: string
+  fecha?: string
+  partnerId?: number | null
+  supplierId?: number | null
+  saleId?: number | null
+}
+
+export interface FinanceMovementFilters {
+  accountId?: number
+  tipo?: FinanceMovementTipo
+  categoriaId?: number
+  partnerId?: number
+  dateFrom?: string
+  dateTo?: string
+}
+
+export interface CreateFinanceCategoryInput {
+  name: string
+  appliesTo: FinanceCategoryAppliesTo
+}
+
+export interface FinanceAccountBalance {
+  accountId: number
+  accountName: string
+  accountType: FinanceAccountType
+  balance: number
+}
+
+export interface FinanceCashFlowPoint {
+  period: string
+  ingresos: number
+  egresos: number
+  neto: number
+}
+
+export interface FinanceCategoryExpense {
+  categoriaId: number | null
+  categoriaName: string
+  total: number
+}
+
+export interface FinancePartnerEquity {
+  partnerId: number
+  partnerName: string
+  ownershipPct: number
+  utilidadAcumulada: number
+  retirosRealizados: number
+  saldoPendiente: number
 }

@@ -1,6 +1,7 @@
+import type { FinanceMovement } from '../finance/types'
+
 export type PaymentMethod = 'contado_efectivo' | 'transferencia' | 'debito' | 'credito'
 export type SessionStatus = 'open' | 'closed'
-export type MovimientoTipo = 'ingreso' | 'egreso'
 
 export interface CashSession {
   id: number
@@ -10,16 +11,6 @@ export interface CashSession {
   status: SessionStatus
   createdAt: string
   updatedAt: string
-}
-
-export interface CashMovement {
-  id: number
-  sessionId: number | null
-  descripcion: string
-  tipo: MovimientoTipo
-  monto: number
-  movimientoDate: string
-  createdAt: string
 }
 
 export interface CierreSummary {
@@ -36,17 +27,11 @@ export interface CierreSummary {
     debito: number
     credito: number
   }
-  movements: CashMovement[]
+  // Movimientos de la cuenta Caja del día (cargados desde el módulo de Finanzas)
+  movements: FinanceMovement[]
 }
 
 export interface CreateSessionInput {
   sessionDate: string
   aperturaAmount: number
-}
-
-export interface CreateMovementInput {
-  descripcion: string
-  tipo: MovimientoTipo
-  monto: number
-  movimientoDate?: string
 }

@@ -9,6 +9,9 @@ const STATUS_LABELS: Record<string, string> = {
   PENDING_CAE: '⏳ Pendiente CAE',
   REJECTED: '❌ Rechazada',
   INTERNAL_RECEIPT: '📄 Comprobante Interno',
+  WEB_ORDER: '🌐 Pedido Web',
+  PROCESSED: '🌐 Pedido Web Procesado',
+  CANCELLED: '🚫 Cancelada',
 }
 
 const STATUS_CLASSES: Record<string, string> = {
@@ -16,6 +19,9 @@ const STATUS_CLASSES: Record<string, string> = {
   PENDING_CAE: 'badge badge--warning',
   REJECTED: 'badge badge--danger',
   INTERNAL_RECEIPT: 'badge badge--info',
+  WEB_ORDER: 'badge badge--info',
+  PROCESSED: 'badge badge--info',
+  CANCELLED: 'badge badge--danger',
 }
 
 export default function SalesPage() {
@@ -28,6 +34,8 @@ export default function SalesPage() {
   const [changePrintingId, setChangePrintingId] = useState<number | null>(null)
   const [mailingId, setMailingId] = useState<number | null>(null)
   const [printError, setPrintError] = useState<string | null>(null)
+  const [cancelingId, setCancelingId] = useState<number | null>(null)
+  const [cancelError, setCancelError] = useState<string | null>(null)
 
   async function loadSales() {
     setLoading(true)
@@ -77,6 +85,23 @@ export default function SalesPage() {
     }
   }
 
+  async function handleCancelSale(sale: Sale) {
+    const confirmed = window.confirm(
+      `¿Cancelar la venta #${sale.id}? Se repondrá el stock vendido y se revertirá el ingreso financiero asociado.`
+    )
+    if (!confirmed) return
+    setCancelingId(sale.id)
+    setCancelError(null)
+    try {
+      await sales.cancelSale(sale.id)
+      await loadSales()
+    } catch (err) {
+      setCancelError(err instanceof Error ? err.message : 'Error al cancelar la venta')
+    } finally {
+      setCancelingId(null)
+    }
+  }
+
   async function handlePrintChangeTicket(sale: Sale) {
     setChangePrintingId(sale.id)
     setPrintError(null)
@@ -122,6 +147,7 @@ export default function SalesPage() {
       {loading && <p>Cargando...</p>}
       {error && <p className="error">{error}</p>}
       {printError && <p className="error">{printError}</p>}
+      {cancelError && <p className="error">{cancelError}</p>}
 
       {!loading && !error && (
         <>
@@ -185,6 +211,16 @@ export default function SalesPage() {
                           title={`Enviar por email a ${sale.customerEmail}`}
                         >
                           {mailingId === sale.id ? '⏳' : '📧'}
+                        </button>
+                      )}
+                      {sale.status !== 'AUTHORIZED' && sale.status !== 'CANCELLED' && (
+                        <button
+                          className="btn btn-danger btn-sm"
+                          onClick={() => void handleCancelSale(sale)}
+                          disabled={cancelingId === sale.id}
+                          title="Cancelar venta"
+                        >
+                          {cancelingId === sale.id ? '⏳' : '🚫'}
                         </button>
                       )}
                     </td>

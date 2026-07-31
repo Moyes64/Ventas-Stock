@@ -1,23 +1,23 @@
 import { NavLink, Outlet } from 'react-router-dom'
 
-export default function CajaLayout() {
+export default function FinanceLayout() {
   return (
     <div className="page">
       <div className="page-header">
-        <h1 className="page-title">💰 Caja</h1>
+        <h1 className="page-title">💵 Finanzas</h1>
       </div>
       <nav className="sub-nav">
         <NavLink
-          to="/caja/apertura"
+          to="/finance/movimientos"
           className={({ isActive }) => `sub-nav-item ${isActive ? 'active' : ''}`}
         >
-          🔓 Apertura
+          📋 Movimientos
         </NavLink>
         <NavLink
-          to="/caja/cierre"
+          to="/finance/dashboard"
           className={({ isActive }) => `sub-nav-item ${isActive ? 'active' : ''}`}
         >
-          🔒 Cierre
+          📊 Dashboard
         </NavLink>
       </nav>
       <div className="sub-page">

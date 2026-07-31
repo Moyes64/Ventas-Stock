@@ -77,6 +77,7 @@ const electronAPI = {
     listPendingCAE: () => invoke('sales:listPendingCAE'),
     updatePaymentMethod: (id: number, paymentMethod: string) =>
       invoke('sales:updatePaymentMethod', id, paymentMethod),
+    cancelSale: (id: number) => invoke('sales:cancelSale', id),
   },
 
   // Invoicing
@@ -94,6 +95,8 @@ const electronAPI = {
     printBatch: (saleIds: number[]) => invoke('printing:printBatch', saleIds),
     listForReprint: (filters: unknown) => invoke('printing:listForReprint', filters),
     printChangeTicket: (saleId: number) => invoke('printing:printChangeTicket', saleId),
+    printStockReport: () => invoke('printing:printStockReport'),
+    printPriceReport: () => invoke('printing:printPriceReport'),
   },
 
   // Reporting
@@ -214,9 +217,7 @@ const electronAPI = {
     getCierreSummary: (date: string) => invoke('caja:getCierreSummary', date),
     closeSession: (date: string, cierreAmount: number) =>
       invoke('caja:closeSession', date, cierreAmount),
-    listMovements: (date: string) => invoke('caja:listMovements', date),
-    createMovement: (input: unknown) => invoke('caja:createMovement', input),
-    deleteMovement: (id: number) => invoke('caja:deleteMovement', id),
+    reopenSession: (date: string) => invoke('caja:reopenSession', date),
   },
 
   // Crédito de clientes
@@ -232,6 +233,23 @@ const electronAPI = {
     preview: (rawQr: string) => invoke('cambios:preview', rawQr),
     confirm: (rawQr: string, notes?: string) => invoke('cambios:confirm', rawQr, notes),
     list: (limit?: number) => invoke('cambios:list', limit),
+  },
+
+  // Finanzas (ingresos/egresos multi-cuenta y patrimonio de socios)
+  finance: {
+    listPartners: () => invoke('finance:listPartners'),
+    listAccounts: () => invoke('finance:listAccounts'),
+    listCategories: (appliesTo?: string) => invoke('finance:listCategories', appliesTo),
+    createCategory: (input: unknown) => invoke('finance:createCategory', input),
+    listMovements: (filters?: unknown) => invoke('finance:listMovements', filters),
+    createMovement: (input: unknown) => invoke('finance:createMovement', input),
+    deleteMovement: (id: number) => invoke('finance:deleteMovement', id),
+    getAccountBalances: () => invoke('finance:getAccountBalances'),
+    getCashFlowSummary: (dateFrom: string, dateTo: string, groupBy?: 'day' | 'month', accountId?: number) =>
+      invoke('finance:getCashFlowSummary', dateFrom, dateTo, groupBy, accountId),
+    getExpensesByCategory: (dateFrom: string, dateTo: string, accountId?: number) =>
+      invoke('finance:getExpensesByCategory', dateFrom, dateTo, accountId),
+    getPartnersEquity: () => invoke('finance:getPartnersEquity'),
   },
 }
 

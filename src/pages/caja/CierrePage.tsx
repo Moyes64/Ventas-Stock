@@ -19,6 +19,8 @@ export default function CierrePage() {
   const [closing, setClosing] = useState(false)
   const [closeError, setCloseError] = useState<string | null>(null)
   const [closeSuccess, setCloseSuccess] = useState<string | null>(null)
+  const [reopening, setReopening] = useState(false)
+  const [reopenError, setReopenError] = useState<string | null>(null)
   const [showPrintPrompt, setShowPrintPrompt] = useState(false)
   const [batchPrinting, setBatchPrinting] = useState(false)
   const [batchMsg, setBatchMsg] = useState<string | null>(null)
@@ -58,6 +60,25 @@ export default function CierrePage() {
       setCloseError(err instanceof Error ? err.message : 'Error al cerrar la caja')
     } finally {
       setClosing(false)
+    }
+  }
+
+  async function handleReopen() {
+    if (!summary) return
+    if (!window.confirm(`¿Confirmás reabrir la caja del ${selectedDate}? Esto deshace el cierre registrado.`)) {
+      return
+    }
+    setReopening(true)
+    setReopenError(null)
+    try {
+      await caja.reopenSession(selectedDate)
+      setCloseSuccess(null)
+      setShowPrintPrompt(false)
+      void loadSummary(selectedDate)
+    } catch (err) {
+      setReopenError(err instanceof Error ? err.message : 'Error al reabrir la caja')
+    } finally {
+      setReopening(false)
     }
   }
 
@@ -209,6 +230,18 @@ export default function CierrePage() {
               disabled={closing}
             >
               {closing ? '⏳ Cerrando...' : '🔒 Cerrar Caja'}
+            </button>
+          )}
+
+          {reopenError && <p className="error">{reopenError}</p>}
+
+          {summary.session.status === 'closed' && (
+            <button
+              className="btn btn-secondary"
+              onClick={() => { void handleReopen() }}
+              disabled={reopening}
+            >
+              {reopening ? '⏳ Reabriendo...' : '🔓 Reabrir Caja'}
             </button>
           )}
         </>

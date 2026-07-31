@@ -114,6 +114,7 @@ app.whenReady().then(() => {
       // 2. Caja
       const delCashMov     = db.prepare('DELETE FROM cash_movements').run()
       const delCashSess    = db.prepare('DELETE FROM cash_register_sessions').run()
+      const delFinanceMov  = db.prepare('DELETE FROM finance_movements').run()
 
       // 3. Clientes
       const delCustomers   = db.prepare('DELETE FROM customers').run()
@@ -134,7 +135,7 @@ app.whenReady().then(() => {
 
       // 6. Resetear autoincrements (sqlite_sequence)
       const tables = ['sales', 'sale_items', 'sale_parameters',
-                      'cash_register_sessions', 'cash_movements', 'customers']
+                      'cash_register_sessions', 'cash_movements', 'finance_movements', 'customers']
       for (const t of tables) {
         db.prepare("UPDATE sqlite_sequence SET seq = 0 WHERE name = ?").run(t)
       }
@@ -145,6 +146,7 @@ app.whenReady().then(() => {
         saleParams:   delSaleParams.changes,
         cashSessions: delCashSess.changes,
         cashMov:      delCashMov.changes,
+        financeMov:   delFinanceMov.changes,
         customers:    delCustomers.changes,
         stockSaleMov: delStockSales.changes,
       }
@@ -161,7 +163,8 @@ app.whenReady().then(() => {
       `  • Ítems de venta:            ${result.saleItems}\n` +
       `  • Parámetros de venta:       ${result.saleParams}\n` +
       `  • Sesiones de caja:          ${result.cashSessions}\n` +
-      `  • Movimientos de caja:       ${result.cashMov}\n` +
+      `  • Movimientos de caja (histórico): ${result.cashMov}\n` +
+      `  • Movimientos de Finanzas:   ${result.financeMov}\n` +
       `  • Clientes:                  ${result.customers}\n` +
       `  • Movimientos de stock (ventas): ${result.stockSaleMov}\n\n` +
       `Stock recalculado a partir de los movimientos de compra/ajuste restantes.\n\n` +

@@ -10,9 +10,10 @@ import { app } from 'electron'
 import { localToday } from '../../lib/date'
 import type {
   SyncConfig, SyncPayload, SyncResult, SyncStockItem, SyncVentasHoy, SyncSaleHistory, SyncCaja,
-  SyncWebCategory, SyncWebProduct, SyncWebImage, WebOrder, PullResult,
+  SyncWebCategory, SyncWebProduct, SyncWebImage, WebOrder, PullResult, SyncFinance,
 } from './types'
 import { SystemParamsService } from '../system-params/service'
+import { FinanceService } from '../finance/service'
 
 const CONFIG_FILENAME = 'sync-config.json'
 const DEFAULT_CONFIG: SyncConfig = {
@@ -26,9 +27,11 @@ export class SyncService {
   private configPath: string
   private lastResult: SyncResult | null = null
   private timer: ReturnType<typeof setInterval> | null = null
+  private readonly financeService: FinanceService
 
   constructor(private readonly db: Database) {
     this.configPath = path.join(app.getPath('userData'), CONFIG_FILENAME)
+    this.financeService = new FinanceService(db)
   }
 
   // ── Config ────────────────────────────────────────────────────────────────
@@ -130,6 +133,42 @@ export class SyncService {
       webCategories: this.buildWebCategories(),
       webProducts: this.buildWebProducts(),
       webParams: { costoEnvioWeb },
+      finance: this.buildFinance(today),
+    }
+  }
+
+  // ── Finanzas builder ──────────────────────────────────────────────────────
+
+  private buildFinance(today: string): SyncFinance {
+    const firstOfMonth = `${today.slice(0, 7)}-01`
+    const balances = this.financeService.getAccountBalances()
+    const [cashFlow] = this.financeService.getCashFlowSummary(firstOfMonth, today, 'month')
+    const expenses = this.financeService.getExpensesByCategory(firstOfMonth, today)
+    const equity = this.financeService.getPartnersEquity()
+
+    return {
+      accountBalances: balances.map(b => ({
+        accountId: b.accountId,
+        accountName: b.accountName,
+        accountType: b.accountType,
+        balance: b.balance,
+      })),
+      cashFlowMonth: {
+        ingresos: cashFlow?.ingresos ?? 0,
+        egresos: cashFlow?.egresos ?? 0,
+        neto: cashFlow?.neto ?? 0,
+      },
+      expensesByCategoryMonth: expenses.map(e => ({
+        categoriaName: e.categoriaName,
+        total: e.total,
+      })),
+      partnersEquity: equity.map(p => ({
+        partnerName: p.partnerName,
+        ownershipPct: p.ownershipPct,
+        utilidadAcumulada: p.utilidadAcumulada,
+        retirosRealizados: p.retirosRealizados,
+        saldoPendiente: p.saldoPendiente,
+      })),
     }
   }
 
@@ -389,6 +428,15 @@ export class SyncService {
         INSERT OR IGNORE INTO web_orders_processed (external_id, sale_id, processed_at)
         VALUES (?,?,datetime('now','localtime'))
       `).run(order.externalId, saleId)
+
+      // Auto-registrar el ingreso a MP-Anabella si corresponde (no bloquea la importación si falla)
+      try {
+        this.financeService.registerSaleIncome({
+          saleId, paymentMethod: localPaymentMethod, monto: order.total, fecha: saleDate,
+        })
+      } catch (err) {
+        console.error('[sync] Error registrando ingreso financiero automático:', err)
+      }
     })()
   }
 
@@ -580,9 +628,13 @@ export class SyncService {
       }
     }
 
-    const movements = this.db
-      .prepare(`SELECT tipo, monto FROM cash_movements WHERE movimiento_date = ?`)
-      .all(date) as Array<{ tipo: string; monto: number }>
+    const cajaAccount = this.financeService.getCashAccount()
+    const allMovements = cajaAccount
+      ? this.financeService.listMovements({ accountId: cajaAccount.id, dateFrom: date, dateTo: date })
+      : []
+    // Los movimientos generados automáticamente por una venta ya están contados
+    // en efectivoVentas — solo los manuales entran en ingresos/egresos.
+    const movements = allMovements.filter(m => m.saleId === null)
 
     const ingresosTotal = movements
       .filter(m => m.tipo === 'ingreso')

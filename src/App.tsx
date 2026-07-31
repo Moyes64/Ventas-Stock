@@ -15,7 +15,6 @@ import ParametersPage from './pages/parameters/ParametersPage'
 import CajaLayout from './pages/caja/CajaLayout'
 import AperturaPage from './pages/caja/AperturaPage'
 import CierrePage from './pages/caja/CierrePage'
-import MovimientosPage from './pages/caja/MovimientosPage'
 import SyncPage from './pages/sync/SyncPage'
 import SystemParamsPage from './pages/system-params/SystemParamsPage'
 import PedidoReposicionPage from './pages/stock/PedidoReposicionPage'
@@ -27,6 +26,9 @@ import WebOrdersPage from './pages/web-orders/WebOrdersPage'
 import WebProductEditorPage from './pages/web-catalog/WebProductEditorPage'
 import WebCategoriesPage from './pages/web-catalog/WebCategoriesPage'
 import CambiosPage from './pages/cambios/CambiosPage'
+import FinanceLayout from './pages/finance/FinanceLayout'
+import MovementsPage from './pages/finance/MovementsPage'
+import FinanceDashboardPage from './pages/finance/FinanceDashboardPage'
 import { HiddenOptionsProvider } from './context/HiddenOptionsContext'
 
 export default function App() {
@@ -52,7 +54,6 @@ export default function App() {
               <Route index element={<Navigate to="/caja/apertura" replace />} />
               <Route path="apertura" element={<AperturaPage />} />
               <Route path="cierre" element={<CierrePage />} />
-              <Route path="movimientos" element={<MovimientosPage />} />
             </Route>
             <Route path="sync" element={<SyncPage />} />
             <Route path="system-params" element={<SystemParamsPage />} />
@@ -65,6 +66,11 @@ export default function App() {
             <Route path="web-catalog/product/:productId" element={<WebProductEditorPage />} />
             <Route path="web-catalog/categories" element={<WebCategoriesPage />} />
             <Route path="cambios" element={<CambiosPage />} />
+            <Route path="finance" element={<FinanceLayout />}>
+              <Route index element={<Navigate to="/finance/movimientos" replace />} />
+              <Route path="movimientos" element={<MovementsPage />} />
+              <Route path="dashboard" element={<FinanceDashboardPage />} />
+            </Route>
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Route>
         </Routes>

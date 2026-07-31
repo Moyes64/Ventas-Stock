@@ -113,6 +113,41 @@ export interface WebOrder {
   createdAt: string
 }
 
+// ── Finanzas (ingresos/egresos y patrimonio de socios) ──────────────────
+
+export interface SyncFinanceAccountBalance {
+  accountId: number
+  accountName: string
+  accountType: string
+  balance: number
+}
+
+export interface SyncFinanceCashFlow {
+  ingresos: number
+  egresos: number
+  neto: number
+}
+
+export interface SyncFinanceCategoryExpense {
+  categoriaName: string
+  total: number
+}
+
+export interface SyncFinancePartnerEquity {
+  partnerName: string
+  ownershipPct: number
+  utilidadAcumulada: number
+  retirosRealizados: number
+  saldoPendiente: number
+}
+
+export interface SyncFinance {
+  accountBalances: SyncFinanceAccountBalance[]
+  cashFlowMonth: SyncFinanceCashFlow
+  expensesByCategoryMonth: SyncFinanceCategoryExpense[]
+  partnersEquity: SyncFinancePartnerEquity[]
+}
+
 export interface SyncPayload {
   timestamp: string
   empresa: string
@@ -123,6 +158,7 @@ export interface SyncPayload {
   webCategories: SyncWebCategory[]
   webProducts: SyncWebProduct[]
   webParams?: { costoEnvioWeb: number }
+  finance: SyncFinance
 }
 
 export interface PullResult {
