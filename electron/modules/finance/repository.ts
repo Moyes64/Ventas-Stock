@@ -92,17 +92,34 @@ export class FinanceRepository {
     return row ? this.mapAccount(row) : undefined
   }
 
-  /**
-   * Monto de apertura de la primera sesión de caja registrada — es plata física
-   * que ya existía antes de empezar a llevar el control en Finanzas (no es una
-   * venta ni un movimiento cargado), así que hay que sumarla una sola vez al
-   * saldo de la cuenta Caja para que coincida con el total físico real.
+/**
+   * Punto de anclaje para calcular el saldo actual de Caja: el conteo físico
+   * conocido más reciente (el cierre de la última sesión cerrada, o la apertura
+   * de la sesión de hoy si todavía está abierta) — NO la primera sesión jamás
+   * abierta. Usar la primera sesión rompía el saldo apenas había más de un día
+   * de historial, porque acumulaba cualquier diferencia entre lo que Finanzas
+   * calculaba en teoría y lo que en la práctica se contó/asentó cada cierre.
    */
-  getFirstCajaAperturaAmount(): number {
+  getLatestCajaAnchor(): { amount: number; date: string } | undefined {
     const row = this.db
-      .prepare('SELECT apertura_amount FROM cash_register_sessions ORDER BY session_date ASC LIMIT 1')
-      .get() as { apertura_amount: number } | undefined
-    return row?.apertura_amount ?? 0
+      .prepare(
+        `SELECT session_date, apertura_amount, cierre_amount, status
+         FROM cash_register_sessions ORDER BY session_date DESC LIMIT 1`
+      )
+      .get() as { session_date: string; apertura_amount: number; cierre_amount: number | null; status: string } | undefined
+    if (!row) return undefined
+
+    const amount = row.status === 'closed' && row.cierre_amount !== null ? row.cierre_amount : row.apertura_amount
+    // Si la sesión ya cerró, ese cierre ya incluye todo lo del día de esa sesión —
+    // los movimientos a sumar arriba del ancla empiezan al día siguiente. Si sigue
+    // abierta (es "hoy"), los movimientos de ese mismo día todavía hay que sumarlos.
+    const date = row.status === 'closed' ? this.nextDay(row.session_date) : row.session_date
+    return { amount, date }
+  }
+
+  private nextDay(dateStr: string): string {
+    const [y, m, d] = dateStr.split('-').map(Number)
+    return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10)
   }
 
   findAccountByName(name: string): FinanceAccount | undefined {

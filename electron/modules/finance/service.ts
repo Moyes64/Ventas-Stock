@@ -160,9 +160,14 @@ export class FinanceService {
     const cashAccount = this.repo.findCashAccount()
 
     return accounts.map(account => {
-      let balance = this.repo.sumFinanceMovementsNet(account.id)
+      let balance: number
       if (cashAccount && account.id === cashAccount.id) {
-        balance += this.repo.getFirstCajaAperturaAmount()
+        const anchor = this.repo.getLatestCajaAnchor()
+        balance = anchor
+          ? anchor.amount + this.repo.sumFinanceMovementsNet(account.id, anchor.date)
+          : this.repo.sumFinanceMovementsNet(account.id)
+      } else {
+        balance = this.repo.sumFinanceMovementsNet(account.id)
       }
       return {
         accountId: account.id,
