@@ -71,6 +71,7 @@ export interface SyncWebProduct {
   slug: string
   visible: boolean
   featured: boolean
+  featuredOrder: number
   price: number          // precio efectivo web
   stock: number
   webCategoryId: number | null

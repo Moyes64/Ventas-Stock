@@ -38,7 +38,9 @@ export default function WebCatalogPage() {
   }
 
   async function handleToggleFeatured(wp: WebProduct) {
-    await webCatalog.saveProduct({ ...wp, featured: !wp.featured })
+    const featured = !wp.featured
+    const featuredOrder = featured ? await webCatalog.getNextFeaturedOrder() : wp.featuredOrder
+    await webCatalog.saveProduct({ ...wp, featured, featuredOrder })
     void load()
   }
 
@@ -50,6 +52,7 @@ export default function WebCatalogPage() {
       webCategoryId: null,
       visible: false,
       featured: false,
+      featuredOrder: 0,
       webPrice: null,
       shortDescription: '',
       longDescription: '',
@@ -216,7 +219,7 @@ export default function WebCatalogPage() {
                   ? <WcThumb filename={wp.images[0].filename} />
                   : <span className="wc-no-img">Sin imagen</span>
                 }
-                {wp.featured && <span className="wc-badge-featured">⭐ Destacado</span>}
+                {wp.featured && <span className="wc-badge-featured">⭐ Destacado #{wp.featuredOrder}</span>}
               </div>
 
               <div className="wc-body">

@@ -1,6 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import { app } from 'electron'
+import { app, nativeImage } from 'electron'
 import type { Database } from 'better-sqlite3'
 import type {
   WebCategory,
@@ -9,6 +9,11 @@ import type {
   SaveWebProductInput,
   SaveWebCategoryInput,
 } from './types'
+
+// Las imágenes se suben tal cual a Hostinger y de ahí las optimiza Vercel
+// (facturado por uso); si entran sin comprimir agotan esa cuota rápido.
+const MAX_IMAGE_DIMENSION = 1600
+const JPEG_QUALITY = 82
 
 function slugify(text: string): string {
   return text
@@ -23,6 +28,19 @@ function imagesDir(): string {
   const dir = path.join(app.getPath('userData'), 'web-images')
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
   return dir
+}
+
+function compressImage(sourcePath: string): Buffer {
+  const image = nativeImage.createFromPath(sourcePath)
+  if (image.isEmpty()) return fs.readFileSync(sourcePath)
+
+  const { width, height } = image.getSize()
+  const scale = Math.min(1, MAX_IMAGE_DIMENSION / Math.max(width, height))
+  const resized = scale < 1
+    ? image.resize({ width: Math.round(width * scale), height: Math.round(height * scale), quality: 'best' })
+    : image
+
+  return resized.toJPEG(JPEG_QUALITY)
 }
 
 interface WebCategoryRow {
@@ -42,6 +60,7 @@ interface WebProductRow {
   web_category_id: number | null
   visible: number
   featured: number
+  featured_order: number
   web_price: number | null
   short_description: string
   long_description: string
@@ -89,6 +108,7 @@ function mapProduct(r: WebProductRow, images: WebProductImage[]): WebProduct {
     webCategoryId: r.web_category_id,
     visible: r.visible === 1,
     featured: r.featured === 1,
+    featuredOrder: r.featured_order,
     webPrice: r.web_price,
     shortDescription: r.short_description,
     longDescription: r.long_description,
@@ -183,13 +203,13 @@ export class WebCatalogService {
     if (existing) {
       this.db.prepare(`
         UPDATE web_products SET
-          web_category_id=?, visible=?, featured=?, web_price=?,
+          web_category_id=?, visible=?, featured=?, featured_order=?, web_price=?,
           short_description=?, long_description=?, age_min=?, players_min=?,
           players_max=?, play_time_min=?, difficulty=?, video_url=?, tags=?,
           sort_order=?, updated_at=datetime('now','localtime')
         WHERE product_id=?
       `).run(
-        input.webCategoryId, input.visible ? 1 : 0, input.featured ? 1 : 0,
+        input.webCategoryId, input.visible ? 1 : 0, input.featured ? 1 : 0, input.featuredOrder,
         input.webPrice, input.shortDescription, input.longDescription,
         input.ageMin, input.playersMin, input.playersMax, input.playTimeMin,
         input.difficulty, input.videoUrl, input.tags, input.sortOrder,
@@ -198,12 +218,12 @@ export class WebCatalogService {
     } else {
       this.db.prepare(`
         INSERT INTO web_products (
-          product_id, web_category_id, visible, featured, web_price,
+          product_id, web_category_id, visible, featured, featured_order, web_price,
           short_description, long_description, age_min, players_min,
           players_max, play_time_min, difficulty, video_url, tags, sort_order
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
       `).run(
-        input.productId, input.webCategoryId, input.visible ? 1 : 0, input.featured ? 1 : 0,
+        input.productId, input.webCategoryId, input.visible ? 1 : 0, input.featured ? 1 : 0, input.featuredOrder,
         input.webPrice, input.shortDescription, input.longDescription,
         input.ageMin, input.playersMin, input.playersMax, input.playTimeMin,
         input.difficulty, input.videoUrl, input.tags, input.sortOrder,
@@ -228,10 +248,9 @@ export class WebCatalogService {
   }
 
   saveImage(productId: number, sourcePath: string, sortOrder: number): WebProductImage {
-    const ext = path.extname(sourcePath).toLowerCase() || '.jpg'
-    const filename = `${productId}_${Date.now()}${ext}`
+    const filename = `${productId}_${Date.now()}.jpg`
     const dest = path.join(imagesDir(), filename)
-    fs.copyFileSync(sourcePath, dest)
+    fs.writeFileSync(dest, compressImage(sourcePath))
 
     const result = this.db.prepare(`
       INSERT INTO web_product_images (product_id, filename, sort_order) VALUES (?,?,?)
@@ -276,6 +295,13 @@ export class WebCatalogService {
       ? this.db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS mx FROM web_products WHERE web_category_id = ?').get(webCategoryId)
       : this.db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS mx FROM web_products').get()
     ) as { mx: number }
+    return row.mx + 1
+  }
+
+  getNextFeaturedOrder(): number {
+    const row = this.db
+      .prepare('SELECT COALESCE(MAX(featured_order), -1) AS mx FROM web_products WHERE featured = 1')
+      .get() as { mx: number }
     return row.mx + 1
   }
 

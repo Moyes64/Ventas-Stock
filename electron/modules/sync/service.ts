@@ -189,7 +189,7 @@ export class SyncService {
       ORDER BY wp.sort_order ASC, p.name ASC
     `).all() as Array<{
       product_id: number; product_name: string; product_price: number; product_stock: number
-      web_category_id: number | null; featured: number; web_price: number | null; visible: number
+      web_category_id: number | null; featured: number; featured_order: number; web_price: number | null; visible: number
       short_description: string; long_description: string; age_min: number | null
       players_min: number | null; players_max: number | null; play_time_min: number | null
       difficulty: number | null; video_url: string; tags: string; sort_order: number
@@ -218,6 +218,7 @@ export class SyncService {
         slug,
         visible: r.visible === 1,
         featured: r.featured === 1,
+        featuredOrder: r.featured_order,
         price: r.web_price ?? r.product_price,
         stock: r.product_stock,
         webCategoryId: r.web_category_id,

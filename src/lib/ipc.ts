@@ -323,6 +323,7 @@ export const webCatalog = {
   saveProduct:     (input: Partial<WebProduct>) => electron.webCatalog.saveProduct(input) as Promise<WebProduct>,
   listUnpublished:  () => electron.webCatalog.listUnpublished() as Promise<UnpublishedProduct[]>,
   getNextSortOrder: (webCategoryId: number | null) => electron.webCatalog.getNextSortOrder(webCategoryId) as Promise<number>,
+  getNextFeaturedOrder: () => electron.webCatalog.getNextFeaturedOrder() as Promise<number>,
   uploadImage:     (productId: number, sortOrder: number) =>
     electron.webCatalog.uploadImage(productId, sortOrder) as Promise<{ success: boolean; image?: WebProductImage; error?: string }>,
   deleteImage:     (imageId: number) => electron.webCatalog.deleteImage(imageId) as Promise<{ success: boolean }>,

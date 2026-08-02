@@ -196,6 +196,7 @@ const electronAPI = {
     saveProduct:      (input: unknown) => invoke('webCatalog:saveProduct', input),
     listUnpublished:   () => invoke('webCatalog:listUnpublished'),
     getNextSortOrder:  (webCategoryId: number | null) => invoke('webCatalog:getNextSortOrder', webCategoryId),
+    getNextFeaturedOrder: () => invoke('webCatalog:getNextFeaturedOrder'),
     uploadImage:      (productId: number, sortOrder: number) => invoke('webCatalog:uploadImage', productId, sortOrder),
     deleteImage:      (imageId: number) => invoke('webCatalog:deleteImage', imageId),
     reorderImages:    (productId: number, orderedIds: number[]) => invoke('webCatalog:reorderImages', productId, orderedIds),

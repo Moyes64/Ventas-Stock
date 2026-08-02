@@ -16,12 +16,14 @@ export default function WebProductEditorPage() {
   const [saveMsg, setSaveMsg]   = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [maxSortOrder, setMaxSortOrder] = useState<number | null>(null)
+  const [maxFeaturedOrder, setMaxFeaturedOrder] = useState<number | null>(null)
 
   // Form state
   const [form, setForm] = useState({
     webCategoryId: null as number | null,
     visible: false,
     featured: false,
+    featuredOrder: '0' as string,
     webPrice: '' as string,
     shortDescription: '',
     longDescription: '',
@@ -48,6 +50,7 @@ export default function WebProductEditorPage() {
           webCategoryId: product.webCategoryId,
           visible: product.visible,
           featured: product.featured,
+          featuredOrder: String(product.featuredOrder),
           webPrice: product.webPrice !== null ? String(product.webPrice) : '',
           shortDescription: product.shortDescription,
           longDescription: product.longDescription,
@@ -70,6 +73,12 @@ export default function WebProductEditorPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.webCategoryId, wp])
 
+  useEffect(() => {
+    if (!wp) return
+    void webCatalog.getNextFeaturedOrder().then(next => setMaxFeaturedOrder(next - 1))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wp])
+
   function set<K extends keyof typeof form>(key: K, value: typeof form[K]) {
     setForm(prev => ({ ...prev, [key]: value }))
   }
@@ -84,6 +93,7 @@ export default function WebProductEditorPage() {
         webCategoryId: form.webCategoryId,
         visible: form.visible,
         featured: form.featured,
+        featuredOrder: parseInt(form.featuredOrder) || 0,
         webPrice: form.webPrice !== '' ? parseFloat(form.webPrice) : null,
         shortDescription: form.shortDescription,
         longDescription: form.longDescription,
@@ -212,6 +222,19 @@ export default function WebProductEditorPage() {
                 <span>⭐ Destacado en la home</span>
               </label>
             </div>
+            {form.featured && (
+              <div className="form-group sysparam-col2" style={{ marginTop: 8 }}>
+                <label className="label">Orden en destacados</label>
+                <input className="input" type="number" min={0} value={form.featuredOrder} onChange={e => set('featuredOrder', e.target.value)} />
+                {maxFeaturedOrder !== null && (
+                  <span style={{ fontSize: 11, color: '#6b7280', marginTop: 2, display: 'block' }}>
+                    {maxFeaturedOrder < 0
+                      ? 'Sin otros productos destacados'
+                      : `Valor más alto entre destacados: ${maxFeaturedOrder}`}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Categoría y precio */}

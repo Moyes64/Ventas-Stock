@@ -28,6 +28,8 @@ export function registerWebCatalogHandlers(db: Database): void {
   ipcMain.handle('webCatalog:getNextSortOrder', (_e, webCategoryId: number | null) =>
     svc.getNextSortOrder(webCategoryId))
 
+  ipcMain.handle('webCatalog:getNextFeaturedOrder', () => svc.getNextFeaturedOrder())
+
   // ── Imágenes ──────────────────────────────────────────────────────────────
   ipcMain.handle('webCatalog:uploadImage', async (_e, productId: number, sortOrder: number) => {
     const { canceled, filePaths } = await dialog.showOpenDialog({

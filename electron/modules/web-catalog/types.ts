@@ -23,6 +23,7 @@ export interface WebProduct {
   webCategoryId: number | null
   visible: boolean
   featured: boolean
+  featuredOrder: number
   webPrice: number | null
   shortDescription: string
   longDescription: string
@@ -50,6 +51,7 @@ export interface SaveWebProductInput {
   webCategoryId: number | null
   visible: boolean
   featured: boolean
+  featuredOrder: number
   webPrice: number | null
   shortDescription: string
   longDescription: string
