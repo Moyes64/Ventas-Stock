@@ -11,6 +11,7 @@ export default function WebCatalogPage() {
   const [loading, setLoading]           = useState(true)
   const [filterCat, setFilterCat]       = useState<number | 'all' | 'none'>('all')
   const [filterVis, setFilterVis]       = useState<'all' | 'visible' | 'hidden'>('all')
+  const [onlyFeatured, setOnlyFeatured] = useState(false)
   const [search, setSearch]             = useState('')
   const [addingId, setAddingId]         = useState<number | null>(null)
   const [showUnpublished, setShowUnpublished] = useState(false)
@@ -70,17 +71,22 @@ export default function WebCatalogPage() {
     void load()
   }
 
-  const filtered = products.filter(p => {
-    if (filterCat === 'none' && p.webCategoryId !== null) return false
-    if (typeof filterCat === 'number' && p.webCategoryId !== filterCat) return false
-    if (filterVis === 'visible' && !p.visible) return false
-    if (filterVis === 'hidden' && p.visible) return false
-    if (search && !p.productName.toLowerCase().includes(search.toLowerCase())) return false
-    return true
-  })
+  const filtered = products
+    .filter(p => {
+      if (onlyFeatured && !p.featured) return false
+      if (filterCat === 'none' && p.webCategoryId !== null) return false
+      if (typeof filterCat === 'number' && p.webCategoryId !== filterCat) return false
+      if (filterVis === 'visible' && !p.visible) return false
+      if (filterVis === 'hidden' && p.visible) return false
+      if (search && !p.productName.toLowerCase().includes(search.toLowerCase())) return false
+      return true
+    })
+    .sort((a, b) => onlyFeatured ? a.featuredOrder - b.featuredOrder : 0)
 
   const catName = (id: number | null) =>
     id ? (categories.find(c => c.id === id)?.name ?? '—') : '—'
+
+  const sortedCategories = [...categories].sort((a, b) => a.name.localeCompare(b.name, 'es'))
 
   return (
     <div className="page">
@@ -192,13 +198,20 @@ export default function WebCatalogPage() {
         }}>
           <option value="all">Todas las categorías</option>
           <option value="none">Sin categoría</option>
-          {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          {sortedCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
         <select className="select" value={filterVis} onChange={e => setFilterVis(e.target.value as typeof filterVis)}>
           <option value="all">Todos</option>
           <option value="visible">Publicados</option>
           <option value="hidden">Ocultos</option>
         </select>
+        <button
+          className={`btn btn-sm ${onlyFeatured ? 'btn-primary' : 'btn-ghost'}`}
+          onClick={() => setOnlyFeatured(v => !v)}
+          title="Mostrar solo los productos marcados como Destacados, en el orden en que aparecerán en la web"
+        >
+          ⭐ Solo Destacados
+        </button>
         <span className="muted" style={{ fontSize: 13 }}>{filtered.length} producto(s)</span>
       </div>
 
