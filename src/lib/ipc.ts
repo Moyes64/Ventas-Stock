@@ -46,6 +46,10 @@ import type {
   FinanceCashFlowPoint,
   FinanceCategoryExpense,
   FinancePartnerEquity,
+  FinancePendingAccreditation,
+  FinanceTransfer,
+  CreateFinanceTransferInput,
+  FinanceTransferFilters,
 } from '../types/ipc'
 
 // Access the electron bridge exposed by preload
@@ -393,6 +397,15 @@ export const finance = {
   createMovement: (input: CreateFinanceMovementInput) =>
     electron.finance.createMovement(input) as Promise<FinanceMovement>,
   deleteMovement: (id: number) => electron.finance.deleteMovement(id) as Promise<void>,
+  getPendingAccreditations: (accountId?: number) =>
+    electron.finance.getPendingAccreditations(accountId) as Promise<FinancePendingAccreditation[]>,
+  accreditMovement: (movementId: number, fecha?: string) =>
+    electron.finance.accreditMovement(movementId, fecha) as Promise<FinanceMovement>,
+  listTransfers: (filters?: FinanceTransferFilters) =>
+    electron.finance.listTransfers(filters) as Promise<FinanceTransfer[]>,
+  createTransfer: (input: CreateFinanceTransferInput) =>
+    electron.finance.createTransfer(input) as Promise<FinanceTransfer>,
+  deleteTransfer: (id: number) => electron.finance.deleteTransfer(id) as Promise<void>,
   getAccountBalances: () => electron.finance.getAccountBalances() as Promise<FinanceAccountBalance[]>,
   getCashFlowSummary: (dateFrom: string, dateTo: string, groupBy?: 'day' | 'month', accountId?: number) =>
     electron.finance.getCashFlowSummary(dateFrom, dateTo, groupBy, accountId) as Promise<FinanceCashFlowPoint[]>,

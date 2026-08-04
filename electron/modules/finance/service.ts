@@ -14,6 +14,10 @@ import type {
   CashFlowPoint,
   CategoryExpense,
   PartnerEquity,
+  PendingAccreditation,
+  FinanceTransfer,
+  CreateTransferInput,
+  TransferFilters,
 } from './types'
 
 const RETIRO_SOCIO_CATEGORIA = 'Retiro de Socio'
@@ -95,6 +99,12 @@ export class FinanceService {
         `No se pueden cargar movimientos anteriores al ${foundingDate} — la contabilidad de Finanzas arranca esa fecha.`
       )
     }
+    if (input.fechaAcreditacion && input.fechaAcreditacion < fecha) {
+      throw new Error('La fecha de acreditación no puede ser anterior a la fecha del movimiento')
+    }
+    if (input.fechaAcreditacion && input.tipo !== 'ingreso') {
+      throw new Error('La fecha de acreditación solo aplica a movimientos de ingreso')
+    }
 
     const account = this.repo.findAccountById(input.accountId)
     if (!account) throw new Error(`La cuenta ${input.accountId} no existe`)
@@ -131,6 +141,82 @@ export class FinanceService {
       )
     }
     this.repo.deleteMovement(id)
+  }
+
+  /** Ingresos registrados cuya fecha de acreditación todavía no llegó (hoy como referencia). */
+  getPendingAccreditations(accountId?: number): PendingAccreditation[] {
+    return this.repo.listPendingAccreditations(localToday(), accountId)
+  }
+
+  /**
+   * Marca manualmente un ingreso pendiente como acreditado en una fecha puntual
+   * (por defecto hoy) — útil cuando la plata llega antes de la fecha estimada al
+   * cargar el movimiento (ej: Mercado Pago acredita un par de días antes). Solo
+   * permite adelantar la fecha, nunca postergarla más allá de lo ya indicado.
+   */
+  accreditMovement(movementId: number, fecha?: string): FinanceMovement {
+    const movement = this.repo.findMovementById(movementId)
+    if (!movement) throw new Error(`Movimiento no encontrado: ${movementId}`)
+    if (movement.tipo !== 'ingreso') {
+      throw new Error('Solo los ingresos pueden tener fecha de acreditación')
+    }
+    if (!movement.fechaAcreditacion) {
+      throw new Error('Este movimiento no tiene una acreditación pendiente')
+    }
+
+    const nuevaFecha = fecha ?? localToday()
+    if (nuevaFecha < movement.fecha) {
+      throw new Error('La fecha de acreditación no puede ser anterior a la fecha del movimiento')
+    }
+    if (nuevaFecha > movement.fechaAcreditacion) {
+      throw new Error('La acreditación manual solo permite adelantar la fecha, no postergarla')
+    }
+
+    this.repo.accreditMovement(movementId, nuevaFecha)
+    const updated = this.repo.findMovementById(movementId)
+    if (!updated) throw new Error('Error al recuperar el movimiento actualizado')
+    return updated
+  }
+
+  // ── Transferencias entre cuentas ─────────────────────────────────────────
+
+  listTransfers(filters?: TransferFilters): FinanceTransfer[] {
+    return this.repo.listTransfers({
+      ...filters,
+      dateFrom: filters?.dateFrom !== undefined ? this.clampDateFrom(filters.dateFrom) : undefined,
+    })
+  }
+
+  createTransfer(input: CreateTransferInput): FinanceTransfer {
+    if (typeof input.monto !== 'number' || input.monto <= 0) {
+      throw new Error('El monto debe ser un número mayor a cero')
+    }
+    if (input.fromAccountId === input.toAccountId) {
+      throw new Error('La cuenta de origen y destino no pueden ser la misma')
+    }
+    const fromAccount = this.repo.findAccountById(input.fromAccountId)
+    if (!fromAccount) throw new Error(`La cuenta de origen ${input.fromAccountId} no existe`)
+    const toAccount = this.repo.findAccountById(input.toAccountId)
+    if (!toAccount) throw new Error(`La cuenta de destino ${input.toAccountId} no existe`)
+
+    const foundingDate = this.repo.getFoundingDate()
+    const fecha = input.fecha ?? localToday()
+    if (fecha < foundingDate) {
+      throw new Error(
+        `No se pueden cargar transferencias anteriores al ${foundingDate} — la contabilidad de Finanzas arranca esa fecha.`
+      )
+    }
+
+    const id = this.repo.createTransfer(input)
+    const created = this.repo.findTransferById(id)
+    if (!created) throw new Error('Error al recuperar la transferencia creada')
+    return created
+  }
+
+  deleteTransfer(id: number): void {
+    const existing = this.repo.findTransferById(id)
+    if (!existing) throw new Error(`Transferencia no encontrada: ${id}`)
+    this.repo.deleteTransfer(id)
   }
 
   // ── Ventas (auto-generación de ingresos) ───────────────────────────────────
@@ -182,22 +268,28 @@ export class FinanceService {
     const accounts = this.repo.listAccounts()
     const cashAccount = this.repo.findCashAccount()
     const foundingDate = this.repo.getFoundingDate()
+    const today = localToday()
 
     return accounts.map(account => {
       let balance: number
       if (cashAccount && account.id === cashAccount.id) {
         const anchor = this.repo.getLatestCajaAnchor()
         balance = anchor && anchor.date >= foundingDate
-          ? anchor.amount + this.repo.sumFinanceMovementsNet(account.id, anchor.date)
-          : this.repo.sumFinanceMovementsNet(account.id, foundingDate)
+          ? anchor.amount + this.repo.sumFinanceMovementsNet(account.id, anchor.date, undefined, today)
+          : this.repo.sumFinanceMovementsNet(account.id, foundingDate, undefined, today)
       } else {
-        balance = this.repo.sumFinanceMovementsNet(account.id, foundingDate)
+        balance = this.repo.sumFinanceMovementsNet(account.id, foundingDate, undefined, today)
       }
+      balance += this.repo.sumTransfersNet(account.id, foundingDate)
+
+      const { pendingAmount, nextAccreditationDate } = this.repo.pendingAccreditationSummary(account.id, today)
       return {
         accountId: account.id,
         accountName: account.name,
         accountType: account.type,
         balance,
+        pendingAmount,
+        nextAccreditationDate,
       }
     })
   }

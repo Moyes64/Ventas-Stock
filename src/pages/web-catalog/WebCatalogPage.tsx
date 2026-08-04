@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { webCatalog } from '../../lib/ipc'
 import type { WebProduct, WebCategory, UnpublishedProduct } from '../../types/ipc'
 
@@ -9,10 +9,26 @@ export default function WebCatalogPage() {
   const [categories, setCategories]     = useState<WebCategory[]>([])
   const [unpublished, setUnpublished]   = useState<UnpublishedProduct[]>([])
   const [loading, setLoading]           = useState(true)
-  const [filterCat, setFilterCat]       = useState<number | 'all' | 'none'>('all')
-  const [filterVis, setFilterVis]       = useState<'all' | 'visible' | 'hidden'>('all')
-  const [onlyFeatured, setOnlyFeatured] = useState(false)
-  const [search, setSearch]             = useState('')
+
+  // Los filtros viven en la URL (y no en useState) para que el botón "Volver"
+  // del editor de producto restaure exactamente el mismo estado de la lista.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const catParam = searchParams.get('cat')
+  const filterCat: number | 'all' | 'none' =
+    catParam === 'none' ? 'none' : catParam ? parseInt(catParam) : 'all'
+  const filterVis = (searchParams.get('vis') as 'all' | 'visible' | 'hidden' | null) ?? 'all'
+  const onlyFeatured = searchParams.get('featured') === '1'
+  const search = searchParams.get('q') ?? ''
+
+  function updateFilters(next: { cat?: string; vis?: string; featured?: boolean; q?: string }) {
+    const sp = new URLSearchParams(searchParams)
+    if (next.cat !== undefined) next.cat === 'all' ? sp.delete('cat') : sp.set('cat', next.cat)
+    if (next.vis !== undefined) next.vis === 'all' ? sp.delete('vis') : sp.set('vis', next.vis)
+    if (next.featured !== undefined) next.featured ? sp.set('featured', '1') : sp.delete('featured')
+    if (next.q !== undefined) next.q ? sp.set('q', next.q) : sp.delete('q')
+    setSearchParams(sp, { replace: true })
+  }
+
   const [addingId, setAddingId]         = useState<number | null>(null)
   const [showUnpublished, setShowUnpublished] = useState(false)
   const [unpubSearch, setUnpubSearch]   = useState('')
@@ -189,25 +205,22 @@ export default function WebCatalogPage() {
           className="input"
           placeholder="🔍 Buscar producto..."
           value={search}
-          onChange={e => setSearch(e.target.value)}
+          onChange={e => updateFilters({ q: e.target.value })}
           style={{ width: 220 }}
         />
-        <select className="select" value={String(filterCat)} onChange={e => {
-          const v = e.target.value
-          setFilterCat(v === 'all' ? 'all' : v === 'none' ? 'none' : parseInt(v))
-        }}>
+        <select className="select" value={String(filterCat)} onChange={e => updateFilters({ cat: e.target.value })}>
           <option value="all">Todas las categorías</option>
           <option value="none">Sin categoría</option>
           {sortedCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        <select className="select" value={filterVis} onChange={e => setFilterVis(e.target.value as typeof filterVis)}>
+        <select className="select" value={filterVis} onChange={e => updateFilters({ vis: e.target.value })}>
           <option value="all">Todos</option>
           <option value="visible">Publicados</option>
           <option value="hidden">Ocultos</option>
         </select>
         <button
           className={`btn btn-sm ${onlyFeatured ? 'btn-primary' : 'btn-ghost'}`}
-          onClick={() => setOnlyFeatured(v => !v)}
+          onClick={() => updateFilters({ featured: !onlyFeatured })}
           title="Mostrar solo los productos marcados como Destacados, en el orden en que aparecerán en la web"
         >
           ⭐ Solo Destacados

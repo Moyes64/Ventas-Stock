@@ -121,6 +121,24 @@ export interface SyncFinanceAccountBalance {
   accountName: string
   accountType: string
   balance: number
+  pendingAmount: number
+  nextAccreditationDate: string | null
+}
+
+export interface SyncFinancePendingAccreditation {
+  accountName: string
+  monto: number
+  fecha: string
+  fechaAcreditacion: string
+  descripcion: string
+}
+
+export interface SyncFinanceTransfer {
+  fecha: string
+  fromAccountName: string
+  toAccountName: string
+  monto: number
+  descripcion: string | null
 }
 
 export interface SyncFinanceCashFlow {
@@ -147,6 +165,8 @@ export interface SyncFinance {
   cashFlowMonth: SyncFinanceCashFlow
   expensesByCategoryMonth: SyncFinanceCategoryExpense[]
   partnersEquity: SyncFinancePartnerEquity[]
+  pendingAccreditations: SyncFinancePendingAccreditation[]
+  recentTransfers: SyncFinanceTransfer[]
 }
 
 export interface SyncPayload {

@@ -6,6 +6,8 @@ import type {
   FinanceCategory,
   FinanceMovement,
   FinancePartner,
+  FinancePendingAccreditation,
+  FinanceTransfer,
   Supplier,
 } from '../../types/ipc'
 
@@ -18,6 +20,8 @@ export default function MovementsPage() {
   const [partners, setPartners] = useState<FinancePartner[]>([])
   const [suppliersList, setSuppliersList] = useState<Supplier[]>([])
   const [movements, setMovements] = useState<FinanceMovement[]>([])
+  const [pending, setPending] = useState<FinancePendingAccreditation[]>([])
+  const [transfers, setTransfers] = useState<FinanceTransfer[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [foundingDate, setFoundingDate] = useState<string | null>(null)
@@ -35,10 +39,26 @@ export default function MovementsPage() {
   const [monto, setMonto] = useState('')
   const [descripcion, setDescripcion] = useState('')
   const [fecha, setFecha] = useState(localToday)
+  const [fechaAcreditacion, setFechaAcreditacion] = useState('')
   const [partnerId, setPartnerId] = useState<number | ''>('')
   const [supplierId, setSupplierId] = useState<number | ''>('')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+
+  // Form de transferencia entre cuentas
+  const [transferFrom, setTransferFrom] = useState<number | ''>('')
+  const [transferTo, setTransferTo] = useState<number | ''>('')
+  const [transferMonto, setTransferMonto] = useState('')
+  const [transferFecha, setTransferFecha] = useState(localToday)
+  const [transferDescripcion, setTransferDescripcion] = useState('')
+  const [transferSaving, setTransferSaving] = useState(false)
+  const [transferError, setTransferError] = useState<string | null>(null)
+
+  // Acreditación manual anticipada de un pendiente
+  const [accreditingId, setAccreditingId] = useState<number | null>(null)
+  const [accreditDate, setAccreditDate] = useState('')
+  const [accreditSaving, setAccreditSaving] = useState(false)
+  const [accreditError, setAccreditError] = useState<string | null>(null)
 
   const categoriasDelTipo = categories.filter(c => c.appliesTo === tipo || c.appliesTo === 'ambos')
   const categoriaSeleccionada = categories.find(c => c.id === categoriaId)
@@ -58,22 +78,33 @@ export default function MovementsPage() {
     setPartners(parts)
     setSuppliersList(sups)
     if (accs.length > 0) setAccountId(accs[0].id)
+    if (accs.length > 0) setTransferFrom(accs[0].id)
+    if (accs.length > 1) setTransferTo(accs[1].id)
     setFoundingDate(fd)
     setFilterDateFrom(prev => (prev < fd ? fd : prev))
     setFecha(prev => (prev < fd ? fd : prev))
+    setTransferFecha(prev => (prev < fd ? fd : prev))
   }
 
   async function loadMovements() {
     setLoading(true)
     setError(null)
     try {
-      const data = await finance.listMovements({
-        dateFrom: filterDateFrom,
-        dateTo: filterDateTo,
-        accountId: filterAccountId === '' ? undefined : filterAccountId,
-        tipo: filterTipo === '' ? undefined : filterTipo,
-      })
+      const [data, transfersData] = await Promise.all([
+        finance.listMovements({
+          dateFrom: filterDateFrom,
+          dateTo: filterDateTo,
+          accountId: filterAccountId === '' ? undefined : filterAccountId,
+          tipo: filterTipo === '' ? undefined : filterTipo,
+        }),
+        finance.listTransfers({
+          dateFrom: filterDateFrom,
+          dateTo: filterDateTo,
+          accountId: filterAccountId === '' ? undefined : filterAccountId,
+        }),
+      ])
       setMovements(data)
+      setTransfers(transfersData)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al cargar movimientos')
     } finally {
@@ -81,8 +112,17 @@ export default function MovementsPage() {
     }
   }
 
+  async function loadPending() {
+    try {
+      setPending(await finance.getPendingAccreditations())
+    } catch {
+      // No es crítico: si falla, el resumen de pendientes simplemente no se muestra.
+    }
+  }
+
   useEffect(() => {
     void loadCatalogs()
+    void loadPending()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -95,6 +135,7 @@ export default function MovementsPage() {
     setCategoriaId('')
     setMonto('')
     setDescripcion('')
+    setFechaAcreditacion('')
     setPartnerId('')
     setSupplierId('')
   }
@@ -117,6 +158,10 @@ export default function MovementsPage() {
       setSaveError('Seleccioná el socio que realiza el retiro')
       return
     }
+    if (fechaAcreditacion && fechaAcreditacion < fecha) {
+      setSaveError('La fecha de acreditación no puede ser anterior a la fecha del movimiento')
+      return
+    }
 
     setSaving(true)
     setSaveError(null)
@@ -128,11 +173,13 @@ export default function MovementsPage() {
         monto: montoNum,
         descripcion: descripcion.trim(),
         fecha,
+        fechaAcreditacion: tipo === 'ingreso' && fechaAcreditacion ? fechaAcreditacion : null,
         partnerId: partnerId === '' ? null : partnerId,
         supplierId: supplierId === '' ? null : supplierId,
       })
       resetForm()
       await loadMovements()
+      await loadPending()
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Error al guardar el movimiento')
     } finally {
@@ -144,13 +191,85 @@ export default function MovementsPage() {
     try {
       await finance.deleteMovement(id)
       await loadMovements()
+      await loadPending()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al eliminar el movimiento')
     }
   }
 
+  async function handleTransferSave() {
+    const montoNum = parseFloat(transferMonto)
+    if (transferFrom === '' || transferTo === '') {
+      setTransferError('Seleccioná cuenta de origen y destino')
+      return
+    }
+    if (transferFrom === transferTo) {
+      setTransferError('La cuenta de origen y destino no pueden ser la misma')
+      return
+    }
+    if (isNaN(montoNum) || montoNum <= 0) {
+      setTransferError('El monto debe ser mayor a cero')
+      return
+    }
+
+    setTransferSaving(true)
+    setTransferError(null)
+    try {
+      await finance.createTransfer({
+        fromAccountId: transferFrom,
+        toAccountId: transferTo,
+        monto: montoNum,
+        descripcion: transferDescripcion.trim() || null,
+        fecha: transferFecha,
+      })
+      setTransferMonto('')
+      setTransferDescripcion('')
+      await loadMovements()
+    } catch (err) {
+      setTransferError(err instanceof Error ? err.message : 'Error al guardar la transferencia')
+    } finally {
+      setTransferSaving(false)
+    }
+  }
+
+  async function handleDeleteTransfer(id: number) {
+    try {
+      await finance.deleteTransfer(id)
+      await loadMovements()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al eliminar la transferencia')
+    }
+  }
+
+  function startAccredit(p: FinancePendingAccreditation) {
+    setAccreditingId(p.movementId)
+    setAccreditDate(today < p.fechaAcreditacion ? today : p.fechaAcreditacion)
+    setAccreditError(null)
+  }
+
+  function cancelAccredit() {
+    setAccreditingId(null)
+    setAccreditError(null)
+  }
+
+  async function confirmAccredit(p: FinancePendingAccreditation) {
+    setAccreditSaving(true)
+    setAccreditError(null)
+    try {
+      await finance.accreditMovement(p.movementId, accreditDate)
+      setAccreditingId(null)
+      await loadPending()
+      await loadMovements()
+    } catch (err) {
+      setAccreditError(err instanceof Error ? err.message : 'Error al acreditar el movimiento')
+    } finally {
+      setAccreditSaving(false)
+    }
+  }
+
   const currency = (n: number) =>
     new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(n)
+  const today = localToday()
 
   const accountName = (id: number) => accounts.find(a => a.id === id)?.name ?? '—'
   const categoryName = (id: number | null) => (id === null ? '—' : categories.find(c => c.id === id)?.name ?? '—')
@@ -161,7 +280,7 @@ export default function MovementsPage() {
   const totalEgresos = movements.filter(m => m.tipo === 'egreso').reduce((s, m) => s + m.monto, 0)
 
   return (
-    <div className="caja-section">
+    <div className="caja-section caja-section--wide">
       <h2 className="section-title">📋 Movimientos de Ingresos y Egresos</h2>
 
       {/* Nuevo movimiento */}
@@ -241,6 +360,20 @@ export default function MovementsPage() {
               className="input"
             />
           </div>
+          {tipo === 'ingreso' && (
+            <div className="form-group">
+              <label className="label" title="Dejar vacío si el dinero ya está disponible de inmediato">
+                Fecha de acreditación (opcional)
+              </label>
+              <input
+                type="date"
+                value={fechaAcreditacion}
+                min={fecha}
+                onChange={e => setFechaAcreditacion(e.target.value)}
+                className="input"
+              />
+            </div>
+          )}
           {requiereSocio && (
             <div className="form-group">
               <label className="label">Socio</label>
@@ -285,8 +418,139 @@ export default function MovementsPage() {
         {saveError && <p className="error">{saveError}</p>}
       </div>
 
+      {/* Transferencia entre cuentas */}
+      <div className="caja-movement-form">
+        <h3>🔁 Transferencia entre cuentas</h3>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="label">Origen</label>
+            <select
+              value={transferFrom}
+              onChange={e => setTransferFrom(e.target.value === '' ? '' : parseInt(e.target.value))}
+              className="select"
+            >
+              <option value="">— Seleccionar —</option>
+              {accounts.map(a => (
+                <option key={a.id} value={a.id} disabled={a.id === transferTo}>{a.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="label">Destino</label>
+            <select
+              value={transferTo}
+              onChange={e => setTransferTo(e.target.value === '' ? '' : parseInt(e.target.value))}
+              className="select"
+            >
+              <option value="">— Seleccionar —</option>
+              {accounts.map(a => (
+                <option key={a.id} value={a.id} disabled={a.id === transferFrom}>{a.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="label">Monto</label>
+            <input
+              type="number"
+              min="0.01"
+              step="0.01"
+              value={transferMonto}
+              onChange={e => setTransferMonto(e.target.value)}
+              onFocus={e => e.target.select()}
+              placeholder="0.00"
+              className="input"
+            />
+          </div>
+          <div className="form-group">
+            <label className="label">Fecha</label>
+            <input
+              type="date"
+              value={transferFecha}
+              min={foundingDate ?? undefined}
+              onChange={e => setTransferFecha(e.target.value)}
+              className="input"
+            />
+          </div>
+          <div className="form-group form-group--grow">
+            <label className="label">Descripción (opcional)</label>
+            <input
+              type="text"
+              value={transferDescripcion}
+              onChange={e => setTransferDescripcion(e.target.value)}
+              placeholder="Ej: Refuerzo de caja para pago a proveedor"
+              className="input"
+            />
+          </div>
+          <div className="form-group form-group--action">
+            <label className="label">&nbsp;</label>
+            <button
+              className="btn btn-primary"
+              onClick={() => { void handleTransferSave() }}
+              disabled={transferSaving}
+            >
+              {transferSaving ? '⏳' : '+ Transferir'}
+            </button>
+          </div>
+        </div>
+        {transferError && <p className="error">{transferError}</p>}
+      </div>
+
       {foundingDate && (
         <p className="page-subtitle">📅 Contabilidad iniciada el {foundingDate} — no se pueden ver ni cargar movimientos anteriores.</p>
+      )}
+
+      {pending.length > 0 && (
+        <div className="pending-accreditation-box">
+          <h3>🕓 Pendiente de acreditación</h3>
+          <table className="table table--compact">
+            <thead>
+              <tr>
+                <th>Cuenta</th>
+                <th>Monto</th>
+                <th>Fecha de acreditación</th>
+                <th>Descripción</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {pending.map(p => (
+                <tr key={p.movementId}>
+                  <td>{p.accountName}</td>
+                  <td>{currency(p.monto)}</td>
+                  <td><span className="badge badge--warning">{p.fechaAcreditacion}</span></td>
+                  <td>{p.descripcion}</td>
+                  <td>
+                    {accreditingId === p.movementId ? (
+                      <div className="inline-accredit">
+                        <input
+                          type="date"
+                          value={accreditDate}
+                          min={p.fecha}
+                          max={p.fechaAcreditacion}
+                          onChange={e => setAccreditDate(e.target.value)}
+                          className="input"
+                        />
+                        <button
+                          className="btn btn-primary btn-sm"
+                          onClick={() => { void confirmAccredit(p) }}
+                          disabled={accreditSaving}
+                        >
+                          {accreditSaving ? '⏳' : '✓'}
+                        </button>
+                        <button className="btn btn-sm" onClick={cancelAccredit} disabled={accreditSaving}>✕</button>
+                      </div>
+                    ) : (
+                      <button className="btn btn-secondary btn-sm" onClick={() => startAccredit(p)}>
+                        ✅ Acreditar
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {accreditError && <p className="error">{accreditError}</p>}
+        </div>
       )}
 
       {/* Filtros */}
@@ -351,6 +615,7 @@ export default function MovementsPage() {
                     <th>Socio / Proveedor</th>
                     <th>Descripción</th>
                     <th>Monto</th>
+                    <th>Acreditación</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -369,6 +634,13 @@ export default function MovementsPage() {
                       <td>{m.descripcion}</td>
                       <td className={m.tipo === 'egreso' ? 'text-danger' : ''}>
                         {m.tipo === 'egreso' ? '−' : '+'}{currency(m.monto)}
+                      </td>
+                      <td>
+                        {m.fechaAcreditacion ? (
+                          <span className={`badge badge--${m.fechaAcreditacion > today ? 'warning' : 'success'}`}>
+                            {m.fechaAcreditacion > today ? `Pendiente · ${m.fechaAcreditacion}` : `Acreditado · ${m.fechaAcreditacion}`}
+                          </span>
+                        ) : '—'}
                       </td>
                       <td>
                         {m.saleId ? (
@@ -396,10 +668,49 @@ export default function MovementsPage() {
                       <div className="text-danger">−{currency(totalEgresos)}</div>
                     </td>
                     <td></td>
+                    <td></td>
                   </tr>
                 </tfoot>
               </table>
             </div>
+          )}
+
+          {/* Transferencias entre cuentas */}
+          {transfers.length > 0 && (
+            <>
+              <h3 className="table-section-title">🔁 Transferencias entre cuentas</h3>
+              <div className="table-container">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Fecha</th>
+                      <th>Origen</th>
+                      <th>Destino</th>
+                      <th>Descripción</th>
+                      <th>Monto</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {transfers.map(t => (
+                      <tr key={t.id}>
+                        <td>{t.fecha}</td>
+                        <td>{accountName(t.fromAccountId)}</td>
+                        <td>{accountName(t.toAccountId)}</td>
+                        <td>{t.descripcion ?? '—'}</td>
+                        <td>{currency(t.monto)}</td>
+                        <td>
+                          <button
+                            className="btn btn-danger btn-sm"
+                            onClick={() => { void handleDeleteTransfer(t.id) }}
+                          >✕</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </>
       )}

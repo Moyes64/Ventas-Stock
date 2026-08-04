@@ -582,6 +582,7 @@ export interface FinanceMovement {
   monto: number
   descripcion: string
   fecha: string
+  fechaAcreditacion: string | null
   partnerId: number | null
   supplierId: number | null
   saleId: number | null
@@ -595,9 +596,44 @@ export interface CreateFinanceMovementInput {
   monto: number
   descripcion: string
   fecha?: string
+  fechaAcreditacion?: string | null
   partnerId?: number | null
   supplierId?: number | null
   saleId?: number | null
+}
+
+export interface FinancePendingAccreditation {
+  movementId: number
+  accountId: number
+  accountName: string
+  monto: number
+  fecha: string
+  fechaAcreditacion: string
+  descripcion: string
+}
+
+export interface FinanceTransfer {
+  id: number
+  fromAccountId: number
+  toAccountId: number
+  monto: number
+  descripcion: string | null
+  fecha: string
+  createdAt: string
+}
+
+export interface CreateFinanceTransferInput {
+  fromAccountId: number
+  toAccountId: number
+  monto: number
+  descripcion?: string | null
+  fecha?: string
+}
+
+export interface FinanceTransferFilters {
+  dateFrom?: string
+  dateTo?: string
+  accountId?: number
 }
 
 export interface FinanceMovementFilters {
@@ -619,6 +655,8 @@ export interface FinanceAccountBalance {
   accountName: string
   accountType: FinanceAccountType
   balance: number
+  pendingAmount: number
+  nextAccreditationDate: string | null
 }
 
 export interface FinanceCashFlowPoint {

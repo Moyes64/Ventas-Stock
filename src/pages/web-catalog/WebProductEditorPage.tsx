@@ -149,7 +149,7 @@ export default function WebProductEditorPage() {
     <div className="page">
       <div className="page-header">
         <div>
-          <button className="btn btn-ghost" onClick={() => navigate('/web-catalog')}>← Volver</button>
+          <button className="btn btn-ghost" onClick={() => navigate(-1)}>← Volver</button>
           <h1 className="page-title" style={{ display: 'inline', marginLeft: 12 }}>{wp.productName}</h1>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>

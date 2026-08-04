@@ -246,6 +246,11 @@ const electronAPI = {
     listMovements: (filters?: unknown) => invoke('finance:listMovements', filters),
     createMovement: (input: unknown) => invoke('finance:createMovement', input),
     deleteMovement: (id: number) => invoke('finance:deleteMovement', id),
+    getPendingAccreditations: (accountId?: number) => invoke('finance:getPendingAccreditations', accountId),
+    accreditMovement: (movementId: number, fecha?: string) => invoke('finance:accreditMovement', movementId, fecha),
+    listTransfers: (filters?: unknown) => invoke('finance:listTransfers', filters),
+    createTransfer: (input: unknown) => invoke('finance:createTransfer', input),
+    deleteTransfer: (id: number) => invoke('finance:deleteTransfer', id),
     getAccountBalances: () => invoke('finance:getAccountBalances'),
     getCashFlowSummary: (dateFrom: string, dateTo: string, groupBy?: 'day' | 'month', accountId?: number) =>
       invoke('finance:getCashFlowSummary', dateFrom, dateTo, groupBy, accountId),

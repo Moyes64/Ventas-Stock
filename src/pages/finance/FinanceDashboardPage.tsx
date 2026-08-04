@@ -6,6 +6,7 @@ import type {
   FinanceCashFlowPoint,
   FinanceCategoryExpense,
   FinancePartnerEquity,
+  FinancePendingAccreditation,
 } from '../../types/ipc'
 import { PieChart } from '../../components/charts/PieChart'
 
@@ -14,6 +15,7 @@ export default function FinanceDashboardPage() {
   const [cashFlow, setCashFlow] = useState<FinanceCashFlowPoint[]>([])
   const [expenses, setExpenses] = useState<FinanceCategoryExpense[]>([])
   const [equity, setEquity] = useState<FinancePartnerEquity[]>([])
+  const [pending, setPending] = useState<FinancePendingAccreditation[]>([])
   const [dateFrom, setDateFrom] = useState(localFirstOfMonth)
   const [dateTo, setDateTo] = useState(localToday)
   const [groupBy, setGroupBy] = useState<'day' | 'month'>('month')
@@ -32,16 +34,18 @@ export default function FinanceDashboardPage() {
     setLoading(true)
     setError(null)
     try {
-      const [b, cf, ex, eq] = await Promise.all([
+      const [b, cf, ex, eq, pend] = await Promise.all([
         finance.getAccountBalances(),
         finance.getCashFlowSummary(dateFrom, dateTo, groupBy),
         finance.getExpensesByCategory(dateFrom, dateTo),
         finance.getPartnersEquity(),
+        finance.getPendingAccreditations(),
       ])
       setBalances(b)
       setCashFlow(cf)
       setExpenses(ex)
       setEquity(eq)
+      setPending(pend)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al cargar el dashboard de finanzas')
     } finally {
@@ -58,9 +62,10 @@ export default function FinanceDashboardPage() {
     new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(n)
 
   const totalBalance = balances.reduce((s, b) => s + b.balance, 0)
+  const totalPending = balances.reduce((s, b) => s + b.pendingAmount, 0)
 
   return (
-    <div className="caja-section">
+    <div className="caja-section caja-section--wide">
       <h2 className="section-title">📊 Dashboard de Finanzas</h2>
 
       {error && <p className="error">{error}</p>}
@@ -72,16 +77,49 @@ export default function FinanceDashboardPage() {
           <div key={b.accountId} className={`stat-card ${b.balance < 0 ? 'stat-card--warning' : ''}`}>
             <div className="stat-value">{currency(b.balance)}</div>
             <div className="stat-label">{b.accountName}</div>
+            {b.pendingAmount > 0 && (
+              <div className="stat-sub">
+                🕓 {currency(b.pendingAmount)} pendiente
+                {b.nextAccreditationDate && <> · acredita {b.nextAccreditationDate}</>}
+              </div>
+            )}
           </div>
         ))}
         <div className="stat-card stat-card--total">
           <div className="stat-value">{currency(totalBalance)}</div>
           <div className="stat-label">Total</div>
+          {totalPending > 0 && <div className="stat-sub stat-sub--light">🕓 {currency(totalPending)} pendiente</div>}
         </div>
       </div>
 
       {foundingDate && (
         <p className="page-subtitle">📅 Contabilidad iniciada el {foundingDate} — no se pueden ver ni cargar datos anteriores.</p>
+      )}
+
+      {pending.length > 0 && (
+        <div className="pending-accreditation-box">
+          <h3>🕓 Pendiente de acreditación</h3>
+          <table className="table table--compact">
+            <thead>
+              <tr>
+                <th>Cuenta</th>
+                <th>Monto</th>
+                <th>Fecha de acreditación</th>
+                <th>Descripción</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pending.map(p => (
+                <tr key={p.movementId}>
+                  <td>{p.accountName}</td>
+                  <td>{currency(p.monto)}</td>
+                  <td><span className="badge badge--warning">{p.fechaAcreditacion}</span></td>
+                  <td>{p.descripcion}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {/* Filtros de período */}

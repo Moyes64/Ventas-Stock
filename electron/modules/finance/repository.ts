@@ -11,6 +11,10 @@ import type {
   FinanceCategoryAppliesTo,
   CashFlowPoint,
   CategoryExpense,
+  PendingAccreditation,
+  FinanceTransfer,
+  CreateTransferInput,
+  TransferFilters,
 } from './types'
 
 interface PartnerRow {
@@ -44,9 +48,20 @@ interface MovementRow {
   monto: number
   descripcion: string
   fecha: string
+  fecha_acreditacion: string | null
   partner_id: number | null
   supplier_id: number | null
   sale_id: number | null
+  created_at: string
+}
+
+interface TransferRow {
+  id: number
+  from_account_id: number
+  to_account_id: number
+  monto: number
+  descripcion: string | null
+  fecha: string
   created_at: string
 }
 
@@ -227,9 +242,9 @@ export class FinanceRepository {
     const result = this.db
       .prepare(
         `INSERT INTO finance_movements
-           (account_id, tipo, categoria_id, monto, descripcion, fecha, partner_id, supplier_id, sale_id)
+           (account_id, tipo, categoria_id, monto, descripcion, fecha, fecha_acreditacion, partner_id, supplier_id, sale_id)
          VALUES
-           (@accountId, @tipo, @categoriaId, @monto, @descripcion, @fecha, @partnerId, @supplierId, @saleId)`
+           (@accountId, @tipo, @categoriaId, @monto, @descripcion, @fecha, @fechaAcreditacion, @partnerId, @supplierId, @saleId)`
       )
       .run({
         accountId: input.accountId,
@@ -238,6 +253,7 @@ export class FinanceRepository {
         monto: input.monto,
         descripcion: input.descripcion,
         fecha: input.fecha ?? localToday(),
+        fechaAcreditacion: input.fechaAcreditacion ?? null,
         partnerId: input.partnerId ?? null,
         supplierId: input.supplierId ?? null,
         saleId: input.saleId ?? null,
@@ -249,14 +265,142 @@ export class FinanceRepository {
     this.db.prepare('DELETE FROM finance_movements WHERE id = ?').run(id)
   }
 
+  // ── Pendientes de acreditación ───────────────────────────────────────────
+
+  /**
+   * Ingresos cuya fecha de acreditación todavía no llegó (asOfDate por defecto: hoy).
+   * Se listan individualmente porque cada uno puede acreditarse en una fecha distinta.
+   */
+  listPendingAccreditations(asOfDate: string, accountId?: number): PendingAccreditation[] {
+    const conditions = [
+      "tipo = 'ingreso'",
+      'fecha_acreditacion IS NOT NULL',
+      'fecha_acreditacion > @asOfDate',
+    ]
+    const params: Record<string, unknown> = { asOfDate }
+    if (accountId !== undefined) {
+      conditions.push('account_id = @accountId')
+      params.accountId = accountId
+    }
+    const rows = this.db
+      .prepare(
+        `SELECT fm.id AS movementId, fm.account_id AS accountId, fa.name AS accountName,
+                fm.monto AS monto, fm.fecha AS fecha, fm.fecha_acreditacion AS fechaAcreditacion,
+                fm.descripcion AS descripcion
+         FROM finance_movements fm
+         JOIN finance_accounts fa ON fa.id = fm.account_id
+         WHERE ${conditions.join(' AND ')}
+         ORDER BY fm.fecha_acreditacion ASC`
+      )
+      .all(params) as PendingAccreditation[]
+    return rows
+  }
+
+  /** Actualiza la fecha de acreditación de un movimiento (acreditación manual anticipada). */
+  accreditMovement(id: number, fecha: string): void {
+    this.db.prepare('UPDATE finance_movements SET fecha_acreditacion = @fecha WHERE id = @id').run({ id, fecha })
+  }
+
+  /** Total pendiente y próxima fecha de acreditación de una cuenta puntual (asOfDate por defecto: hoy). */
+  pendingAccreditationSummary(accountId: number, asOfDate: string): { pendingAmount: number; nextAccreditationDate: string | null } {
+    const row = this.db
+      .prepare(
+        `SELECT COALESCE(SUM(monto), 0) AS pendingAmount, MIN(fecha_acreditacion) AS nextAccreditationDate
+         FROM finance_movements
+         WHERE tipo = 'ingreso' AND account_id = @accountId
+           AND fecha_acreditacion IS NOT NULL AND fecha_acreditacion > @asOfDate`
+      )
+      .get({ accountId, asOfDate }) as { pendingAmount: number; nextAccreditationDate: string | null }
+    return row
+  }
+
+  // ── Transferencias entre cuentas ─────────────────────────────────────────
+
+  listTransfers(filters: TransferFilters = {}): FinanceTransfer[] {
+    const conditions: string[] = []
+    const params: Record<string, unknown> = {}
+    if (filters.accountId !== undefined) {
+      conditions.push('(from_account_id = @accountId OR to_account_id = @accountId)')
+      params.accountId = filters.accountId
+    }
+    if (filters.dateFrom !== undefined) {
+      conditions.push('fecha >= @dateFrom')
+      params.dateFrom = filters.dateFrom
+    }
+    if (filters.dateTo !== undefined) {
+      conditions.push('fecha <= @dateTo')
+      params.dateTo = filters.dateTo
+    }
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+    const rows = this.db
+      .prepare(`SELECT * FROM finance_transfers ${where} ORDER BY fecha DESC, created_at DESC`)
+      .all(params) as TransferRow[]
+    return rows.map(r => this.mapTransfer(r))
+  }
+
+  findTransferById(id: number): FinanceTransfer | undefined {
+    const row = this.db
+      .prepare('SELECT * FROM finance_transfers WHERE id = ?')
+      .get(id) as TransferRow | undefined
+    return row ? this.mapTransfer(row) : undefined
+  }
+
+  createTransfer(input: CreateTransferInput): number {
+    const result = this.db
+      .prepare(
+        `INSERT INTO finance_transfers (from_account_id, to_account_id, monto, descripcion, fecha)
+         VALUES (@fromAccountId, @toAccountId, @monto, @descripcion, @fecha)`
+      )
+      .run({
+        fromAccountId: input.fromAccountId,
+        toAccountId: input.toAccountId,
+        monto: input.monto,
+        descripcion: input.descripcion ?? null,
+        fecha: input.fecha ?? localToday(),
+      })
+    return result.lastInsertRowid as number
+  }
+
+  deleteTransfer(id: number): void {
+    this.db.prepare('DELETE FROM finance_transfers WHERE id = ?').run(id)
+  }
+
+  /** Neto de transferencias (entradas - salidas) de una cuenta desde dateFrom. */
+  sumTransfersNet(accountId: number, dateFrom?: string): number {
+    const dateCondition = dateFrom !== undefined ? 'AND fecha >= @dateFrom' : ''
+    const params: Record<string, unknown> = { accountId }
+    if (dateFrom !== undefined) params.dateFrom = dateFrom
+    const row = this.db
+      .prepare(
+        `SELECT
+           COALESCE(SUM(CASE WHEN to_account_id = @accountId THEN monto ELSE 0 END), 0) -
+           COALESCE(SUM(CASE WHEN from_account_id = @accountId THEN monto ELSE 0 END), 0) AS net
+         FROM finance_transfers
+         WHERE (from_account_id = @accountId OR to_account_id = @accountId) ${dateCondition}`
+      )
+      .get(params) as { net: number }
+    return row.net
+  }
+
   // ── Agregados: finance_movements ──────────────────────────────────────────
 
-  sumFinanceMovementsNet(accountId?: number, dateFrom?: string, dateTo?: string): number {
+  /**
+   * Neto de movimientos (ingresos - egresos). Si se pasa asOfDate, los ingresos cuya
+   * fecha_acreditacion todavía no llegó a esa fecha se excluyen del neto — todavía no
+   * son saldo disponible, aunque ya estén registrados como movimiento.
+   */
+  sumFinanceMovementsNet(accountId?: number, dateFrom?: string, dateTo?: string, asOfDate?: string): number {
     const { where, params } = this.buildDateAccountFilter(accountId, dateFrom, dateTo)
+    const conditions = where ? [where.replace(/^WHERE /, '')] : []
+    if (asOfDate !== undefined) {
+      conditions.push("(tipo = 'egreso' OR fecha_acreditacion IS NULL OR fecha_acreditacion <= @asOfDate)")
+      params.asOfDate = asOfDate
+    }
+    const finalWhere = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
     const row = this.db
       .prepare(
         `SELECT COALESCE(SUM(CASE WHEN tipo = 'ingreso' THEN monto ELSE -monto END), 0) AS net
-         FROM finance_movements ${where}`
+         FROM finance_movements ${finalWhere}`
       )
       .get(params) as { net: number }
     return row.net
@@ -404,9 +548,22 @@ export class FinanceRepository {
       monto: row.monto,
       descripcion: row.descripcion,
       fecha: row.fecha,
+      fechaAcreditacion: row.fecha_acreditacion,
       partnerId: row.partner_id,
       supplierId: row.supplier_id,
       saleId: row.sale_id,
+      createdAt: row.created_at,
+    }
+  }
+
+  private mapTransfer(row: TransferRow): FinanceTransfer {
+    return {
+      id: row.id,
+      fromAccountId: row.from_account_id,
+      toAccountId: row.to_account_id,
+      monto: row.monto,
+      descripcion: row.descripcion,
+      fecha: row.fecha,
       createdAt: row.created_at,
     }
   }

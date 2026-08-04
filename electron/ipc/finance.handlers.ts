@@ -6,6 +6,8 @@ import type {
   CreateCategoryInput,
   MovementFilters,
   FinanceCategoryAppliesTo,
+  CreateTransferInput,
+  TransferFilters,
 } from '../modules/finance/types'
 
 export function registerFinanceHandlers(db: Database): void {
@@ -43,6 +45,27 @@ export function registerFinanceHandlers(db: Database): void {
 
   ipcMain.handle('finance:deleteMovement', (_event, id: number) => {
     return financeService.deleteMovement(id)
+  })
+
+  ipcMain.handle('finance:getPendingAccreditations', (_event, accountId?: number) => {
+    return financeService.getPendingAccreditations(accountId)
+  })
+
+  ipcMain.handle('finance:accreditMovement', (_event, movementId: number, fecha?: string) => {
+    return financeService.accreditMovement(movementId, fecha)
+  })
+
+  // Transferencias entre cuentas
+  ipcMain.handle('finance:listTransfers', (_event, filters?: TransferFilters) => {
+    return financeService.listTransfers(filters)
+  })
+
+  ipcMain.handle('finance:createTransfer', (_event, input: CreateTransferInput) => {
+    return financeService.createTransfer(input)
+  })
+
+  ipcMain.handle('finance:deleteTransfer', (_event, id: number) => {
+    return financeService.deleteTransfer(id)
   })
 
   // Reportes

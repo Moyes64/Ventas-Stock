@@ -312,6 +312,14 @@ html, body, #root {
   margin-top: 4px;
 }
 
+.stat-sub {
+  font-size: 11px;
+  color: #b45309;
+  margin-top: 6px;
+}
+
+.stat-sub--light { color: rgba(255,255,255,0.75); }
+
 /* Filter bar */
 .filter-bar {
   display: flex;
@@ -932,6 +940,54 @@ code {
   border-radius: var(--radius);
   padding: 24px;
   max-width: 700px;
+}
+
+/* Páginas de Finanzas (Movimientos, Dashboard): usan tablas anchas con varias
+   columnas, a diferencia de los formularios angostos de Apertura/Cierre de
+   Caja — no las limitamos a 700px, para que aprovechen el ancho de .page
+   (1400px) y no fuercen scroll horizontal. */
+.caja-section--wide {
+  max-width: none;
+}
+
+.table-section-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 24px 0 8px;
+}
+
+.pending-accreditation-box {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  margin-bottom: 20px;
+}
+
+.pending-accreditation-box h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 10px;
+  color: #92400e;
+}
+
+.pending-accreditation-box .table {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.inline-accredit {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.inline-accredit .input {
+  padding: 4px 6px;
+  font-size: 12px;
+  width: 140px;
 }
 
 .section-title {

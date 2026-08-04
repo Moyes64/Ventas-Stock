@@ -145,6 +145,10 @@ export class SyncService {
     const [cashFlow] = this.financeService.getCashFlowSummary(firstOfMonth, today, 'month')
     const expenses = this.financeService.getExpensesByCategory(firstOfMonth, today)
     const equity = this.financeService.getPartnersEquity()
+    const pending = this.financeService.getPendingAccreditations()
+    const transfers = this.financeService.listTransfers({ dateFrom: firstOfMonth, dateTo: today })
+    const accounts = this.financeService.listAccounts()
+    const accountName = (id: number) => accounts.find(a => a.id === id)?.name ?? '—'
 
     return {
       accountBalances: balances.map(b => ({
@@ -152,6 +156,8 @@ export class SyncService {
         accountName: b.accountName,
         accountType: b.accountType,
         balance: b.balance,
+        pendingAmount: b.pendingAmount,
+        nextAccreditationDate: b.nextAccreditationDate,
       })),
       cashFlowMonth: {
         ingresos: cashFlow?.ingresos ?? 0,
@@ -168,6 +174,20 @@ export class SyncService {
         utilidadAcumulada: p.utilidadAcumulada,
         retirosRealizados: p.retirosRealizados,
         saldoPendiente: p.saldoPendiente,
+      })),
+      pendingAccreditations: pending.map(p => ({
+        accountName: p.accountName,
+        monto: p.monto,
+        fecha: p.fecha,
+        fechaAcreditacion: p.fechaAcreditacion,
+        descripcion: p.descripcion,
+      })),
+      recentTransfers: transfers.map(t => ({
+        fecha: t.fecha,
+        fromAccountName: accountName(t.fromAccountId),
+        toAccountName: accountName(t.toAccountId),
+        monto: t.monto,
+        descripcion: t.descripcion,
       })),
     }
   }
