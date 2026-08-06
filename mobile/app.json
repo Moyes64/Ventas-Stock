@@ -13,6 +13,7 @@
     "android": {
       "package": "com.ventasstock.conteo",
       "versionCode": 1,
+      "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -39,6 +40,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "3da838e6-2520-43d1-9027-100b99fb9dcb"
+      }
     }
   }
 }
