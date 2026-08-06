@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { sales, printing, systemParams, mail } from '../../lib/ipc'
 import { localToday } from '../../lib/date'
 import type { Sale } from '../../types/ipc'
+import { useConfirm } from '../../hooks/useConfirm'
 
 const STATUS_LABELS: Record<string, string> = {
   AUTHORIZED: '✅ Autorizada',
@@ -36,6 +37,7 @@ export default function SalesPage() {
   const [printError, setPrintError] = useState<string | null>(null)
   const [cancelingId, setCancelingId] = useState<number | null>(null)
   const [cancelError, setCancelError] = useState<string | null>(null)
+  const { confirm, dialog: confirmDialog } = useConfirm()
 
   async function loadSales() {
     setLoading(true)
@@ -86,8 +88,9 @@ export default function SalesPage() {
   }
 
   async function handleCancelSale(sale: Sale) {
-    const confirmed = window.confirm(
-      `¿Cancelar la venta #${sale.id}? Se repondrá el stock vendido y se revertirá el ingreso financiero asociado.`
+    const confirmed = await confirm(
+      `¿Cancelar la venta #${sale.id}? Se repondrá el stock vendido y se revertirá el ingreso financiero asociado.`,
+      { danger: true }
     )
     if (!confirmed) return
     setCancelingId(sale.id)
@@ -236,6 +239,8 @@ export default function SalesPage() {
           </div>
         </>
       )}
+
+      {confirmDialog}
     </div>
   )
 }

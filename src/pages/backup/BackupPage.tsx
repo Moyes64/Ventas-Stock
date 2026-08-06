@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { backup as backupApi } from '../../lib/ipc'
 import type { BackupInfo } from '../../types/ipc'
+import { useConfirm } from '../../hooks/useConfirm'
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -14,6 +15,7 @@ export default function BackupPage() {
   const [creating, setCreating] = useState(false)
   const [restoring, setRestoring] = useState<string | null>(null)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const { confirm, dialog: confirmDialog } = useConfirm()
 
   async function loadBackups() {
     setLoading(true)
@@ -48,11 +50,13 @@ export default function BackupPage() {
   }
 
   async function handleRestore(filename: string) {
-    if (!window.confirm(
+    const ok = await confirm(
       `¿Restaurar la base de datos desde "${filename}"?\n\n` +
       'ADVERTENCIA: Esta acción reemplazará la base de datos actual.\n' +
-      'La aplicación deberá reiniciarse después.'
-    )) return
+      'La aplicación deberá reiniciarse después.',
+      { danger: true }
+    )
+    if (!ok) return
 
     setRestoring(filename)
     setMessage(null)
@@ -133,6 +137,8 @@ export default function BackupPage() {
           </table>
         </div>
       )}
+
+      {confirmDialog}
     </div>
   )
 }

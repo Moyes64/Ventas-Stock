@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react'
-import { caja, printing } from '../../lib/ipc'
+import { caja, finance, printing } from '../../lib/ipc'
 import { localToday } from '../../lib/date'
-import type { CierreSummary } from '../../types/ipc'
+import type { CierreSummary, FinanceAccount } from '../../types/ipc'
+import { useConfirm } from '../../hooks/useConfirm'
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   contado_efectivo: '💵 Contado Efectivo',
   transferencia: '🏦 Transferencia',
+  qr: '📱 QR',
   debito: '💳 Débito',
   credito: '💳 Crédito',
+  mercadopago: '🛒 Mercado Pago (Web)',
 }
 
 export default function CierrePage() {
@@ -24,6 +27,10 @@ export default function CierrePage() {
   const [showPrintPrompt, setShowPrintPrompt] = useState(false)
   const [batchPrinting, setBatchPrinting] = useState(false)
   const [batchMsg, setBatchMsg] = useState<string | null>(null)
+  const [accounts, setAccounts] = useState<FinanceAccount[]>([])
+  const { confirm, dialog: confirmDialog } = useConfirm()
+
+  const accountName = (id: number) => accounts.find(a => a.id === id)?.name ?? '—'
 
   async function loadSummary(date: string) {
     setLoadingSum(true)
@@ -43,6 +50,7 @@ export default function CierrePage() {
 
   useEffect(() => {
     void loadSummary(today)
+    void finance.listAccounts().then(setAccounts)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -65,7 +73,7 @@ export default function CierrePage() {
 
   async function handleReopen() {
     if (!summary) return
-    if (!window.confirm(`¿Confirmás reabrir la caja del ${selectedDate}? Esto deshace el cierre registrado.`)) {
+    if (!(await confirm(`¿Confirmás reabrir la caja del ${selectedDate}? Esto deshace el cierre registrado.`))) {
       return
     }
     setReopening(true)
@@ -136,6 +144,18 @@ export default function CierrePage() {
                 <span>− Egresos</span>
                 <span>−{currency(summary.egresosTotal)}</span>
               </div>
+              {summary.transfersInTotal > 0 && (
+                <div className="caja-summary-row caja-summary-row--ingreso">
+                  <span>+ Transferencias recibidas</span>
+                  <span>{currency(summary.transfersInTotal)}</span>
+                </div>
+              )}
+              {summary.transfersOutTotal > 0 && (
+                <div className="caja-summary-row caja-summary-row--egreso">
+                  <span>− Transferencias enviadas</span>
+                  <span>−{currency(summary.transfersOutTotal)}</span>
+                </div>
+              )}
               <div className="caja-summary-row caja-summary-row--total">
                 <span><strong>Total esperado en caja</strong></span>
                 <span><strong>{currency(summary.expectedTotal)}</strong></span>
@@ -169,6 +189,25 @@ export default function CierrePage() {
                       <span>
                         {m.tipo === 'egreso' ? '−' : '+'}{currency(m.monto)}
                       </span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {summary.transfers.length > 0 && (
+              <>
+                <h3 className="caja-summary-title" style={{ marginTop: '1.5rem' }}>
+                  Transferencias entre cuentas del día
+                </h3>
+                <div className="caja-summary-table">
+                  {summary.transfers.map(t => (
+                    <div key={t.id} className="caja-summary-row">
+                      <span>
+                        {accountName(t.fromAccountId)} → {accountName(t.toAccountId)}
+                        {t.descripcion ? ` (${t.descripcion})` : ''}
+                      </span>
+                      <span>{currency(t.monto)}</span>
                     </div>
                   ))}
                 </div>
@@ -246,6 +285,8 @@ export default function CierrePage() {
           )}
         </>
       )}
+
+      {confirmDialog}
     </div>
   )
 }

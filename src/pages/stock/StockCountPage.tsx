@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { stockCount as stockCountApi, webCatalog as webCatalogApi } from '../../lib/ipc'
 import type { StockCountServerStatus, StockCountSession, WebCategory } from '../../types/ipc'
+import { useConfirm } from '../../hooks/useConfirm'
 
 const STATUS_LABEL: Record<StockCountSession['status'], string> = {
   open: 'Abierta',
@@ -33,6 +34,8 @@ export default function StockCountPage() {
 
   const [pairing, setPairing] = useState<{ session: StockCountSession; qr: string | null } | null>(null)
 
+  const { confirm, dialog: confirmDialog } = useConfirm()
+
   async function loadAll() {
     setLoading(true)
     try {
@@ -62,7 +65,7 @@ export default function StockCountPage() {
   }
 
   async function handleRegenerateToken() {
-    if (!window.confirm('Esto invalida el pairing de cualquier celular ya conectado. ¿Regenerar el token?')) return
+    if (!(await confirm('Esto invalida el pairing de cualquier celular ya conectado. ¿Regenerar el token?'))) return
     const s = await stockCountApi.regenerateToken()
     setStatus(s)
   }
@@ -89,13 +92,13 @@ export default function StockCountPage() {
   }
 
   async function handleCancelSession(id: number) {
-    if (!window.confirm('¿Cancelar esta sesión de conteo?')) return
+    if (!(await confirm('¿Cancelar esta sesión de conteo?'))) return
     await stockCountApi.cancelSession(id)
     await loadAll()
   }
 
   async function handleDeleteSession(id: number) {
-    if (!window.confirm('¿Eliminar esta sesión de conteo? Esta acción no se puede deshacer.')) return
+    if (!(await confirm('¿Eliminar esta sesión de conteo? Esta acción no se puede deshacer.', { danger: true }))) return
     await stockCountApi.deleteSession(id)
     await loadAll()
   }
@@ -276,6 +279,8 @@ export default function StockCountPage() {
           )}
         </div>
       </div>
+
+      {confirmDialog}
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { suppliers as suppliersApi } from '../../lib/ipc'
 import type { Supplier } from '../../types/ipc'
+import { useConfirm } from '../../hooks/useConfirm'
 
 export default function SuppliersPage() {
   const [supplierList, setSupplierList] = useState<Supplier[]>([])
@@ -9,6 +10,7 @@ export default function SuppliersPage() {
   const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [editSupplier, setEditSupplier] = useState<Supplier | null>(null)
+  const { confirm, dialog: confirmDialog } = useConfirm()
 
   async function loadSuppliers() {
     setLoading(true)
@@ -28,7 +30,7 @@ export default function SuppliersPage() {
   useEffect(() => { void loadSuppliers() }, [search])
 
   async function handleDelete(id: number) {
-    if (!window.confirm('¿Desactivar este proveedor?')) return
+    if (!(await confirm('¿Desactivar este proveedor?', { danger: true }))) return
     try {
       await suppliersApi.delete(id)
       await loadSuppliers()
@@ -109,6 +111,8 @@ export default function SuppliersPage() {
           onSaved={() => { void loadSuppliers() }}
         />
       )}
+
+      {confirmDialog}
     </div>
   )
 }
