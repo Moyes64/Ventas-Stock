@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { reporting, catalog } from '../lib/ipc'
+import { localToday } from '../lib/date'
 import type { DailySummaryReport } from '../types/ipc'
 import { useHiddenOptions } from '../context/HiddenOptionsContext'
 
@@ -14,7 +15,7 @@ export default function Dashboard() {
   useEffect(() => {
     async function loadData() {
       try {
-        const today = new Date().toISOString().slice(0, 10)
+        const today = localToday()
         const [summaries, lowStockItems] = await Promise.all([
           reporting.dailySummary({ dateFrom: today, dateTo: today }),
           catalog.listLowStock(),

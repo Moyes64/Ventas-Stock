@@ -33,6 +33,7 @@
     "date-fns": "^3.3.1",
     "dotenv": "^16.4.7",
     "node-forge": "^1.4.0",
+    "nodemailer": "^9.0.1",
     "qrcode": "^1.5.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -46,9 +47,11 @@
     "@electron-toolkit/preload": "^3.0.0",
     "@electron-toolkit/tsconfig": "^1.0.1",
     "@electron-toolkit/utils": "^3.0.0",
+    "@electron/rebuild": "^3.7.1",
     "@types/better-sqlite3": "7.6.13",
     "@types/node": "^20.11.16",
     "@types/node-forge": "^1.3.10",
+    "@types/nodemailer": "^8.0.1",
     "@types/qrcode": "^1.5.5",
     "@types/react": "^18.2.55",
     "@types/react-dom": "^18.2.19",
@@ -57,7 +60,6 @@
     "@typescript-eslint/parser": "^7.0.2",
     "@vitejs/plugin-react": "^4.2.1",
     "electron": "^39.8.1",
-    "@electron/rebuild": "^3.7.1",
     "electron-builder": "^24.9.1",
     "electron-vite": "^2.0.0",
     "eslint": "^8.56.0",
@@ -98,6 +100,10 @@
     "win": {
       "target": "nsis",
       "sign": "./scripts/win-sign.cjs"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": false
     },
     "mac": {
       "target": "dmg"

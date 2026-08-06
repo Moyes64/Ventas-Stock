@@ -19,12 +19,6 @@ export default function CajaLayout() {
         >
           🔒 Cierre
         </NavLink>
-        <NavLink
-          to="/caja/movimientos"
-          className={({ isActive }) => `sub-nav-item ${isActive ? 'active' : ''}`}
-        >
-          📋 Movimientos
-        </NavLink>
       </nav>
       <div className="sub-page">
         <Outlet />

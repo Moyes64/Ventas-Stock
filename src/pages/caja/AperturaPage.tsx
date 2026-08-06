@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { caja } from '../../lib/ipc'
+import { localToday } from '../../lib/date'
 import type { CashSession } from '../../types/ipc'
 
 export default function AperturaPage() {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localToday()
   const [sessionDate, setSessionDate] = useState(today)
   const [aperturaAmount, setAperturaAmount] = useState('')
   const [existingSession, setExistingSession] = useState<CashSession | null | undefined>(undefined)

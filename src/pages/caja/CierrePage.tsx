@@ -1,16 +1,20 @@
 import { useEffect, useState } from 'react'
-import { caja } from '../../lib/ipc'
-import type { CierreSummary } from '../../types/ipc'
+import { caja, finance, printing } from '../../lib/ipc'
+import { localToday } from '../../lib/date'
+import type { CierreSummary, FinanceAccount } from '../../types/ipc'
+import { useConfirm } from '../../hooks/useConfirm'
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   contado_efectivo: '💵 Contado Efectivo',
   transferencia: '🏦 Transferencia',
+  qr: '📱 QR',
   debito: '💳 Débito',
   credito: '💳 Crédito',
+  mercadopago: '🛒 Mercado Pago (Web)',
 }
 
 export default function CierrePage() {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localToday()
   const [selectedDate, setSelectedDate] = useState(today)
   const [summary, setSummary] = useState<CierreSummary | null>(null)
   const [loadingSum, setLoadingSum] = useState(false)
@@ -18,6 +22,15 @@ export default function CierrePage() {
   const [closing, setClosing] = useState(false)
   const [closeError, setCloseError] = useState<string | null>(null)
   const [closeSuccess, setCloseSuccess] = useState<string | null>(null)
+  const [reopening, setReopening] = useState(false)
+  const [reopenError, setReopenError] = useState<string | null>(null)
+  const [showPrintPrompt, setShowPrintPrompt] = useState(false)
+  const [batchPrinting, setBatchPrinting] = useState(false)
+  const [batchMsg, setBatchMsg] = useState<string | null>(null)
+  const [accounts, setAccounts] = useState<FinanceAccount[]>([])
+  const { confirm, dialog: confirmDialog } = useConfirm()
+
+  const accountName = (id: number) => accounts.find(a => a.id === id)?.name ?? '—'
 
   async function loadSummary(date: string) {
     setLoadingSum(true)
@@ -37,6 +50,7 @@ export default function CierrePage() {
 
   useEffect(() => {
     void loadSummary(today)
+    void finance.listAccounts().then(setAccounts)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -48,11 +62,31 @@ export default function CierrePage() {
     try {
       await caja.closeSession(selectedDate, summary.expectedTotal)
       setCloseSuccess(`✅ Cierre de caja registrado. Total: ${currency(summary.expectedTotal)}`)
+      setShowPrintPrompt(true)
       void loadSummary(selectedDate)
     } catch (err) {
       setCloseError(err instanceof Error ? err.message : 'Error al cerrar la caja')
     } finally {
       setClosing(false)
+    }
+  }
+
+  async function handleReopen() {
+    if (!summary) return
+    if (!(await confirm(`¿Confirmás reabrir la caja del ${selectedDate}? Esto deshace el cierre registrado.`))) {
+      return
+    }
+    setReopening(true)
+    setReopenError(null)
+    try {
+      await caja.reopenSession(selectedDate)
+      setCloseSuccess(null)
+      setShowPrintPrompt(false)
+      void loadSummary(selectedDate)
+    } catch (err) {
+      setReopenError(err instanceof Error ? err.message : 'Error al reabrir la caja')
+    } finally {
+      setReopening(false)
     }
   }
 
@@ -110,6 +144,18 @@ export default function CierrePage() {
                 <span>− Egresos</span>
                 <span>−{currency(summary.egresosTotal)}</span>
               </div>
+              {summary.transfersInTotal > 0 && (
+                <div className="caja-summary-row caja-summary-row--ingreso">
+                  <span>+ Transferencias recibidas</span>
+                  <span>{currency(summary.transfersInTotal)}</span>
+                </div>
+              )}
+              {summary.transfersOutTotal > 0 && (
+                <div className="caja-summary-row caja-summary-row--egreso">
+                  <span>− Transferencias enviadas</span>
+                  <span>−{currency(summary.transfersOutTotal)}</span>
+                </div>
+              )}
               <div className="caja-summary-row caja-summary-row--total">
                 <span><strong>Total esperado en caja</strong></span>
                 <span><strong>{currency(summary.expectedTotal)}</strong></span>
@@ -148,10 +194,73 @@ export default function CierrePage() {
                 </div>
               </>
             )}
+
+            {summary.transfers.length > 0 && (
+              <>
+                <h3 className="caja-summary-title" style={{ marginTop: '1.5rem' }}>
+                  Transferencias entre cuentas del día
+                </h3>
+                <div className="caja-summary-table">
+                  {summary.transfers.map(t => (
+                    <div key={t.id} className="caja-summary-row">
+                      <span>
+                        {accountName(t.fromAccountId)} → {accountName(t.toAccountId)}
+                        {t.descripcion ? ` (${t.descripcion})` : ''}
+                      </span>
+                      <span>{currency(t.monto)}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
 
           {closeError && <p className="error">{closeError}</p>}
           {closeSuccess && <p className="success">{closeSuccess}</p>}
+
+          {/* Prompt de impresión post-cierre */}
+          {showPrintPrompt && (
+            <div className="print-prompt-card">
+              <p className="print-prompt-text">
+                🖨️ ¿Desea imprimir todos los comprobantes emitidos hoy ({selectedDate})?
+              </p>
+              <div className="print-prompt-actions">
+                <button
+                  className="btn btn-primary"
+                  disabled={batchPrinting}
+                  onClick={async () => {
+                    setBatchPrinting(true)
+                    setBatchMsg(null)
+                    try {
+                      const invoicesHoy = await printing.listForReprint({ dateFrom: selectedDate, dateTo: selectedDate })
+                      const ids = invoicesHoy.map(i => i.id)
+                      if (ids.length === 0) {
+                        setBatchMsg('No hay comprobantes para imprimir en esta fecha.')
+                      } else {
+                        const res = await printing.printBatch(ids)
+                        setBatchMsg(`✅ Impresos ${res.printed} de ${ids.length} comprobante${ids.length !== 1 ? 's' : ''}.`)
+                      }
+                    } catch (err) {
+                      setBatchMsg(`Error: ${err instanceof Error ? err.message : String(err)}`)
+                    } finally {
+                      setBatchPrinting(false)
+                      setShowPrintPrompt(false)
+                    }
+                  }}
+                >
+                  {batchPrinting ? '⏳ Imprimiendo...' : '🖨️ Sí, imprimir todos'}
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setShowPrintPrompt(false)}
+                  disabled={batchPrinting}
+                >
+                  No por ahora
+                </button>
+              </div>
+            </div>
+          )}
+          {batchMsg && <p className="success">{batchMsg}</p>}
 
           {summary.session.status === 'open' && !closeSuccess && (
             <button
@@ -162,8 +271,22 @@ export default function CierrePage() {
               {closing ? '⏳ Cerrando...' : '🔒 Cerrar Caja'}
             </button>
           )}
+
+          {reopenError && <p className="error">{reopenError}</p>}
+
+          {summary.session.status === 'closed' && (
+            <button
+              className="btn btn-secondary"
+              onClick={() => { void handleReopen() }}
+              disabled={reopening}
+            >
+              {reopening ? '⏳ Reabriendo...' : '🔓 Reabrir Caja'}
+            </button>
+          )}
         </>
       )}
+
+      {confirmDialog}
     </div>
   )
 }

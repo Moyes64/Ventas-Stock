@@ -2,6 +2,7 @@ import type { Database } from 'better-sqlite3'
 import { SaleRepository } from './repository'
 import { StockService } from '../stock/service'
 import { ParameterRepository } from '../parameters/repository'
+import { FinanceService } from '../finance/service'
 import type { InvoicingService } from '../invoicing-afip/service'
 import type { Sale, AppliedParameter, CreateSaleInput } from './types'
 
@@ -10,12 +11,14 @@ export class SaleService {
   private readonly stockService: StockService
   private readonly paramRepo: ParameterRepository
   private readonly invoicingService: InvoicingService
+  private readonly financeService: FinanceService
 
   constructor(db: Database, invoicingService: InvoicingService) {
     this.saleRepo = new SaleRepository(db)
     this.stockService = new StockService(db)
     this.paramRepo = new ParameterRepository(db)
     this.invoicingService = invoicingService
+    this.financeService = new FinanceService(db)
   }
 
   getById(id: number): Sale | undefined {
@@ -28,6 +31,13 @@ export class SaleService {
 
   findPendingCAE(): Sale[] {
     return this.saleRepo.findPendingCAE()
+  }
+
+  updatePaymentMethod(id: number, paymentMethod: Sale['paymentMethod']): Sale {
+    this.saleRepo.updatePaymentMethod(id, paymentMethod)
+    const sale = this.saleRepo.findById(id)
+    if (!sale) throw new Error(`Venta no encontrada: ${id}`)
+    return sale
   }
 
   /**
@@ -146,6 +156,54 @@ export class SaleService {
     // Step 7: Return final state
     const finalSale = this.saleRepo.findById(saleId)
     if (!finalSale) throw new Error(`Venta no encontrada: ${saleId}`)
+
+    // Step 8: Auto-registrar el ingreso a MP-Anabella si corresponde (no bloquea la venta si falla)
+    try {
+      this.financeService.registerSaleIncome({
+        saleId: finalSale.id,
+        paymentMethod: finalSale.paymentMethod,
+        monto: finalSale.total,
+        fecha: finalSale.saleDate,
+      })
+    } catch (err) {
+      console.error('[sales] Error registrando ingreso financiero automático:', err)
+    }
+
     return finalSale
+  }
+
+  /**
+   * Cancela una venta que todavía no tiene CAE autorizado (errores de carga, pedidos
+   * web mal importados, etc.). Las ventas ya facturadas (AUTHORIZED) no se pueden
+   * cancelar acá — corresponde usar Cambios y Devoluciones para esos casos.
+   * Repone el stock vendido y revierte el ingreso financiero auto-generado, si existe.
+   */
+  cancelSale(id: number): Sale {
+    const sale = this.saleRepo.findById(id)
+    if (!sale) throw new Error(`Venta no encontrada: ${id}`)
+    if (sale.status === 'CANCELLED') throw new Error('La venta ya está cancelada')
+    if (sale.status === 'AUTHORIZED') {
+      throw new Error(
+        'No se puede cancelar una venta ya facturada con CAE. Usá Cambios y Devoluciones para este caso.'
+      )
+    }
+
+    for (const item of sale.items ?? []) {
+      this.stockService.addManualMovement({
+        productId: item.productId,
+        type: 'ENTRY',
+        quantity: item.quantity,
+        referenceType: 'SALE_CANCEL',
+        referenceId: id,
+        notes: `Reversión por cancelación de venta #${id}`,
+      })
+    }
+
+    this.saleRepo.updateStatus(id, 'CANCELLED')
+    this.financeService.reverseSaleIncome(id)
+
+    const updated = this.saleRepo.findById(id)
+    if (!updated) throw new Error(`Venta no encontrada: ${id}`)
+    return updated
   }
 }

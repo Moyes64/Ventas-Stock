@@ -2,7 +2,7 @@ import { ipcMain } from 'electron'
 import type { Database } from 'better-sqlite3'
 import { SaleService } from '../modules/sales/service'
 import { InvoicingService } from '../modules/invoicing-afip/service'
-import type { CreateSaleInput } from '../modules/sales/types'
+import type { CreateSaleInput, PaymentMethod } from '../modules/sales/types'
 
 export function registerSalesHandlers(db: Database): void {
   const invoicingService = new InvoicingService(db)
@@ -28,5 +28,16 @@ export function registerSalesHandlers(db: Database): void {
 
   ipcMain.handle('sales:listPendingCAE', () => {
     return saleService.findPendingCAE()
+  })
+
+  ipcMain.handle(
+    'sales:updatePaymentMethod',
+    (_event, id: number, paymentMethod: PaymentMethod) => {
+      return saleService.updatePaymentMethod(id, paymentMethod)
+    }
+  )
+
+  ipcMain.handle('sales:cancelSale', (_event, id: number) => {
+    return saleService.cancelSale(id)
   })
 }

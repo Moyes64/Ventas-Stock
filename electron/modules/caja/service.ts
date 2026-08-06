@@ -1,18 +1,15 @@
 import type { Database } from 'better-sqlite3'
 import { CajaRepository } from './repository'
-import type {
-  CashSession,
-  CashMovement,
-  CierreSummary,
-  CreateSessionInput,
-  CreateMovementInput,
-} from './types'
+import { FinanceService } from '../finance/service'
+import type { CashSession, CierreSummary, CreateSessionInput } from './types'
 
 export class CajaService {
   private readonly repo: CajaRepository
+  private readonly financeService: FinanceService
 
   constructor(db: Database) {
     this.repo = new CajaRepository(db)
+    this.financeService = new FinanceService(db)
   }
 
   // ── Apertura ──────────────────────────────────────────────────────────────
@@ -25,12 +22,22 @@ export class CajaService {
       throw new Error('La fecha de apertura es obligatoria')
     }
 
+    // Verificar si ya existe sesión para la fecha solicitada
     const existing = this.repo.findSessionByDate(input.sessionDate)
     if (existing) {
       if (existing.status === 'open') {
         throw new Error(`Ya existe una apertura de caja abierta para la fecha ${input.sessionDate}`)
       }
       throw new Error(`Ya existe un cierre de caja para la fecha ${input.sessionDate}`)
+    }
+
+    // Verificar que el día anterior esté cerrado (salvo que sea el primer uso)
+    const lastSession = this.repo.findLastSessionBefore(input.sessionDate)
+    if (lastSession && lastSession.status === 'open') {
+      throw new Error(
+        `No se puede abrir la caja del ${input.sessionDate} porque la sesión del ${lastSession.sessionDate} aún está abierta. ` +
+        `Realizá primero el cierre de esa jornada.`
+      )
     }
 
     const id = this.repo.createSession(input)
@@ -59,7 +66,13 @@ export class CajaService {
       throw new Error(`No hay apertura de caja para la fecha ${date}`)
     }
 
-    const movements = this.repo.listMovementsByDate(date)
+    const cajaAccount = this.financeService.getCashAccount()
+    const allMovements = cajaAccount
+      ? this.financeService.listMovements({ accountId: cajaAccount.id, dateFrom: date, dateTo: date })
+      : []
+    // Los movimientos generados automáticamente por una venta (saleId != null) ya
+    // están contados en cashSalesTotal — solo los manuales entran en ingresos/egresos.
+    const movements = allMovements.filter(m => m.saleId === null)
     const salesByMethod = this.repo.getSalesSummaryByPaymentMethod(date)
 
     const cashSalesTotal = salesByMethod['contado_efectivo'] ?? 0
@@ -102,33 +115,21 @@ export class CajaService {
     return updated
   }
 
-  // ── Movimientos ───────────────────────────────────────────────────────────
-
-  listMovements(date: string): CashMovement[] {
-    return this.repo.listMovementsByDate(date)
-  }
-
-  createMovement(input: CreateMovementInput): CashMovement {
-    if (!input.descripcion?.trim()) throw new Error('La descripción es obligatoria')
-    if (input.tipo !== 'ingreso' && input.tipo !== 'egreso') {
-      throw new Error('El tipo debe ser "ingreso" o "egreso"')
-    }
-    if (typeof input.monto !== 'number' || input.monto <= 0) {
-      throw new Error('El monto debe ser un número mayor a cero')
-    }
-
-    const date = input.movimientoDate ?? new Date().toISOString().slice(0, 10)
+  reopenSession(date: string): CashSession {
     const session = this.repo.findSessionByDate(date)
+    if (!session) throw new Error(`No hay caja registrada para la fecha ${date}`)
+    if (session.status === 'open') throw new Error('La caja ya está abierta para ese día')
 
-    const id = this.repo.createMovement(input, session?.id ?? null)
-    const created = this.repo.findMovementById(id)
-    if (!created) throw new Error('Error al recuperar el movimiento creado')
-    return created
-  }
+    const lastSession = this.repo.findLastSession()
+    if (!lastSession || lastSession.id !== session.id) {
+      throw new Error(
+        `Solo se puede reabrir el cierre más reciente. Existe una jornada posterior (${lastSession?.sessionDate}).`
+      )
+    }
 
-  deleteMovement(id: number): void {
-    const existing = this.repo.findMovementById(id)
-    if (!existing) throw new Error(`Movimiento no encontrado: ${id}`)
-    this.repo.deleteMovement(id)
+    this.repo.reopenSession(session.id)
+    const updated = this.repo.findSessionById(session.id)
+    if (!updated) throw new Error('Error al recuperar la sesión reabierta')
+    return updated
   }
 }

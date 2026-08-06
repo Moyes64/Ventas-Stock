@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { closeDb, getDb } from '../../../database/db'
+import { localNow } from '../../lib/date'
 import type { BackupInfo, BackupResult, RestoreResult } from './types'
 
 export class BackupService {
@@ -13,7 +14,7 @@ export class BackupService {
   }
 
   /** Creates a timestamped copy of the SQLite database file. */
-  createBackup(): BackupResult {
+  async createBackup(): Promise<BackupResult> {
     try {
       const dbPath = this.dbPath
 
@@ -25,16 +26,13 @@ export class BackupService {
         fs.mkdirSync(this.backupDir, { recursive: true })
       }
 
-      const timestamp = new Date()
-        .toISOString()
-        .replace(/[:.]/g, '-')
-        .slice(0, 19)
+      const timestamp = localNow().replace(/[: ]/g, '-')
       const filename = `ventas-${timestamp}.db`
       const destPath = path.join(this.backupDir, filename)
 
-      // Use SQLite backup API for safe hot backup
+      // Use SQLite backup API for safe hot backup (returns a Promise — must await)
       const db = getDb()
-      void db.backup(destPath)
+      await db.backup(destPath)
 
       const stats = fs.statSync(destPath)
 

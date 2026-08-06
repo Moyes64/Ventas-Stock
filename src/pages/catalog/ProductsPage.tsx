@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
-import { catalog, suppliers as suppliersApi } from '../../lib/ipc'
+import { useEffect, useRef, useState } from 'react'
+import { catalog, suppliers as suppliersApi, printing as printingApi } from '../../lib/ipc'
 import type { Product, TaxRate, Supplier } from '../../types/ipc'
+import { useConfirm } from '../../hooks/useConfirm'
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
@@ -9,6 +10,10 @@ export default function ProductsPage() {
   const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [editProduct, setEditProduct] = useState<Product | null>(null)
+  const [printingReport, setPrintingReport] = useState(false)
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const { confirm, dialog: confirmDialog } = useConfirm()
 
   async function loadProducts() {
     setLoading(true)
@@ -28,7 +33,7 @@ export default function ProductsPage() {
   useEffect(() => { void loadProducts() }, [search])
 
   async function handleDelete(id: number) {
-    if (!window.confirm('¿Desactivar este producto?')) return
+    if (!(await confirm('¿Desactivar este producto?', { danger: true }))) return
     try {
       await catalog.deleteProduct(id)
       await loadProducts()
@@ -40,14 +45,43 @@ export default function ProductsPage() {
   const currency = (n: number) =>
     new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(n)
 
+  async function handlePrintPriceReport() {
+    setPrintingReport(true)
+    try {
+      const result = await printingApi.printPriceReport()
+      if (result.success) {
+        setToast({ type: 'success', text: `Listado de precios enviado a la impresora (${result.count ?? products.length} artículos)` })
+      } else {
+        setToast({ type: 'error', text: result.error ?? 'Error al imprimir el listado' })
+      }
+    } catch (err) {
+      setToast({ type: 'error', text: err instanceof Error ? err.message : 'Error al imprimir el listado' })
+    } finally {
+      setPrintingReport(false)
+      if (toastTimerRef.current !== null) clearTimeout(toastTimerRef.current)
+      toastTimerRef.current = setTimeout(() => setToast(null), 4000)
+    }
+  }
+
   return (
     <div className="page">
       <div className="page-header">
         <h1 className="page-title">Catálogo de Productos</h1>
-        <button className="btn btn-primary" onClick={() => { setEditProduct(null); setShowForm(true) }}>
-          + Nuevo Producto
-        </button>
+        <div className="page-header-actions">
+          <button className="btn btn-primary" onClick={() => { setEditProduct(null); setShowForm(true) }}>
+            + Nuevo Producto
+          </button>
+          <button className="btn btn-secondary" disabled={printingReport} onClick={() => void handlePrintPriceReport()}>
+            🖨️ {printingReport ? 'Imprimiendo…' : 'Imprimir listado de precios'}
+          </button>
+        </div>
       </div>
+
+      {toast && (
+        <div className={`alert alert--${toast.type}`}>
+          {toast.text}
+        </div>
+      )}
 
       <div className="filter-bar">
         <input
@@ -123,6 +157,8 @@ export default function ProductsPage() {
           onSaved={() => { void loadProducts() }}
         />
       )}
+
+      {confirmDialog}
     </div>
   )
 }

@@ -4,6 +4,11 @@
  */
 
 import type {
+  SystemParams,
+  PrinterConfig,
+  PrinterTestResult,
+  ConnectionType,
+  PedidoProduct,
   LoginResult,
   User,
   Role,
@@ -18,11 +23,44 @@ import type {
   BackupInfo,
   DailySummaryReport,
   SalesSummary,
+  RankingItem,
+  PurchasesReport,
+  IncompleteEntry,
   Parameter,
   CashSession,
-  CashMovement,
   CierreSummary,
   PaymentMethod,
+  SyncConfig,
+  SyncResult,
+  RemitoScanResult,
+  RemitoMapping,
+  FinancePartner,
+  FinanceAccount,
+  FinanceCategory,
+  FinanceCategoryAppliesTo,
+  FinanceMovement,
+  CreateFinanceMovementInput,
+  FinanceMovementFilters,
+  CreateFinanceCategoryInput,
+  FinanceAccountBalance,
+  FinanceCashFlowPoint,
+  FinanceCategoryExpense,
+  FinancePartnerEquity,
+  FinancePendingAccreditation,
+  FinanceTransfer,
+  CreateFinanceTransferInput,
+  FinanceTransferFilters,
+  MpFeePaymentMethod,
+  FinanceMpFeeRate,
+  CreateMpFeeRateInput,
+  FinanceMpReconciliation,
+  SaveMpReconciliationInput,
+  MpReconciliationRow,
+  StockCountSession,
+  StockCountSessionStatus,
+  ReconciliationRow,
+  ApplyReconciliationDecision,
+  StockCountServerStatus,
 } from '../types/ipc'
 
 // Access the electron bridge exposed by preload
@@ -92,6 +130,7 @@ export const stock = {
     electron.stock.getCurrent(productId) as Promise<number>,
   getMovements: (filters: {
     productId?: number
+    supplierId?: number | 'none'
     dateFrom?: string
     dateTo?: string
     limit?: number
@@ -143,6 +182,9 @@ export const sales = {
   list: (filters: { dateFrom?: string; dateTo?: string; status?: string; limit?: number }) =>
     electron.sales.list(filters) as Promise<Sale[]>,
   listPendingCAE: () => electron.sales.listPendingCAE() as Promise<Sale[]>,
+  updatePaymentMethod: (id: number, paymentMethod: PaymentMethod) =>
+    electron.sales.updatePaymentMethod(id, paymentMethod) as Promise<Sale>,
+  cancelSale: (id: number) => electron.sales.cancelSale(id) as Promise<Sale>,
 }
 
 // Invoicing
@@ -163,6 +205,18 @@ export const printing = {
     electron.printing.printInvoiceSystem(saleId) as Promise<{ success: boolean; error?: string }>,
   printDeliveryNoteSystem: (saleId: number) =>
     electron.printing.printDeliveryNoteSystem(saleId) as Promise<{ success: boolean; error?: string }>,
+  printBatch: (saleIds: number[]) =>
+    electron.printing.printBatch(saleIds) as Promise<{ success: boolean; printed: number; errors: string[] }>,
+  listForReprint: (filters: {
+    dateFrom?: string; dateTo?: string; status?: string
+    customerName?: string; customerDoc?: string; invoiceNumber?: number
+  }) => electron.printing.listForReprint(filters) as Promise<Sale[]>,
+  printChangeTicket: (saleId: number) =>
+    electron.printing.printChangeTicket(saleId) as Promise<{ success: boolean; error?: string }>,
+  printStockReport: () =>
+    electron.printing.printStockReport() as Promise<{ success: boolean; error?: string; count?: number }>,
+  printPriceReport: () =>
+    electron.printing.printPriceReport() as Promise<{ success: boolean; error?: string; count?: number }>,
 }
 
 // Reporting
@@ -176,6 +230,14 @@ export const reporting = {
     electron.reporting.stockMovements(filters) as Promise<unknown[]>,
   dailySummary: (filters: { dateFrom?: string; dateTo?: string }) =>
     electron.reporting.dailySummary(filters) as Promise<DailySummaryReport[]>,
+  rankingPorCantidad: (filters: { dateFrom?: string; dateTo?: string }) =>
+    electron.reporting.rankingPorCantidad(filters) as Promise<RankingItem[]>,
+  rankingPorGanancia: (filters: { dateFrom?: string; dateTo?: string }) =>
+    electron.reporting.rankingPorGanancia(filters) as Promise<RankingItem[]>,
+  purchasesBySupplier: (filters: { dateFrom?: string; dateTo?: string; supplierId?: number }) =>
+    electron.reporting.purchasesBySupplier(filters) as Promise<PurchasesReport>,
+  incompleteEntries: (filters: { dateFrom?: string; dateTo?: string }) =>
+    electron.reporting.incompleteEntries(filters) as Promise<IncompleteEntry[]>,
 }
 
 // Backup
@@ -199,6 +261,121 @@ export const parameters = {
   delete: (id: number) => electron.parameters.delete(id) as Promise<void>,
 }
 
+// System Params
+export const systemParams = {
+  get: () => electron.systemParams.get() as Promise<SystemParams>,
+  save: (params: SystemParams) => electron.systemParams.save(params) as Promise<void>,
+}
+
+// Pedido de Reposición
+export const pedido = {
+  getSupplierProducts: (supplierId: number) =>
+    electron.pedido.getSupplierProducts(supplierId) as Promise<PedidoProduct[]>,
+  saveFile: (content: string, defaultName: string) =>
+    electron.pedido.saveFile(content, defaultName) as Promise<{ success: boolean; filePath?: string; canceled?: boolean; error?: string }>,
+}
+
+// Label Config
+export const labelConfig = {
+  get: () => electron.labelConfig.get() as Promise<import('../types/ipc').LabelConfig>,
+  save: (config: import('../types/ipc').LabelConfig) =>
+    electron.labelConfig.save(config) as Promise<void>,
+  print: (config: import('../types/ipc').LabelConfig, copies: number) =>
+    electron.labelConfig.print(config, copies) as Promise<{ success: boolean; error?: string }>,
+  feed: (mm: number) =>
+    electron.labelConfig.feed(mm) as Promise<{ success: boolean; error?: string }>,
+}
+
+// Printer Config
+export const printerConfig = {
+  get: () => electron.printerConfig.get() as Promise<PrinterConfig>,
+  save: (config: PrinterConfig) => electron.printerConfig.save(config) as Promise<void>,
+  testConnection: (config: PrinterConfig) =>
+    electron.printerConfig.testConnection(config) as Promise<PrinterTestResult>,
+  printTest: (config: PrinterConfig) =>
+    electron.printerConfig.printTest(config) as Promise<PrinterTestResult>,
+  listPrinters: () => electron.printerConfig.listPrinters() as Promise<string[]>,
+}
+
+// Re-export type for page use
+export type { ConnectionType }
+
+// Remito Scanner
+export const remitoScanner = {
+  selectImage: () => electron.remitoScanner.selectImage() as Promise<string | null>,
+  scan: (imagePath: string) => electron.remitoScanner.scan(imagePath) as Promise<RemitoScanResult>,
+  getMappings: (codes: string[]) =>
+    electron.remitoScanner.getMappings(codes) as Promise<Record<string, { productId: number; productName: string }>>,
+  saveMappings: (mappings: Array<{ supplierCode: string; productId: number }>) =>
+    electron.remitoScanner.saveMappings(mappings) as Promise<void>,
+  listMappings: () => electron.remitoScanner.listMappings() as Promise<RemitoMapping[]>,
+  deleteMapping: (supplierCode: string) => electron.remitoScanner.deleteMapping(supplierCode) as Promise<void>,
+}
+
+// Sync
+export const sync = {
+  getConfig: () => electron.sync.getConfig() as Promise<SyncConfig>,
+  saveConfig: (config: SyncConfig) => electron.sync.saveConfig(config) as Promise<void>,
+  triggerNow: () => electron.sync.triggerNow() as Promise<SyncResult>,
+  getLastResult: () => electron.sync.getLastResult() as Promise<SyncResult | null>,
+  pullOrders: () => electron.sync.pullOrders() as Promise<import('../types/ipc').PullResult>,
+  listWebOrders: () => electron.sync.listWebOrders() as Promise<unknown[]>,
+  markOrderProcessed: (externalId: string) => electron.sync.markOrderProcessed(externalId) as Promise<void>,
+  printShippingLabel: (order: { customerName: string; deliveryAddress: string; externalId: string }) =>
+    electron.sync.printShippingLabel(order) as Promise<{ success: boolean; error?: string }>,
+}
+
+// Web Catalog
+import type { WebCategory, WebProduct, WebProductImage, UnpublishedProduct } from '../types/ipc'
+
+export const webCatalog = {
+  listCategories:  () => electron.webCatalog.listCategories() as Promise<WebCategory[]>,
+  saveCategory:    (id: number | null, input: Partial<WebCategory>) =>
+    electron.webCatalog.saveCategory(id, input) as Promise<WebCategory>,
+  deleteCategory:  (id: number) => electron.webCatalog.deleteCategory(id) as Promise<void>,
+  listProducts:    () => electron.webCatalog.listProducts() as Promise<WebProduct[]>,
+  getProduct:      (productId: number) => electron.webCatalog.getProduct(productId) as Promise<WebProduct | null>,
+  saveProduct:     (input: Partial<WebProduct>) => electron.webCatalog.saveProduct(input) as Promise<WebProduct>,
+  listUnpublished:  () => electron.webCatalog.listUnpublished() as Promise<UnpublishedProduct[]>,
+  getNextSortOrder: (webCategoryId: number | null) => electron.webCatalog.getNextSortOrder(webCategoryId) as Promise<number>,
+  getNextFeaturedOrder: () => electron.webCatalog.getNextFeaturedOrder() as Promise<number>,
+  uploadImage:     (productId: number, sortOrder: number) =>
+    electron.webCatalog.uploadImage(productId, sortOrder) as Promise<{ success: boolean; image?: WebProductImage; error?: string }>,
+  deleteImage:     (imageId: number) => electron.webCatalog.deleteImage(imageId) as Promise<{ success: boolean }>,
+  reorderImages:   (productId: number, orderedIds: number[]) =>
+    electron.webCatalog.reorderImages(productId, orderedIds) as Promise<{ success: boolean }>,
+  getImageDataUrl: (filename: string) => electron.webCatalog.getImageDataUrl(filename) as Promise<string | null>,
+  getImagesDir:    () => electron.webCatalog.getImagesDir() as Promise<string>,
+}
+
+// Mail
+export const mail = {
+  sendInvoice: (saleId: number, toEmail: string) =>
+    electron.mail.sendInvoice(saleId, toEmail) as Promise<{ success: boolean; error?: string }>,
+}
+
+// Crédito de clientes
+export const credits = {
+  getBalance: (customerId: number) =>
+    electron.credits.getBalance(customerId) as Promise<number>,
+  getHistory: (customerId: number) =>
+    electron.credits.getHistory(customerId) as Promise<import('../types/ipc').CreditRecord[]>,
+  use: (customerId: number, amount: number, saleId: number) =>
+    electron.credits.use(customerId, amount, saleId) as Promise<{ ok: boolean; error?: string; newBalance: number }>,
+  adjust: (customerId: number, amount: number, notes: string) =>
+    electron.credits.adjust(customerId, amount, notes) as Promise<{ ok: boolean; error?: string }>,
+}
+
+// Cambios y Devoluciones
+export const cambios = {
+  preview: (rawQr: string) =>
+    electron.cambios.preview(rawQr) as Promise<import('../types/ipc').ExchangePreview>,
+  confirm: (rawQr: string, notes?: string) =>
+    electron.cambios.confirm(rawQr, notes) as Promise<{ ok: boolean; error?: string; creditId?: number }>,
+  list: (limit?: number) =>
+    electron.cambios.list(limit) as Promise<import('../types/ipc').ExchangeRecord[]>,
+}
+
 // Caja
 export const caja = {
   openSession: (input: { sessionDate: string; aperturaAmount: number }) =>
@@ -213,10 +390,75 @@ export const caja = {
     electron.caja.getCierreSummary(date) as Promise<CierreSummary>,
   closeSession: (date: string, cierreAmount: number) =>
     electron.caja.closeSession(date, cierreAmount) as Promise<CashSession>,
-  listMovements: (date: string) =>
-    electron.caja.listMovements(date) as Promise<CashMovement[]>,
-  createMovement: (input: { descripcion: string; tipo: 'ingreso' | 'egreso'; monto: number; movimientoDate?: string }) =>
-    electron.caja.createMovement(input) as Promise<CashMovement>,
-  deleteMovement: (id: number) =>
-    electron.caja.deleteMovement(id) as Promise<void>,
+  reopenSession: (date: string) =>
+    electron.caja.reopenSession(date) as Promise<CashSession>,
+}
+
+// Finanzas (ingresos/egresos multi-cuenta y patrimonio de socios)
+export const finance = {
+  listPartners: () => electron.finance.listPartners() as Promise<FinancePartner[]>,
+  listAccounts: () => electron.finance.listAccounts() as Promise<FinanceAccount[]>,
+  getFoundingDate: () => electron.finance.getFoundingDate() as Promise<string>,
+  listCategories: (appliesTo?: FinanceCategoryAppliesTo) =>
+    electron.finance.listCategories(appliesTo) as Promise<FinanceCategory[]>,
+  createCategory: (input: CreateFinanceCategoryInput) =>
+    electron.finance.createCategory(input) as Promise<FinanceCategory>,
+  listMovements: (filters?: FinanceMovementFilters) =>
+    electron.finance.listMovements(filters) as Promise<FinanceMovement[]>,
+  createMovement: (input: CreateFinanceMovementInput) =>
+    electron.finance.createMovement(input) as Promise<FinanceMovement>,
+  deleteMovement: (id: number) => electron.finance.deleteMovement(id) as Promise<void>,
+  getPendingAccreditations: (accountId?: number) =>
+    electron.finance.getPendingAccreditations(accountId) as Promise<FinancePendingAccreditation[]>,
+  accreditMovement: (movementId: number, fecha?: string) =>
+    electron.finance.accreditMovement(movementId, fecha) as Promise<FinanceMovement>,
+  listTransfers: (filters?: FinanceTransferFilters) =>
+    electron.finance.listTransfers(filters) as Promise<FinanceTransfer[]>,
+  createTransfer: (input: CreateFinanceTransferInput) =>
+    electron.finance.createTransfer(input) as Promise<FinanceTransfer>,
+  deleteTransfer: (id: number) => electron.finance.deleteTransfer(id) as Promise<void>,
+  getAccountBalances: () => electron.finance.getAccountBalances() as Promise<FinanceAccountBalance[]>,
+  getCashFlowSummary: (dateFrom: string, dateTo: string, groupBy?: 'day' | 'month', accountId?: number) =>
+    electron.finance.getCashFlowSummary(dateFrom, dateTo, groupBy, accountId) as Promise<FinanceCashFlowPoint[]>,
+  getExpensesByCategory: (dateFrom: string, dateTo: string, accountId?: number) =>
+    electron.finance.getExpensesByCategory(dateFrom, dateTo, accountId) as Promise<FinanceCategoryExpense[]>,
+  getPartnersEquity: () => electron.finance.getPartnersEquity() as Promise<FinancePartnerEquity[]>,
+  listMpFeeRates: (paymentMethod?: MpFeePaymentMethod) =>
+    electron.finance.listMpFeeRates(paymentMethod) as Promise<FinanceMpFeeRate[]>,
+  createMpFeeRate: (input: CreateMpFeeRateInput) =>
+    electron.finance.createMpFeeRate(input) as Promise<FinanceMpFeeRate>,
+  deleteMpFeeRate: (id: number) => electron.finance.deleteMpFeeRate(id) as Promise<void>,
+  getMpReconciliationRows: (fecha: string, paymentMethod?: MpFeePaymentMethod) =>
+    electron.finance.getMpReconciliationRows(fecha, paymentMethod) as Promise<MpReconciliationRow[]>,
+  listMpReconciliations: (dateFrom?: string, dateTo?: string) =>
+    electron.finance.listMpReconciliations(dateFrom, dateTo) as Promise<FinanceMpReconciliation[]>,
+  saveMpReconciliation: (input: SaveMpReconciliationInput) =>
+    electron.finance.saveMpReconciliation(input) as Promise<FinanceMpReconciliation>,
+  confirmMpReconciliationAdjustment: (id: number) =>
+    electron.finance.confirmMpReconciliationAdjustment(id) as Promise<FinanceMpReconciliation>,
+  ignoreMpReconciliation: (id: number) =>
+    electron.finance.ignoreMpReconciliation(id) as Promise<FinanceMpReconciliation>,
+  reopenMpReconciliation: (id: number) =>
+    electron.finance.reopenMpReconciliation(id) as Promise<FinanceMpReconciliation>,
+}
+
+// Conteo de stock
+export const stockCount = {
+  getServerStatus: () => electron.stockCount.getServerStatus() as Promise<StockCountServerStatus>,
+  setServerEnabled: (enabled: boolean) =>
+    electron.stockCount.setServerEnabled(enabled) as Promise<StockCountServerStatus>,
+  regenerateToken: () => electron.stockCount.regenerateToken() as Promise<StockCountServerStatus>,
+  getSessionPairingQr: (sessionId: number) =>
+    electron.stockCount.getSessionPairingQr(sessionId) as Promise<string | null>,
+  createSession: (label: string, webCategoryId: number | null) =>
+    electron.stockCount.createSession(label, webCategoryId) as Promise<number>,
+  listSessions: (statusFilter?: StockCountSessionStatus) =>
+    electron.stockCount.listSessions(statusFilter) as Promise<StockCountSession[]>,
+  getSession: (id: number) => electron.stockCount.getSession(id) as Promise<StockCountSession | undefined>,
+  getReconciliation: (sessionId: number) =>
+    electron.stockCount.getReconciliation(sessionId) as Promise<ReconciliationRow[]>,
+  applyReconciliation: (sessionId: number, decisions: ApplyReconciliationDecision[]) =>
+    electron.stockCount.applyReconciliation(sessionId, decisions) as Promise<void>,
+  cancelSession: (id: number) => electron.stockCount.cancelSession(id) as Promise<void>,
+  deleteSession: (id: number) => electron.stockCount.deleteSession(id) as Promise<void>,
 }

@@ -19,6 +19,7 @@ export class StockService {
 
   getMovements(filters: {
     productId?: number
+    supplierId?: number | 'none'
     dateFrom?: string
     dateTo?: string
     limit?: number

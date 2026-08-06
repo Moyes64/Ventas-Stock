@@ -18,7 +18,13 @@ export function registerStockHandlers(db: Database): void {
     'stock:getMovements',
     (
       _event,
-      filters: { productId?: number; dateFrom?: string; dateTo?: string; limit?: number }
+      filters: {
+        productId?: number
+        supplierId?: number | 'none'
+        dateFrom?: string
+        dateTo?: string
+        limit?: number
+      }
     ) => {
       return stockService.getMovements(filters)
     }

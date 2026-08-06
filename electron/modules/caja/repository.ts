@@ -1,10 +1,5 @@
 import type { Database } from 'better-sqlite3'
-import type {
-  CashSession,
-  CashMovement,
-  CreateSessionInput,
-  CreateMovementInput,
-} from './types'
+import type { CashSession, CreateSessionInput } from './types'
 
 interface SessionRow {
   id: number
@@ -14,16 +9,6 @@ interface SessionRow {
   status: string
   created_at: string
   updated_at: string
-}
-
-interface MovementRow {
-  id: number
-  session_id: number | null
-  descripcion: string
-  tipo: string
-  monto: number
-  movimiento_date: string
-  created_at: string
 }
 
 export class CajaRepository {
@@ -41,6 +26,17 @@ export class CajaRepository {
   findSessionByDate(date: string): CashSession | undefined {
     const row = this.db
       .prepare('SELECT * FROM cash_register_sessions WHERE session_date = ?')
+      .get(date) as SessionRow | undefined
+    return row ? this.mapSession(row) : undefined
+  }
+
+  findLastSessionBefore(date: string): CashSession | undefined {
+    const row = this.db
+      .prepare(
+        `SELECT * FROM cash_register_sessions
+         WHERE session_date < ?
+         ORDER BY session_date DESC LIMIT 1`
+      )
       .get(date) as SessionRow | undefined
     return row ? this.mapSession(row) : undefined
   }
@@ -80,41 +76,21 @@ export class CajaRepository {
       .run({ id, cierreAmount })
   }
 
-  // ── Movements ─────────────────────────────────────────────────────────────
-
-  findMovementById(id: number): CashMovement | undefined {
-    const row = this.db
-      .prepare('SELECT * FROM cash_movements WHERE id = ?')
-      .get(id) as MovementRow | undefined
-    return row ? this.mapMovement(row) : undefined
-  }
-
-  listMovementsByDate(date: string): CashMovement[] {
-    return (
-      this.db
-        .prepare('SELECT * FROM cash_movements WHERE movimiento_date = ? ORDER BY created_at ASC')
-        .all(date) as MovementRow[]
-    ).map(r => this.mapMovement(r))
-  }
-
-  createMovement(data: CreateMovementInput, sessionId: number | null): number {
-    const result = this.db
+  reopenSession(id: number): void {
+    this.db
       .prepare(
-        `INSERT INTO cash_movements (session_id, descripcion, tipo, monto, movimiento_date)
-         VALUES (@sessionId, @descripcion, @tipo, @monto, @movimientoDate)`
+        `UPDATE cash_register_sessions
+         SET status = 'open', cierre_amount = NULL, updated_at = datetime('now')
+         WHERE id = @id`
       )
-      .run({
-        sessionId,
-        descripcion: data.descripcion,
-        tipo: data.tipo,
-        monto: data.monto,
-        movimientoDate: data.movimientoDate ?? new Date().toISOString().slice(0, 10),
-      })
-    return result.lastInsertRowid as number
+      .run({ id })
   }
 
-  deleteMovement(id: number): void {
-    this.db.prepare('DELETE FROM cash_movements WHERE id = ?').run(id)
+  findLastSession(): CashSession | undefined {
+    const row = this.db
+      .prepare('SELECT * FROM cash_register_sessions ORDER BY session_date DESC LIMIT 1')
+      .get() as SessionRow | undefined
+    return row ? this.mapSession(row) : undefined
   }
 
   // ── Sales summary by payment method ───────────────────────────────────────
@@ -124,7 +100,7 @@ export class CajaRepository {
       .prepare(
         `SELECT payment_method, COALESCE(SUM(total), 0) AS total_amount
          FROM sales
-         WHERE sale_date = ? AND status != 'REJECTED'
+         WHERE sale_date = ? AND status != 'CANCELLED'
          GROUP BY payment_method`
       )
       .all(date) as Array<{ payment_method: string; total_amount: number }>
@@ -152,18 +128,6 @@ export class CajaRepository {
       status: row.status as 'open' | 'closed',
       createdAt: row.created_at,
       updatedAt: row.updated_at,
-    }
-  }
-
-  private mapMovement(row: MovementRow): CashMovement {
-    return {
-      id: row.id,
-      sessionId: row.session_id,
-      descripcion: row.descripcion,
-      tipo: row.tipo as 'ingreso' | 'egreso',
-      monto: row.monto,
-      movimientoDate: row.movimiento_date,
-      createdAt: row.created_at,
     }
   }
 }

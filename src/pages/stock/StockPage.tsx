@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { stock as stockApi, suppliers as suppliersApi, catalog } from '../../lib/ipc'
+import { stock as stockApi, suppliers as suppliersApi, catalog, printing as printingApi } from '../../lib/ipc'
 import type { StockItem, StockMovement, Supplier, Product } from '../../types/ipc'
 
 const MOVEMENT_TYPE_LABELS: Record<string, string> = {
@@ -17,16 +17,19 @@ function EntryForm({
   onClose: () => void
   onSaved: () => void
 }) {
-  const [products, setProducts] = useState<Product[]>([])
   const [suppliersList, setSuppliersList] = useState<Supplier[]>([])
   const [loadingData, setLoadingData] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Product search state
+  const [productQuery, setProductQuery] = useState('')
+  const [productResults, setProductResults] = useState<Product[]>([])
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
+
   const today = new Date().toISOString().split('T')[0]
 
   const [form, setForm] = useState({
-    productId: '' as number | '',
     quantity: '1',
     voucherType: 'FACTURA',
     voucherNumber: '',
@@ -37,11 +40,7 @@ function EntryForm({
   useEffect(() => {
     async function loadData() {
       try {
-        const [prods, sups] = await Promise.all([
-          catalog.listProducts(true),
-          suppliersApi.list(true),
-        ])
-        setProducts(prods)
+        const sups = await suppliersApi.list(true)
         setSuppliersList(sups)
       } catch {
         // non-critical
@@ -52,9 +51,27 @@ function EntryForm({
     void loadData()
   }, [])
 
+  async function handleProductSearch(query: string) {
+    setProductQuery(query)
+    setSelectedProduct(null)
+    if (query.length < 2) { setProductResults([]); return }
+    try {
+      const byBarcode = await catalog.getByBarcode(query)
+      if (byBarcode) { selectProduct(byBarcode); return }
+      const results = await catalog.searchProducts(query)
+      setProductResults(results)
+    } catch { /* non-critical */ }
+  }
+
+  function selectProduct(p: Product) {
+    setSelectedProduct(p)
+    setProductQuery(p.name)
+    setProductResults([])
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (form.productId === '') {
+    if (!selectedProduct) {
       setError('Seleccione un producto')
       return
     }
@@ -79,7 +96,7 @@ function EntryForm({
     setError(null)
     try {
       await stockApi.addMovement({
-        productId: Number(form.productId),
+        productId: selectedProduct.id,
         type: 'ENTRY',
         quantity,
         voucherType: form.voucherType,
@@ -108,19 +125,34 @@ function EntryForm({
           <p>Cargando datos...</p>
         ) : (
           <form onSubmit={e => void handleSubmit(e)} className="form">
-            <div className="form-row">
+            <div className="form-row" style={{ position: 'relative' }}>
               <label className="label">Producto *</label>
-              <select
-                value={form.productId}
-                onChange={e => setForm({ ...form, productId: e.target.value === '' ? '' : Number(e.target.value) })}
-                required
+              <input
+                type="text"
+                value={productQuery}
+                onChange={e => { void handleProductSearch(e.target.value) }}
+                placeholder="Buscar por nombre o código de barras..."
                 className="input"
-              >
-                <option value="">— Seleccionar producto —</option>
-                {products.map(p => (
-                  <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>
-                ))}
-              </select>
+                autoComplete="off"
+              />
+              {selectedProduct && (
+                <p style={{ margin: '4px 0 0', fontSize: '0.85em', color: 'var(--color-primary)' }}>
+                  ✓ {selectedProduct.name} — Stock actual: {selectedProduct.stockQuantity}
+                </p>
+              )}
+              {productResults.length > 0 && (
+                <ul className="product-results" style={{ position: 'absolute', top: '100%', zIndex: 100, width: '100%', marginTop: 2 }}>
+                  {productResults.map(p => (
+                    <li key={p.id}>
+                      <button type="button" className="product-result-item" onClick={() => selectProduct(p)}>
+                        <span className="product-result-name">{p.name}</span>
+                        <span className="product-result-sku">{p.sku}</span>
+                        <span className="product-result-stock">Stock: {p.stockQuantity}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
             <div className="form-row">
@@ -395,7 +427,16 @@ export default function StockPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filterLow, setFilterLow] = useState(false)
+  const [filterSearch, setFilterSearch] = useState('')
   const [showEntryForm, setShowEntryForm] = useState(false)
+  const [printingReport, setPrintingReport] = useState(false)
+
+  // Movements filter state
+  const [suppliersList, setSuppliersList] = useState<Supplier[]>([])
+  const [mvtFilterSupplierId, setMvtFilterSupplierId] = useState<number | 'none' | ''>('')
+  const [mvtFilterDateFrom, setMvtFilterDateFrom] = useState('')
+  const [mvtFilterDateTo, setMvtFilterDateTo] = useState('')
+  const [mvtLoading, setMvtLoading] = useState(false)
 
   // Inline-edit state (stock levels tab)
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -414,17 +455,25 @@ export default function StockPage() {
 
   useEffect(() => {
     void loadData()
+    void loadSuppliersList()
     return () => {
       if (toastTimerRef.current !== null) clearTimeout(toastTimerRef.current)
     }
   }, [])
+
+  async function loadSuppliersList() {
+    try {
+      const sups = await suppliersApi.list(true)
+      setSuppliersList(sups)
+    } catch { /* non-critical */ }
+  }
 
   async function loadData() {
     setLoading(true)
     try {
       const [items, mvts] = await Promise.all([
         stockApi.getItems(),
-        stockApi.getMovements({ limit: 100 }),
+        stockApi.getMovements({ limit: 200 }),
       ])
       setStockItems(items)
       setMovements(mvts)
@@ -433,6 +482,38 @@ export default function StockPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  async function loadMovements(filters: { supplierId?: number | 'none'; dateFrom?: string; dateTo?: string } = {}) {
+    setMvtLoading(true)
+    try {
+      const mvts = await stockApi.getMovements({
+        supplierId: filters.supplierId || undefined,
+        dateFrom: filters.dateFrom || undefined,
+        dateTo: filters.dateTo || undefined,
+        limit: 500,
+      })
+      setMovements(mvts)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al cargar movimientos')
+    } finally {
+      setMvtLoading(false)
+    }
+  }
+
+  function handleMvtSearch() {
+    void loadMovements({
+      supplierId: mvtFilterSupplierId !== '' ? mvtFilterSupplierId : undefined,
+      dateFrom: mvtFilterDateFrom || undefined,
+      dateTo: mvtFilterDateTo || undefined,
+    })
+  }
+
+  function handleMvtClear() {
+    setMvtFilterSupplierId('')
+    setMvtFilterDateFrom('')
+    setMvtFilterDateTo('')
+    void loadMovements()
   }
 
   function startEdit(item: StockItem) {
@@ -501,7 +582,35 @@ export default function StockPage() {
     }
   }
 
-  const displayedItems = filterLow ? stockItems.filter(i => i.isLow) : stockItems
+  async function handlePrintStockReport() {
+    setPrintingReport(true)
+    try {
+      const result = await printingApi.printStockReport()
+      if (result.success) {
+        setToast({ type: 'success', text: `Listado enviado a la impresora (${result.count ?? stockItems.length} artículos)` })
+      } else {
+        setToast({ type: 'error', text: result.error ?? 'Error al imprimir el listado' })
+      }
+    } catch (err) {
+      setToast({ type: 'error', text: err instanceof Error ? err.message : 'Error al imprimir el listado' })
+    } finally {
+      setPrintingReport(false)
+      if (toastTimerRef.current !== null) clearTimeout(toastTimerRef.current)
+      toastTimerRef.current = setTimeout(() => setToast(null), 4000)
+    }
+  }
+
+  const displayedItems = stockItems
+    .filter(i => !filterLow || i.isLow)
+    .filter(i => {
+      if (!filterSearch) return true
+      const q = filterSearch.toLowerCase()
+      return (
+        i.productName.toLowerCase().includes(q) ||
+        i.sku.toLowerCase().includes(q) ||
+        (i.barcode ?? '').toLowerCase().includes(q)
+      )
+    })
 
   return (
     <div className="page">
@@ -510,6 +619,9 @@ export default function StockPage() {
         <div className="page-header-actions">
           <button className="btn btn-primary" onClick={() => setShowEntryForm(true)}>+ Ingresar Stock</button>
           <button className="btn btn-secondary" onClick={() => void loadData()}>↺ Actualizar</button>
+          <button className="btn btn-secondary" disabled={printingReport} onClick={() => void handlePrintStockReport()}>
+            🖨️ {printingReport ? 'Imprimiendo…' : 'Imprimir listado'}
+          </button>
         </div>
       </div>
 
@@ -606,14 +718,23 @@ export default function StockPage() {
 
       {!loading && activeTab === 'stock' && (
         <>
-          <label className="filter-check">
+          <div className="filter-bar">
             <input
-              type="checkbox"
-              checked={filterLow}
-              onChange={e => setFilterLow(e.target.checked)}
+              type="text"
+              placeholder="Buscar por nombre, SKU o código de barras..."
+              value={filterSearch}
+              onChange={e => setFilterSearch(e.target.value)}
+              className="input input--search"
             />
-            Mostrar solo productos con stock bajo
-          </label>
+            <label className="filter-check" style={{ marginLeft: '8px', whiteSpace: 'nowrap' }}>
+              <input
+                type="checkbox"
+                checked={filterLow}
+                onChange={e => setFilterLow(e.target.checked)}
+              />
+              Solo stock bajo
+            </label>
+          </div>
           <div className="table-container">
             <table className="table">
               <thead>
@@ -700,7 +821,55 @@ export default function StockPage() {
       )}
 
       {!loading && activeTab === 'movements' && (
-        <div className="table-container">
+        <>
+          {/* ── Barra de filtros ─────────────────────────────────────────── */}
+          <div className="filter-bar">
+            <div className="filter-bar__group">
+              <label className="label">Proveedor</label>
+              <select
+                className="input"
+                value={mvtFilterSupplierId}
+                onChange={e => {
+                  const v = e.target.value
+                  setMvtFilterSupplierId(v === '' ? '' : v === 'none' ? 'none' : Number(v))
+                }}
+              >
+                <option value="">— Todos los proveedores —</option>
+                <option value="none">— Sin proveedor —</option>
+                {suppliersList.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="filter-bar__group">
+              <label className="label">Desde</label>
+              <input
+                type="date"
+                className="input"
+                value={mvtFilterDateFrom}
+                onChange={e => setMvtFilterDateFrom(e.target.value)}
+              />
+            </div>
+            <div className="filter-bar__group">
+              <label className="label">Hasta</label>
+              <input
+                type="date"
+                className="input"
+                value={mvtFilterDateTo}
+                onChange={e => setMvtFilterDateTo(e.target.value)}
+              />
+            </div>
+            <div className="filter-bar__actions">
+              <button className="btn btn-primary" onClick={handleMvtSearch} disabled={mvtLoading}>
+                {mvtLoading ? '⏳' : '🔍 Buscar'}
+              </button>
+              <button className="btn btn-ghost" onClick={handleMvtClear} disabled={mvtLoading}>
+                ✕ Limpiar
+              </button>
+            </div>
+          </div>
+
+          <div className="table-container">
           <table className="table">
             <thead>
               <tr>
@@ -766,7 +935,8 @@ export default function StockPage() {
               )}
             </tbody>
           </table>
-        </div>
+          </div>
+        </>
       )}
     </div>
   )

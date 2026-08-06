@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, dialog } from 'electron'
+import { app, BrowserWindow, shell, dialog, protocol, net } from 'electron'
 import path from 'path'
 import { config as dotenvConfig } from 'dotenv'
 import { getDb, closeDb } from '../database/db'
@@ -27,15 +27,30 @@ const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
   if (!process.env.DB_PATH) {
     process.env.DB_PATH = path.join(app.getPath('userData'), 'ventas.db')
   }
+  if (!process.env.BACKUP_DIR) {
+    process.env.BACKUP_DIR = path.join(app.getPath('userData'), 'backups')
+  }
+
+  // Los paths de cert/key los construye config.ts dinámicamente según el ambiente
+  // (certs/<homologacion|produccion>/cert.pem) — no se sobreescriben aquí.
+  if (!process.env.AFIP_CUIT) {
+    process.env.AFIP_CUIT = process.env.VITE_EMPRESA_CUIT ?? ''
+  }
+  // AFIP_AMBIENTE no se fuerza aquí — config.ts lo lee desde system-params.json
 }
 
 async function createWindow(): Promise<void> {
+  const iconPath = isDev
+    ? path.join(process.cwd(), 'build/icon.ico')
+    : path.join(process.resourcesPath ?? app.getAppPath(), 'build/icon.ico')
+
   const mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
     minWidth: 1024,
     minHeight: 600,
     title: 'Ventas-Stock',
+    icon: iconPath,
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -71,7 +86,32 @@ async function bootstrap(): Promise<void> {
   try {
     const db = getDb()
     runMigrations()
-    registerAllIpcHandlers(db)
+    const { stockCountService } = registerAllIpcHandlers(db)
+
+    // Retoma el servidor local de conteo de stock si había quedado activado
+    // en la sesión anterior. Debe ser la MISMA instancia que ya usan los
+    // handlers IPC (no `new StockCountService(db)` acá) — el servidor HTTP
+    // que arranca vive como estado en memoria de esa instancia puntual; con
+    // dos instancias separadas, la UI (que consulta la de los handlers IPC)
+    // nunca se entera de que la otra ya está escuchando el puerto, y termina
+    // reportando "Inactivo" mientras el puerto sigue tomado por la primera.
+    await stockCountService.autoStartIfEnabled()
+
+    // One-time fix: ventas marcadas como REJECTED por bug en updateAfipError
+    // (la función sobreescribía el status a REJECTED después de setearlo a INTERNAL_RECEIPT).
+    // Las ventas rechazadas realmente por AFIP aún no existen en este sistema,
+    // así que es seguro convertir todos los REJECTED → INTERNAL_RECEIPT.
+    try {
+      const fixed = db
+        .prepare(`UPDATE sales SET status = 'INTERNAL_RECEIPT' WHERE status = 'REJECTED'`)
+        .run()
+      if (fixed.changes > 0) {
+        console.log(`[main] Corregidas ${fixed.changes} ventas de REJECTED → INTERNAL_RECEIPT`)
+      }
+    } catch (fixErr) {
+      console.warn('[main] No se pudo corregir ventas REJECTED:', fixErr)
+    }
+
     console.log('[main] Database initialized and IPC handlers registered')
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
@@ -87,7 +127,19 @@ async function bootstrap(): Promise<void> {
   await createWindow()
 }
 
-void app.whenReady().then(bootstrap)
+// Protocolo para servir imágenes del catálogo web sin pasar por IPC
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'web-image', privileges: { secure: true, supportFetchAPI: true, bypassCSP: true } },
+])
+
+void app.whenReady().then(async () => {
+  protocol.handle('web-image', request => {
+    const filename = decodeURIComponent(request.url.replace('web-image://', ''))
+    const filePath = path.join(app.getPath('userData'), 'web-images', filename)
+    return net.fetch(`file:///${filePath.replace(/\\/g, '/')}`)
+  })
+  await bootstrap()
+})
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

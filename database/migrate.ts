@@ -88,13 +88,15 @@ export function runMigrations(): void {
     const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf-8')
     console.log(`[migrate] Applying: ${file}`)
 
-    // Run migration in a transaction so partial failures roll back cleanly
+    // Disable FK checks before the transaction so table-recreation migrations
+    // (DROP TABLE + RENAME) work correctly. SQLite ignores PRAGMA inside transactions.
+    db.pragma('foreign_keys = OFF')
     const applyMigration = db.transaction(() => {
       db.exec(sql)
       insertMigration.run(file)
     })
-
     applyMigration()
+    db.pragma('foreign_keys = ON')
     console.log(`[migrate] ✓ Applied: ${file}`)
   }
 

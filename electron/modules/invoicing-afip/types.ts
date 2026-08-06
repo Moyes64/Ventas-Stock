@@ -31,6 +31,13 @@ export interface FacturaDetalle {
   importeTributos: number
   moneda: string             // 'PES' para pesos argentinos
   monedaCtz: number          // 1 para pesos
+  fechaCbte?: string          // AAAAMMDD — si se omite se usa la fecha actual
+  /**
+   * Condición frente al IVA del receptor (RG 5616 — obligatorio desde 2024)
+   * 1=RI  4=Exento  5=Consumidor Final  6=Monotributo
+   * Si se omite, se infiere: DocTipo 99/96 → 5 (CF), 80 → 1 (RI)
+   */
+  condicionIvaReceptorId?: number
   fechaServDesde?: string
   fechaServHasta?: string
   fechaVtoPago?: string

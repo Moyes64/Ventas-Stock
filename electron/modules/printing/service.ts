@@ -1,3 +1,6 @@
+import fs from 'fs'
+import path from 'path'
+import { app } from 'electron'
 import type { Database } from 'better-sqlite3'
 import { SaleRepository } from '../sales/repository'
 import { tryLoadAfipConfig } from '../invoicing-afip/config'
@@ -6,6 +9,8 @@ import { printTicket } from './thermal-printer'
 import type { Sale } from '../sales/types'
 import type { TicketData } from './types'
 import { DOC_TYPE_AFIP_CODE } from '../customers/types'
+import type { SystemParams } from '../system-params/types'
+import { DEFAULT_SYSTEM_PARAMS } from '../system-params/types'
 
 const INVOICE_TYPE_LABELS: Record<number, string> = {
   1: 'FACTURA A',
@@ -26,13 +31,36 @@ export class PrintingService {
     this.saleRepo = new SaleRepository(db)
   }
 
+  private loadSysParams(): SystemParams {
+    try {
+      const p = path.join(app.getPath('userData'), 'system-params.json')
+      if (fs.existsSync(p)) {
+        return { ...DEFAULT_SYSTEM_PARAMS, ...(JSON.parse(fs.readFileSync(p, 'utf-8')) as Partial<SystemParams>) }
+      }
+    } catch { /* ignore */ }
+    return { ...DEFAULT_SYSTEM_PARAMS }
+  }
+
   async buildTicketData(sale: Sale): Promise<TicketData> {
     const config = tryLoadAfipConfig()
+    const sys = this.loadSysParams()
     const defaultPuntoVenta = parseInt(process.env.VITE_EMPRESA_PUNTO_VENTA ?? '1', 10) || 1
 
-    const companyName = process.env.VITE_EMPRESA_RAZON_SOCIAL ?? 'Mi Empresa'
-    const companyAddress = process.env.VITE_EMPRESA_DOMICILIO ?? ''
-    const condicionIva = process.env.VITE_EMPRESA_CONDICION_IVA ?? 'Monotributo'
+    const companyName = sys.denominacion || process.env.VITE_EMPRESA_RAZON_SOCIAL || 'Mi Empresa'
+    const companyAddress = [sys.calle, sys.numero, sys.codigoPostal].filter(Boolean).join(', ') || process.env.VITE_EMPRESA_DOMICILIO || ''
+    const condicionIva = sys.categoriaIva || process.env.VITE_EMPRESA_CONDICION_IVA || 'Monotributo'
+
+    // Inicio de actividades: formatear de YYYY-MM-DD a DD/MM/AAAA
+    let inicioActividades: string | undefined
+    if (sys.inicioActividades) {
+      const [y, m, d] = sys.inicioActividades.split('-')
+      if (y && m && d) inicioActividades = `${d}/${m}/${y}`
+    }
+
+    // Condición IIBB
+    const condicionIIBB = sys.condicionIIBB === 'Inscripto' && sys.nroIIBB
+      ? `Inscripto Nº ${sys.nroIIBB}`
+      : sys.condicionIIBB || 'Exento'
 
     // Customer info
     let customerName = 'Consumidor Final'
@@ -70,24 +98,25 @@ export class PrintingService {
 
     // Generate QR only if authorized and AFIP CUIT is available
     let qrBase64: string | undefined
+    let qrPayload: import('./qr-generator').AfipQrPayload | undefined
 
     if (sale.status === 'AUTHORIZED' && sale.cae && sale.invoiceNumber && config) {
       const docType = DOC_TYPE_AFIP_CODE[customerDocType as keyof typeof DOC_TYPE_AFIP_CODE] ?? 99
       const docNro = parseInt(customerDoc.replace(/\D/g, ''), 10) || 0
 
-      qrBase64 = await generateAfipQR(
-        buildAfipQrPayload({
-          fecha: sale.saleDate,
-          cuit: config.cuit,
-          puntoVenta: sale.puntoVenta ?? config.puntoVenta,
-          tipoComprobante: invoiceType,
-          nroComprobante: sale.invoiceNumber,
-          importe: sale.total,
-          tipoDocReceptor: docType,
-          nroDocReceptor: docNro,
-          cae: sale.cae,
-        })
-      )
+      qrPayload = buildAfipQrPayload({
+        fecha: sale.saleDate,
+        cuit: config.cuit,
+        puntoVenta: sale.puntoVenta ?? config.puntoVenta,
+        tipoComprobante: invoiceType,
+        nroComprobante: sale.invoiceNumber,
+        importe: sale.total,
+        tipoDocReceptor: docType,
+        nroDocReceptor: docNro,
+        cae: sale.cae,
+      })
+
+      qrBase64 = await generateAfipQR(qrPayload)
     }
 
     // Calculate gross subtotal (before parameter adjustments) from item lines, including IVA
@@ -111,9 +140,11 @@ export class PrintingService {
 
     return {
       companyName,
-      companyCuit: config ? String(config.cuit) : (process.env.VITE_EMPRESA_CUIT ?? ''),
+      companyCuit: config ? String(config.cuit) : (sys.cuitCuil || process.env.VITE_EMPRESA_CUIT || ''),
       companyAddress,
       condicionIva,
+      inicioActividades,
+      condicionIIBB,
       puntoVenta: effectivePuntoVenta,
       invoiceType: invoiceLabel,
       invoiceNumber,
@@ -137,6 +168,7 @@ export class PrintingService {
       cae: sale.cae ?? undefined,
       caeVto: sale.caeVto ?? undefined,
       qrBase64,
+      qrPayload,
       isAuthorized: sale.status === 'AUTHORIZED',
       internalReceiptNumber: sale.status !== 'AUTHORIZED' ? sale.id : undefined,
     }

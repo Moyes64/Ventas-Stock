@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron'
 import type { Database } from 'better-sqlite3'
 import { CajaService } from '../modules/caja/service'
-import type { CreateSessionInput, CreateMovementInput } from '../modules/caja/types'
+import type { CreateSessionInput } from '../modules/caja/types'
 
 export function registerCajaHandlers(db: Database): void {
   const cajaService = new CajaService(db)
@@ -32,16 +32,7 @@ export function registerCajaHandlers(db: Database): void {
     return cajaService.closeSession(date, cierreAmount)
   })
 
-  // Movimientos
-  ipcMain.handle('caja:listMovements', (_event, date: string) => {
-    return cajaService.listMovements(date)
-  })
-
-  ipcMain.handle('caja:createMovement', (_event, input: CreateMovementInput) => {
-    return cajaService.createMovement(input)
-  })
-
-  ipcMain.handle('caja:deleteMovement', (_event, id: number) => {
-    return cajaService.deleteMovement(id)
+  ipcMain.handle('caja:reopenSession', (_event, date: string) => {
+    return cajaService.reopenSession(date)
   })
 }
