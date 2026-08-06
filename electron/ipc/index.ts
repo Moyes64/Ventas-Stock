@@ -23,8 +23,9 @@ import { registerCambiosHandlers } from './cambios.handlers'
 import { registerCreditsHandlers } from './credits.handlers'
 import { registerFinanceHandlers } from './finance.handlers'
 import { registerStockCountHandlers } from './stock-count.handlers'
+import type { StockCountService } from '../modules/stock-count/service'
 
-export function registerAllIpcHandlers(db: Database): void {
+export function registerAllIpcHandlers(db: Database): { stockCountService: StockCountService } {
   registerAuthHandlers(db)
   registerCatalogHandlers(db)
   registerCustomerHandlers(db)
@@ -48,5 +49,7 @@ export function registerAllIpcHandlers(db: Database): void {
   registerCambiosHandlers(db)
   registerCreditsHandlers(db)
   registerFinanceHandlers(db)
-  registerStockCountHandlers(db)
+  const stockCountService = registerStockCountHandlers(db)
+
+  return { stockCountService }
 }

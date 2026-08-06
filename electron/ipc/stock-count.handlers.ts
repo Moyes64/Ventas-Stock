@@ -3,7 +3,15 @@ import type { Database } from 'better-sqlite3'
 import { StockCountService } from '../modules/stock-count/service'
 import type { StockCountSessionStatus, ApplyReconciliationDecision } from '../modules/stock-count/types'
 
-export function registerStockCountHandlers(db: Database): void {
+/**
+ * Devuelve la instancia (única) del servicio para que main.ts pueda llamar
+ * autoStartIfEnabled() sobre EXACTAMENTE este objeto — no una instancia
+ * nueva. StockCountService guarda el `http.Server` que arranca como estado
+ * en memoria (`this.server`); dos instancias separadas terminan cada una
+ * pensando que el servidor de la otra no existe (una lo ve "corriendo" solo
+ * si ella misma lo arrancó), aunque el puerto ya esté ocupado por la otra.
+ */
+export function registerStockCountHandlers(db: Database): StockCountService {
   const stockCountService = new StockCountService(db)
 
   // Servidor local
@@ -54,4 +62,6 @@ export function registerStockCountHandlers(db: Database): void {
   ipcMain.handle('stockCount:deleteSession', (_event, id: number) => {
     stockCountService.deleteSession(id)
   })
+
+  return stockCountService
 }

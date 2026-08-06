@@ -62,78 +62,111 @@ export class StockCountService {
   // ── Lifecycle del servidor local ─────────────────────────────────────────
 
   /** Llamado desde main.ts al bootstrapear: retoma el estado 'activado' de la sesión anterior. */
-  autoStartIfEnabled(): void {
+  async autoStartIfEnabled(): Promise<void> {
     const config = this.getConfig()
-    if (config.enabled) this.startServer(config)
+    if (config.enabled) await this.startServer(config)
   }
 
-  setEnabled(enabled: boolean): StockCountServerStatus {
+  async setEnabled(enabled: boolean): Promise<StockCountServerStatus> {
     const config = this.getConfig()
     config.enabled = enabled
     this.saveConfigFile(config)
     if (enabled) {
-      this.startServer(config)
+      await this.startServer(config)
     } else {
-      this.stopServer()
+      await this.stopServer()
     }
     return this.getServerStatus()
   }
 
-  regenerateToken(): StockCountServerStatus {
+  async regenerateToken(): Promise<StockCountServerStatus> {
     const config = this.getConfig()
     config.token = crypto.randomBytes(16).toString('hex')
     this.saveConfigFile(config)
     // Reinicia para que el server tome el nuevo token de inmediato (invalida
     // a propósito cualquier celular ya pareado con el token anterior).
     if (this.server) {
-      this.stopServer()
-      this.startServer(config)
+      await this.stopServer()
+      await this.startServer(config)
     }
     return this.getServerStatus()
   }
 
-  private startServer(config: StockCountServerConfig): void {
-    if (this.server) return
+  /**
+   * `server.listen()` es asíncrono: el bind (o el EADDRINUSE si el puerto
+   * está ocupado) se resuelve en un tick posterior, vía el evento 'listening'
+   * o 'error'. Devolver el estado antes de esperar ese resultado hacía que la
+   * UI mostrara "Activo" de forma optimista un instante antes de que llegara
+   * el error real — por eso este método ahora es awaitable y setEnabled/
+   * regenerateToken/autoStartIfEnabled esperan a que se resuelva antes de
+   * reportar el estado.
+   */
+  private startServer(config: StockCountServerConfig): Promise<void> {
+    if (this.server) return Promise.resolve()
 
-    const server = createStockCountServer({
-      getToken: () => this.getConfig().token,
-      getSessionForDownload: sessionId => {
-        const session = this.repo.getSession(sessionId)
-        if (!session || session.status !== 'open') return null
-        return { label: session.label, products: this.repo.listSessionProducts(sessionId) }
-      },
-      submitItems: (sessionId, items) => {
-        const session = this.repo.getSession(sessionId)
-        if (!session) return { ok: false, error: 'Sesión no encontrada' }
-        if (session.status !== 'open') {
-          return { ok: false, error: `La sesión ya no está abierta (estado: ${session.status})` }
-        }
-        this.repo.replaceSessionItems(sessionId, items)
-        return { ok: true }
-      },
+    return new Promise(resolve => {
+      const server = createStockCountServer({
+        getToken: () => this.getConfig().token,
+        getSessionForDownload: sessionId => {
+          const session = this.repo.getSession(sessionId)
+          if (!session || session.status !== 'open') return null
+          return { label: session.label, products: this.repo.listSessionProducts(sessionId) }
+        },
+        submitItems: (sessionId, items) => {
+          const session = this.repo.getSession(sessionId)
+          if (!session) return { ok: false, error: 'Sesión no encontrada' }
+          if (session.status !== 'open') {
+            return { ok: false, error: `La sesión ya no está abierta (estado: ${session.status})` }
+          }
+          this.repo.replaceSessionItems(sessionId, items)
+          return { ok: true }
+        },
+      })
+
+      // Guarda contra eventos tardíos de un server VIEJO (ya reemplazado por
+      // uno nuevo, p. ej. tras un apagar+prender rápido): si para cuando
+      // llega el evento `this.server` ya no es ESTE objeto puntual, no tocar
+      // el estado compartido — sería pisar el estado del server actual con
+      // el de uno que ya no existe.
+      server.on('error', (err: NodeJS.ErrnoException) => {
+        if (this.server !== server) { resolve(); return }
+        this.lastError =
+          err.code === 'EADDRINUSE'
+            ? `El puerto ${config.port} ya está en uso por otro proceso`
+            : (err.message ?? String(err))
+        this.server = null
+        resolve()
+      })
+
+      server.listen(config.port, '0.0.0.0', () => {
+        if (this.server === server) this.lastError = null
+        resolve()
+      })
+
+      this.server = server
     })
-
-    server.on('error', (err: NodeJS.ErrnoException) => {
-      this.lastError =
-        err.code === 'EADDRINUSE'
-          ? `El puerto ${config.port} ya está en uso por otro proceso`
-          : (err.message ?? String(err))
-      this.server = null
-    })
-
-    server.listen(config.port, '0.0.0.0', () => {
-      this.lastError = null
-    })
-
-    this.server = server
   }
 
-  private stopServer(): void {
-    if (this.server) {
-      this.server.close()
-      this.server = null
+  /**
+   * `server.close()` no libera el puerto a nivel SO de forma sincrónica —
+   * solo dispara el cierre y emite 'close' cuando termina. Intentar volver a
+   * escuchar el mismo puerto antes de que ese evento llegue puede fallar con
+   * EADDRINUSE de forma transitoria (exactamente lo que pasa si el usuario
+   * destilda y tilda "Activado" rápido en la UI) — por eso esto también es
+   * awaitable, y setEnabled/regenerateToken esperan el cierre real antes de
+   * intentar un nuevo bind.
+   */
+  private stopServer(): Promise<void> {
+    if (!this.server) {
+      this.lastError = null
+      return Promise.resolve()
     }
+    const server = this.server
+    this.server = null
     this.lastError = null
+    return new Promise(resolve => {
+      server.close(() => resolve())
+    })
   }
 
   getServerStatus(): StockCountServerStatus {
