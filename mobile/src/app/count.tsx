@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useIsFocused, useRouter } from 'expo-router'
 import { useSession } from '../context/SessionContext'
 import { ScannerModal } from '../components/ScannerModal'
@@ -14,6 +15,7 @@ const EMPTY_PRODUCTS: StockCountProductForDownload[] = []
 /** Pantalla principal: buscar/escanear productos y tipear la cantidad contada de cada uno. */
 export default function CountScreen() {
   const router = useRouter()
+  const insets = useSafeAreaInsets()
   const { session, endSession } = useSession()
   const [query, setQuery] = useState('')
   const [scannerOpen, setScannerOpen] = useState(false)
@@ -92,7 +94,7 @@ export default function CountScreen() {
         ListEmptyComponent={<Text style={styles.empty}>Sin resultados.</Text>}
       />
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
         <Text style={styles.progress}>
           {countedTotal} de {products.length} contados
         </Text>

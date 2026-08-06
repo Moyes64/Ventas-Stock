@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { useSession } from '../context/SessionContext'
 import * as api from '../lib/api'
@@ -8,6 +9,7 @@ import type { SubmitCountItemInput } from '../types/contract'
 /** Pantalla final: revisar lo contado y subirlo al servidor local de la PC. */
 export default function ReviewScreen() {
   const router = useRouter()
+  const insets = useSafeAreaInsets()
   const { session, endSession } = useSession()
   // Sacamos una foto de la sesión al montar: subir con éxito llama a
   // endSession() y pone `session` en null, pero esta pantalla todavía
@@ -81,7 +83,7 @@ export default function ReviewScreen() {
 
       {error && <Text style={styles.error}>{error}</Text>}
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 8) }]}>
         <Pressable style={styles.secondaryButton} onPress={() => router.back()}>
           <Text style={styles.secondaryButtonText}>← Seguir contando</Text>
         </Pressable>
