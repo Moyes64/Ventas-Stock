@@ -59,6 +59,7 @@ const navEntries: NavEntry[] = [
       { to: '/stock',                label: 'Stock',                icon: '📊' },
       { to: '/stock/pedido',         label: 'Pedido de reposición', icon: '📋' },
       { to: '/stock/remito-scanner', label: 'Escáner de Remitos',   icon: '🤖' },
+      { to: '/stock/conteo',         label: 'Conteo de stock',      icon: '📱' },
     ],
   },
   { kind: 'item', to: '/reporting',        label: 'Reportes',                icon: '📈' },

@@ -257,6 +257,34 @@ const electronAPI = {
     getExpensesByCategory: (dateFrom: string, dateTo: string, accountId?: number) =>
       invoke('finance:getExpensesByCategory', dateFrom, dateTo, accountId),
     getPartnersEquity: () => invoke('finance:getPartnersEquity'),
+    listMpFeeRates: (paymentMethod?: string) => invoke('finance:listMpFeeRates', paymentMethod),
+    createMpFeeRate: (input: unknown) => invoke('finance:createMpFeeRate', input),
+    deleteMpFeeRate: (id: number) => invoke('finance:deleteMpFeeRate', id),
+    getMpReconciliationRows: (fecha: string, paymentMethod?: string) =>
+      invoke('finance:getMpReconciliationRows', fecha, paymentMethod),
+    listMpReconciliations: (dateFrom?: string, dateTo?: string) =>
+      invoke('finance:listMpReconciliations', dateFrom, dateTo),
+    saveMpReconciliation: (input: unknown) => invoke('finance:saveMpReconciliation', input),
+    confirmMpReconciliationAdjustment: (id: number) => invoke('finance:confirmMpReconciliationAdjustment', id),
+    ignoreMpReconciliation: (id: number) => invoke('finance:ignoreMpReconciliation', id),
+    reopenMpReconciliation: (id: number) => invoke('finance:reopenMpReconciliation', id),
+  },
+
+  // Conteo de stock (servidor local + sesiones de conciliación)
+  stockCount: {
+    getServerStatus: () => invoke('stockCount:getServerStatus'),
+    setServerEnabled: (enabled: boolean) => invoke('stockCount:setServerEnabled', enabled),
+    regenerateToken: () => invoke('stockCount:regenerateToken'),
+    getSessionPairingQr: (sessionId: number) => invoke('stockCount:getSessionPairingQr', sessionId),
+    createSession: (label: string, categoryId: number | null) =>
+      invoke('stockCount:createSession', label, categoryId),
+    listSessions: (statusFilter?: string) => invoke('stockCount:listSessions', statusFilter),
+    getSession: (id: number) => invoke('stockCount:getSession', id),
+    getReconciliation: (sessionId: number) => invoke('stockCount:getReconciliation', sessionId),
+    applyReconciliation: (sessionId: number, decisions: unknown) =>
+      invoke('stockCount:applyReconciliation', sessionId, decisions),
+    cancelSession: (id: number) => invoke('stockCount:cancelSession', id),
+    deleteSession: (id: number) => invoke('stockCount:deleteSession', id),
   },
 }
 

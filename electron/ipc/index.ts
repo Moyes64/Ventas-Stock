@@ -22,6 +22,7 @@ import { registerWebCatalogHandlers } from './web-catalog.handlers'
 import { registerCambiosHandlers } from './cambios.handlers'
 import { registerCreditsHandlers } from './credits.handlers'
 import { registerFinanceHandlers } from './finance.handlers'
+import { registerStockCountHandlers } from './stock-count.handlers'
 
 export function registerAllIpcHandlers(db: Database): void {
   registerAuthHandlers(db)
@@ -47,4 +48,5 @@ export function registerAllIpcHandlers(db: Database): void {
   registerCambiosHandlers(db)
   registerCreditsHandlers(db)
   registerFinanceHandlers(db)
+  registerStockCountHandlers(db)
 }

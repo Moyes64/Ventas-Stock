@@ -4,6 +4,7 @@ import { config as dotenvConfig } from 'dotenv'
 import { getDb, closeDb } from '../database/db'
 import { runMigrations } from '../database/migrate'
 import { registerAllIpcHandlers } from './ipc/index'
+import { StockCountService } from './modules/stock-count/service'
 
 // Handle app lifecycle
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
@@ -87,6 +88,10 @@ async function bootstrap(): Promise<void> {
     const db = getDb()
     runMigrations()
     registerAllIpcHandlers(db)
+
+    // Retoma el servidor local de conteo de stock si había quedado activado
+    // en la sesión anterior (ver electron/modules/stock-count/service.ts).
+    new StockCountService(db).autoStartIfEnabled()
 
     // One-time fix: ventas marcadas como REJECTED por bug en updateAfipError
     // (la función sobreescribía el status a REJECTED después de setearlo a INTERNAL_RECEIPT).
