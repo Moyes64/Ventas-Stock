@@ -107,6 +107,15 @@ const extraArgs = process.argv.slice(2)
 if (process.platform === 'win32' && !extraArgs.some(a => platformFlags.includes(a))) {
   extraArgs.push('--win')
 }
+// This project has no GitHub Releases publish flow configured (build.publish
+// is unset in package.json) — CI artifacts go out via actions/upload-artifact
+// instead. Without --publish never, electron-builder still auto-detects the
+// CI environment and tries to check for a draft GitHub release to publish
+// to, which fails with "GitHub Personal Access Token is not set" since no
+// GH_TOKEN is provided to the workflow.
+if (!extraArgs.includes('--publish')) {
+  extraArgs.push('--publish', 'never')
+}
 run(bin('electron-builder'), extraArgs)
 
 // ---------------------------------------------------------------------------
