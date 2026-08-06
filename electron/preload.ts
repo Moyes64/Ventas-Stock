@@ -276,8 +276,8 @@ const electronAPI = {
     setServerEnabled: (enabled: boolean) => invoke('stockCount:setServerEnabled', enabled),
     regenerateToken: () => invoke('stockCount:regenerateToken'),
     getSessionPairingQr: (sessionId: number) => invoke('stockCount:getSessionPairingQr', sessionId),
-    createSession: (label: string, categoryId: number | null) =>
-      invoke('stockCount:createSession', label, categoryId),
+    createSession: (label: string, webCategoryId: number | null) =>
+      invoke('stockCount:createSession', label, webCategoryId),
     listSessions: (statusFilter?: string) => invoke('stockCount:listSessions', statusFilter),
     getSession: (id: number) => invoke('stockCount:getSession', id),
     getReconciliation: (sessionId: number) => invoke('stockCount:getReconciliation', sessionId),

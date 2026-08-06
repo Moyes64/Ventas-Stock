@@ -24,8 +24,8 @@ export function registerStockCountHandlers(db: Database): void {
   })
 
   // Sesiones
-  ipcMain.handle('stockCount:createSession', (_event, label: string, categoryId: number | null) => {
-    return stockCountService.createSession(label, categoryId)
+  ipcMain.handle('stockCount:createSession', (_event, label: string, webCategoryId: number | null) => {
+    return stockCountService.createSession(label, webCategoryId)
   })
 
   ipcMain.handle('stockCount:listSessions', (_event, statusFilter?: StockCountSessionStatus) => {

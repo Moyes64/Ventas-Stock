@@ -10,8 +10,8 @@ import type {
 interface SessionRow {
   id: number
   label: string
-  category_id: number | null
-  category_name: string | null
+  web_category_id: number | null
+  web_category_name: string | null
   status: StockCountSessionStatus
   item_count: number
   created_at: string
@@ -22,10 +22,10 @@ interface SessionRow {
 export class StockCountRepository {
   constructor(private readonly db: Database) {}
 
-  createSession(label: string, categoryId: number | null): number {
+  createSession(label: string, webCategoryId: number | null): number {
     const result = this.db
-      .prepare(`INSERT INTO stock_count_sessions (label, category_id) VALUES (?, ?)`)
-      .run(label, categoryId)
+      .prepare(`INSERT INTO stock_count_sessions (label, web_category_id) VALUES (?, ?)`)
+      .run(label, webCategoryId)
     return result.lastInsertRowid as number
   }
 
@@ -33,11 +33,11 @@ export class StockCountRepository {
     const where = statusFilter ? 'WHERE s.status = ?' : ''
     const rows = this.db
       .prepare(
-        `SELECT s.id, s.label, s.category_id, c.name AS category_name, s.status,
+        `SELECT s.id, s.label, s.web_category_id, wc.name AS web_category_name, s.status,
                 (SELECT COUNT(*) FROM stock_count_items i WHERE i.session_id = s.id) AS item_count,
                 s.created_at, s.uploaded_at, s.reconciled_at
          FROM stock_count_sessions s
-         LEFT JOIN categories c ON c.id = s.category_id
+         LEFT JOIN web_categories wc ON wc.id = s.web_category_id
          ${where}
          ORDER BY s.created_at DESC`
       )
@@ -48,11 +48,11 @@ export class StockCountRepository {
   getSession(id: number): StockCountSession | undefined {
     const row = this.db
       .prepare(
-        `SELECT s.id, s.label, s.category_id, c.name AS category_name, s.status,
+        `SELECT s.id, s.label, s.web_category_id, wc.name AS web_category_name, s.status,
                 (SELECT COUNT(*) FROM stock_count_items i WHERE i.session_id = s.id) AS item_count,
                 s.created_at, s.uploaded_at, s.reconciled_at
          FROM stock_count_sessions s
-         LEFT JOIN categories c ON c.id = s.category_id
+         LEFT JOIN web_categories wc ON wc.id = s.web_category_id
          WHERE s.id = ?`
       )
       .get(id) as SessionRow | undefined
@@ -62,20 +62,34 @@ export class StockCountRepository {
   /** Productos que la app Android debe descargar para contar esta sesión. */
   listSessionProducts(sessionId: number): StockCountProductForDownload[] {
     const session = this.db
-      .prepare('SELECT category_id FROM stock_count_sessions WHERE id = ?')
-      .get(sessionId) as { category_id: number | null } | undefined
+      .prepare('SELECT web_category_id FROM stock_count_sessions WHERE id = ?')
+      .get(sessionId) as { web_category_id: number | null } | undefined
     if (!session) return []
 
-    const categoryClause = session.category_id !== null ? 'AND category_id = ?' : ''
-    const rows = this.db
+    // Sin categoría: todo el catálogo activo. Con categoría: solo los productos
+    // publicados en Catálogo Web bajo esa categoría (join por web_products) —
+    // un producto sin fila en web_products no aparece en ningún filtro por
+    // categoría, aunque siempre está disponible bajo "Todas las categorías".
+    if (session.web_category_id === null) {
+      return this.db
+        .prepare(
+          `SELECT id, sku, barcode, name, stock_quantity AS currentStock
+           FROM products
+           WHERE active = 1
+           ORDER BY name ASC`
+        )
+        .all() as StockCountProductForDownload[]
+    }
+
+    return this.db
       .prepare(
-        `SELECT id, sku, barcode, name, stock_quantity AS currentStock
-         FROM products
-         WHERE active = 1 ${categoryClause}
-         ORDER BY name ASC`
+        `SELECT p.id, p.sku, p.barcode, p.name, p.stock_quantity AS currentStock
+         FROM products p
+         JOIN web_products wp ON wp.product_id = p.id
+         WHERE p.active = 1 AND wp.web_category_id = ?
+         ORDER BY p.name ASC`
       )
-      .all(...(session.category_id !== null ? [session.category_id] : [])) as StockCountProductForDownload[]
-    return rows
+      .all(session.web_category_id) as StockCountProductForDownload[]
   }
 
   /** Reemplaza los items contados de la sesión (idempotente ante reintentos del celular) y la marca 'uploaded'. */
@@ -171,8 +185,8 @@ export class StockCountRepository {
     return {
       id: row.id,
       label: row.label,
-      categoryId: row.category_id,
-      categoryName: row.category_name,
+      webCategoryId: row.web_category_id,
+      webCategoryName: row.web_category_name,
       status: row.status,
       itemCount: row.item_count,
       createdAt: row.created_at,

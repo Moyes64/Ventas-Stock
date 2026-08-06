@@ -450,8 +450,8 @@ export const stockCount = {
   regenerateToken: () => electron.stockCount.regenerateToken() as Promise<StockCountServerStatus>,
   getSessionPairingQr: (sessionId: number) =>
     electron.stockCount.getSessionPairingQr(sessionId) as Promise<string | null>,
-  createSession: (label: string, categoryId: number | null) =>
-    electron.stockCount.createSession(label, categoryId) as Promise<number>,
+  createSession: (label: string, webCategoryId: number | null) =>
+    electron.stockCount.createSession(label, webCategoryId) as Promise<number>,
   listSessions: (statusFilter?: StockCountSessionStatus) =>
     electron.stockCount.listSessions(statusFilter) as Promise<StockCountSession[]>,
   getSession: (id: number) => electron.stockCount.getSession(id) as Promise<StockCountSession | undefined>,

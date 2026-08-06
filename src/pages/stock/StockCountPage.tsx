@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { stockCount as stockCountApi, catalog as catalogApi } from '../../lib/ipc'
-import type { StockCountServerStatus, StockCountSession, Category } from '../../types/ipc'
+import { stockCount as stockCountApi, webCatalog as webCatalogApi } from '../../lib/ipc'
+import type { StockCountServerStatus, StockCountSession, WebCategory } from '../../types/ipc'
 
 const STATUS_LABEL: Record<StockCountSession['status'], string> = {
   open: 'Abierta',
@@ -22,7 +22,7 @@ export default function StockCountPage() {
 
   const [status, setStatus] = useState<StockCountServerStatus | null>(null)
   const [sessions, setSessions] = useState<StockCountSession[]>([])
-  const [categories, setCategories] = useState<Category[]>([])
+  const [categories, setCategories] = useState<WebCategory[]>([])
   const [loading, setLoading] = useState(true)
   const [toggling, setToggling] = useState(false)
 
@@ -39,7 +39,7 @@ export default function StockCountPage() {
       const [s, list, cats] = await Promise.all([
         stockCountApi.getServerStatus(),
         stockCountApi.listSessions(),
-        catalogApi.getCategories(),
+        webCatalogApi.listCategories(),
       ])
       setStatus(s)
       setSessions(list)
@@ -179,7 +179,7 @@ export default function StockCountPage() {
                 {sessions.map(s => (
                   <tr key={s.id}>
                     <td>{s.label}</td>
-                    <td className="muted-text">{s.categoryName ?? 'Todas'}</td>
+                    <td className="muted-text">{s.webCategoryName ?? 'Todas'}</td>
                     <td><span className={`badge ${STATUS_BADGE[s.status]}`}>{STATUS_LABEL[s.status]}</span></td>
                     <td className="text-right">{s.itemCount}</td>
                     <td className="text-right">
@@ -255,6 +255,10 @@ export default function StockCountPage() {
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
                   </select>
+                  <span className="field-hint">
+                    Son las categorías de Catálogo Web. Si un producto no está publicado en la tienda online,
+                    solo va a aparecer contando &quot;Todas las categorías&quot;.
+                  </span>
                 </div>
 
                 {createErr && <p className="error">{createErr}</p>}

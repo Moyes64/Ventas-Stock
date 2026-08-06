@@ -169,9 +169,9 @@ export class StockCountService {
 
   // ── Sesiones ──────────────────────────────────────────────────────────────
 
-  createSession(label: string, categoryId: number | null): number {
+  createSession(label: string, webCategoryId: number | null): number {
     if (!label.trim()) throw new Error('La sesión necesita un nombre')
-    return this.repo.createSession(label.trim(), categoryId)
+    return this.repo.createSession(label.trim(), webCategoryId)
   }
 
   listSessions(statusFilter?: StockCountSessionStatus): StockCountSession[] {

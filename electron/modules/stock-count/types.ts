@@ -3,8 +3,9 @@ export type StockCountSessionStatus = 'open' | 'uploaded' | 'reconciled' | 'canc
 export interface StockCountSession {
   id: number
   label: string
-  categoryId: number | null
-  categoryName: string | null
+  /** Categoría de Catálogo Web (no la de Catálogo base — ver migración 027). null = todo el catálogo. */
+  webCategoryId: number | null
+  webCategoryName: string | null
   status: StockCountSessionStatus
   itemCount: number
   createdAt: string
