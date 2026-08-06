@@ -145,6 +145,7 @@ export type PaymentMethod =
   | 'credito_cliente'
   | 'WEB_ORDER'
   | 'mercadopago'
+  | 'qr'
 
 export interface SaleItem {
   id?: number
@@ -535,14 +536,21 @@ export interface CierreSummary {
   cashSalesTotal: number
   ingresosTotal: number
   egresosTotal: number
+  /** Transferencias entre cuentas que ingresaron dinero a Caja ese día. */
+  transfersInTotal: number
+  /** Transferencias entre cuentas que sacaron dinero de Caja ese día. */
+  transfersOutTotal: number
   expectedTotal: number
   salesByPaymentMethod: {
     contado_efectivo: number
     transferencia: number
     debito: number
     credito: number
+    qr: number
+    mercadopago: number
   }
   movements: FinanceMovement[]
+  transfers: FinanceTransfer[]
 }
 
 // ── Finanzas (ingresos/egresos multi-cuenta y patrimonio de socios) ───────
@@ -679,4 +687,106 @@ export interface FinancePartnerEquity {
   utilidadAcumulada: number
   retirosRealizados: number
   saldoPendiente: number
+}
+
+// ── Comisiones de Mercado Pago (QR / Débito / Crédito) y conciliación ──────
+
+export type MpFeePaymentMethod = 'qr' | 'debito' | 'credito' | 'mercadopago'
+
+export interface FinanceMpFeeRate {
+  id: number
+  paymentMethod: MpFeePaymentMethod
+  pct: number
+  ivaPct: number
+  vigenteDesde: string
+  createdAt: string
+}
+
+export interface CreateMpFeeRateInput {
+  paymentMethod: MpFeePaymentMethod
+  pct: number
+  ivaPct?: number
+  vigenteDesde?: string
+}
+
+export type MpReconciliationStatus = 'pending' | 'adjusted' | 'ignored'
+
+export interface FinanceMpReconciliation {
+  id: number
+  saleId: number
+  fecha: string
+  paymentMethod: MpFeePaymentMethod
+  brutoSistema: number
+  comisionSistema: number
+  brutoReal: number
+  comisionReal: number
+  netoReal: number
+  diferencia: number
+  status: MpReconciliationStatus
+  ajusteMovementId: number | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SaveMpReconciliationInput {
+  saleId: number
+  brutoReal: number
+  comisionReal: number
+  netoReal: number
+}
+
+export interface MpReconciliationRow {
+  saleId: number
+  paymentMethod: MpFeePaymentMethod
+  fecha: string
+  customerName: string | null
+  invoiceNumber: number | null
+  total: number
+  brutoSistema: number
+  comisionSistema: number
+  netoSistema: number
+  reconciliation: FinanceMpReconciliation | null
+}
+
+// ── Conteo de stock ──────────────────────────────────────────────────────────
+
+export type StockCountSessionStatus = 'open' | 'uploaded' | 'reconciled' | 'cancelled'
+
+export interface StockCountSession {
+  id: number
+  label: string
+  /** Categoría de Catálogo Web (no la de Catálogo base). null = todo el catálogo. */
+  webCategoryId: number | null
+  webCategoryName: string | null
+  status: StockCountSessionStatus
+  itemCount: number
+  createdAt: string
+  uploadedAt: string | null
+  reconciledAt: string | null
+}
+
+export interface ReconciliationRow {
+  itemId: number
+  productId: number
+  productName: string
+  sku: string
+  systemQuantity: number
+  countedQuantity: number
+  diff: number
+  note: string
+  reconciled: boolean
+}
+
+export interface ApplyReconciliationDecision {
+  itemId: number
+  apply: boolean
+}
+
+export interface StockCountServerStatus {
+  running: boolean
+  enabled: boolean
+  port: number
+  lanIp: string | null
+  token: string
+  error: string | null
 }

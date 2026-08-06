@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { parameters as parametersApi } from '../../lib/ipc'
 import type { Parameter } from '../../types/ipc'
+import { useConfirm } from '../../hooks/useConfirm'
 
 const EMPTY_FORM = { descripcion: '', porcentaje: '', tipo: '+' as '+' | '-' }
 
@@ -14,6 +15,7 @@ export default function ParametersPage() {
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
+  const { confirm, dialog: confirmDialog } = useConfirm()
 
   async function loadParameters() {
     setLoading(true)
@@ -77,7 +79,7 @@ export default function ParametersPage() {
 
   async function handleDelete() {
     if (!selected) return
-    if (!window.confirm(`¿Eliminar el parámetro "${selected.descripcion}"?`)) return
+    if (!(await confirm(`¿Eliminar el parámetro "${selected.descripcion}"?`, { danger: true }))) return
     setFormError(null)
     setSaving(true)
     try {
@@ -236,6 +238,8 @@ export default function ParametersPage() {
           </form>
         </div>
       </div>
+
+      {confirmDialog}
     </div>
   )
 }

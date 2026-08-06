@@ -13,7 +13,7 @@ module.exports = {
     'plugin:react/recommended',
     'plugin:react-hooks/recommended',
   ],
-  ignorePatterns: ['dist', 'release', 'node_modules', '*.cjs'],
+  ignorePatterns: ['dist', 'release', 'node_modules', '*.cjs', 'mobile'],
   parser: '@typescript-eslint/parser',
   parserOptions: {
     ecmaVersion: 'latest',

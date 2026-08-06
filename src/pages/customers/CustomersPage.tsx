@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { customers as customersApi, credits } from '../../lib/ipc'
 import type { Customer, CreditRecord } from '../../types/ipc'
+import { useConfirm } from '../../hooks/useConfirm'
 
 export default function CustomersPage() {
   const [customerList, setCustomerList] = useState<Customer[]>([])
@@ -13,6 +14,7 @@ export default function CustomersPage() {
   const [creditBalance, setCreditBalance] = useState<number>(0)
   const [creditHistory, setCreditHistory] = useState<CreditRecord[]>([])
   const [loadingCredit, setLoadingCredit] = useState(false)
+  const { confirm, dialog: confirmDialog } = useConfirm()
 
   async function loadCustomers() {
     setLoading(true)
@@ -32,7 +34,7 @@ export default function CustomersPage() {
   useEffect(() => { void loadCustomers() }, [search])
 
   async function handleDelete(id: number) {
-    if (!window.confirm('¿Eliminar este cliente?')) return
+    if (!(await confirm('¿Eliminar este cliente?', { danger: true }))) return
     try {
       await customersApi.delete(id)
       await loadCustomers()
@@ -208,6 +210,8 @@ export default function CustomersPage() {
           </div>
         </div>
       )}
+
+      {confirmDialog}
     </div>
   )
 }

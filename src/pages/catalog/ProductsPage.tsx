@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { catalog, suppliers as suppliersApi, printing as printingApi } from '../../lib/ipc'
 import { calcSalePrice, calcGainFromPrice } from '../../lib/pricing'
 import type { Product, TaxRate, Supplier } from '../../types/ipc'
+import { useConfirm } from '../../hooks/useConfirm'
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
@@ -13,6 +14,7 @@ export default function ProductsPage() {
   const [printingReport, setPrintingReport] = useState(false)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const { confirm, dialog: confirmDialog } = useConfirm()
 
   async function loadProducts() {
     setLoading(true)
@@ -32,7 +34,7 @@ export default function ProductsPage() {
   useEffect(() => { void loadProducts() }, [search])
 
   async function handleDelete(id: number) {
-    if (!window.confirm('¿Desactivar este producto?')) return
+    if (!(await confirm('¿Desactivar este producto?', { danger: true }))) return
     try {
       await catalog.deleteProduct(id)
       await loadProducts()
@@ -156,6 +158,8 @@ export default function ProductsPage() {
           onSaved={() => { void loadProducts() }}
         />
       )}
+
+      {confirmDialog}
     </div>
   )
 }

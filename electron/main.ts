@@ -86,7 +86,16 @@ async function bootstrap(): Promise<void> {
   try {
     const db = getDb()
     runMigrations()
-    registerAllIpcHandlers(db)
+    const { stockCountService } = registerAllIpcHandlers(db)
+
+    // Retoma el servidor local de conteo de stock si había quedado activado
+    // en la sesión anterior. Debe ser la MISMA instancia que ya usan los
+    // handlers IPC (no `new StockCountService(db)` acá) — el servidor HTTP
+    // que arranca vive como estado en memoria de esa instancia puntual; con
+    // dos instancias separadas, la UI (que consulta la de los handlers IPC)
+    // nunca se entera de que la otra ya está escuchando el puerto, y termina
+    // reportando "Inactivo" mientras el puerto sigue tomado por la primera.
+    await stockCountService.autoStartIfEnabled()
 
     // One-time fix: ventas marcadas como REJECTED por bug en updateAfipError
     // (la función sobreescribía el status a REJECTED después de setearlo a INTERNAL_RECEIPT).

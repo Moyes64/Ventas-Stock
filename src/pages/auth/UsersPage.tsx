@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { auth as authApi } from '../../lib/ipc'
 import type { User, Role } from '../../types/ipc'
+import { useConfirm } from '../../hooks/useConfirm'
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([])
@@ -9,6 +10,7 @@ export default function UsersPage() {
   const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [editUser, setEditUser] = useState<User | null>(null)
+  const { confirm, dialog: confirmDialog } = useConfirm()
 
   async function loadData() {
     setLoading(true)
@@ -35,7 +37,7 @@ export default function UsersPage() {
   }
 
   async function handleDelete(id: number) {
-    if (!window.confirm('¿Eliminar este usuario?')) return
+    if (!(await confirm('¿Eliminar este usuario?', { danger: true }))) return
     try {
       await authApi.deleteUser(id)
       await loadData()
@@ -118,6 +120,8 @@ export default function UsersPage() {
           onSaved={() => { void loadData() }}
         />
       )}
+
+      {confirmDialog}
     </div>
   )
 }

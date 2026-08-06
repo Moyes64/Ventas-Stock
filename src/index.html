@@ -3,10 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- CSP: no inline scripts, no external resources in production -->
+    <!-- CSP: no inline scripts, no external resources in production.
+         img-src agrega 'data:' porque el QR de pairing del conteo de stock
+         (StockCountPage.tsx) se genera como un data:image/png;base64 en
+         memoria (no hay archivo/ruta 'self' para él) — sin esto, el <img>
+         queda roto en silencio: no hay error de red visible, el navegador
+         simplemente bloquea la carga porque default-src no cubre data:. -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
     />
     <title>Ventas-Stock</title>
   </head>

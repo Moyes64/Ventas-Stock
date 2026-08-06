@@ -50,6 +50,17 @@ import type {
   FinanceTransfer,
   CreateFinanceTransferInput,
   FinanceTransferFilters,
+  MpFeePaymentMethod,
+  FinanceMpFeeRate,
+  CreateMpFeeRateInput,
+  FinanceMpReconciliation,
+  SaveMpReconciliationInput,
+  MpReconciliationRow,
+  StockCountSession,
+  StockCountSessionStatus,
+  ReconciliationRow,
+  ApplyReconciliationDecision,
+  StockCountServerStatus,
 } from '../types/ipc'
 
 // Access the electron bridge exposed by preload
@@ -412,4 +423,42 @@ export const finance = {
   getExpensesByCategory: (dateFrom: string, dateTo: string, accountId?: number) =>
     electron.finance.getExpensesByCategory(dateFrom, dateTo, accountId) as Promise<FinanceCategoryExpense[]>,
   getPartnersEquity: () => electron.finance.getPartnersEquity() as Promise<FinancePartnerEquity[]>,
+  listMpFeeRates: (paymentMethod?: MpFeePaymentMethod) =>
+    electron.finance.listMpFeeRates(paymentMethod) as Promise<FinanceMpFeeRate[]>,
+  createMpFeeRate: (input: CreateMpFeeRateInput) =>
+    electron.finance.createMpFeeRate(input) as Promise<FinanceMpFeeRate>,
+  deleteMpFeeRate: (id: number) => electron.finance.deleteMpFeeRate(id) as Promise<void>,
+  getMpReconciliationRows: (fecha: string, paymentMethod?: MpFeePaymentMethod) =>
+    electron.finance.getMpReconciliationRows(fecha, paymentMethod) as Promise<MpReconciliationRow[]>,
+  listMpReconciliations: (dateFrom?: string, dateTo?: string) =>
+    electron.finance.listMpReconciliations(dateFrom, dateTo) as Promise<FinanceMpReconciliation[]>,
+  saveMpReconciliation: (input: SaveMpReconciliationInput) =>
+    electron.finance.saveMpReconciliation(input) as Promise<FinanceMpReconciliation>,
+  confirmMpReconciliationAdjustment: (id: number) =>
+    electron.finance.confirmMpReconciliationAdjustment(id) as Promise<FinanceMpReconciliation>,
+  ignoreMpReconciliation: (id: number) =>
+    electron.finance.ignoreMpReconciliation(id) as Promise<FinanceMpReconciliation>,
+  reopenMpReconciliation: (id: number) =>
+    electron.finance.reopenMpReconciliation(id) as Promise<FinanceMpReconciliation>,
+}
+
+// Conteo de stock
+export const stockCount = {
+  getServerStatus: () => electron.stockCount.getServerStatus() as Promise<StockCountServerStatus>,
+  setServerEnabled: (enabled: boolean) =>
+    electron.stockCount.setServerEnabled(enabled) as Promise<StockCountServerStatus>,
+  regenerateToken: () => electron.stockCount.regenerateToken() as Promise<StockCountServerStatus>,
+  getSessionPairingQr: (sessionId: number) =>
+    electron.stockCount.getSessionPairingQr(sessionId) as Promise<string | null>,
+  createSession: (label: string, webCategoryId: number | null) =>
+    electron.stockCount.createSession(label, webCategoryId) as Promise<number>,
+  listSessions: (statusFilter?: StockCountSessionStatus) =>
+    electron.stockCount.listSessions(statusFilter) as Promise<StockCountSession[]>,
+  getSession: (id: number) => electron.stockCount.getSession(id) as Promise<StockCountSession | undefined>,
+  getReconciliation: (sessionId: number) =>
+    electron.stockCount.getReconciliation(sessionId) as Promise<ReconciliationRow[]>,
+  applyReconciliation: (sessionId: number, decisions: ApplyReconciliationDecision[]) =>
+    electron.stockCount.applyReconciliation(sessionId, decisions) as Promise<void>,
+  cancelSession: (id: number) => electron.stockCount.cancelSession(id) as Promise<void>,
+  deleteSession: (id: number) => electron.stockCount.deleteSession(id) as Promise<void>,
 }
