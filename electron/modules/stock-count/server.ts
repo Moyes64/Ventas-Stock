@@ -65,6 +65,19 @@ async function handleRequest(
   res: http.ServerResponse,
   handlers: StockCountServerHandlers
 ): Promise<void> {
+  // CORS abierto: la app nativa (fetch de React Native) no lo necesita, pero
+  // permite probar este servidor desde `expo start --web` en un navegador
+  // durante desarrollo. El token sigue siendo lo que realmente autoriza el
+  // acceso — CORS acá es solo para no bloquear el preview web.
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', `Content-Type, ${TOKEN_HEADER}`)
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204)
+    res.end()
+    return
+  }
+
   const url = new URL(req.url ?? '/', 'http://localhost')
   const path = url.pathname
 

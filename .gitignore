@@ -3,6 +3,9 @@ node_modules/
 .pnp
 .pnp.js
 package-lock.json
+# mobile/ es un proyecto npm standalone (Expo) separado del pnpm de la raíz —
+# su lockfile sí se versiona para instalaciones reproducibles.
+!mobile/package-lock.json
 
 # Build outputs
 dist/
