@@ -129,6 +129,21 @@ export default function StockCountPage() {
                 <span>{status.lanIp ? `${status.lanIp}:${status.port}` : 'Sin IP de red detectada'}</span>
               </div>
             )}
+            {status?.running && (
+              <div className="sync-status-row">
+                <span className="sync-status-label">Token</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <code>{status.token}</code>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => { void navigator.clipboard.writeText(status.token) }}
+                  >
+                    Copiar
+                  </button>
+                </span>
+              </div>
+            )}
             {status?.error && (
               <div className="sync-status-row">
                 <span className="sync-status-label">Error</span>
@@ -171,6 +186,7 @@ export default function StockCountPage() {
             <table className="table">
               <thead>
                 <tr>
+                  <th>ID</th>
                   <th>Sesión</th>
                   <th>Categoría</th>
                   <th>Estado</th>
@@ -181,6 +197,7 @@ export default function StockCountPage() {
               <tbody>
                 {sessions.map(s => (
                   <tr key={s.id}>
+                    <td className="muted-text">{s.id}</td>
                     <td>{s.label}</td>
                     <td className="muted-text">{s.webCategoryName ?? 'Todas'}</td>
                     <td><span className={`badge ${STATUS_BADGE[s.status]}`}>{STATUS_LABEL[s.status]}</span></td>

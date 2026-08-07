@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { catalog, suppliers as suppliersApi, printing as printingApi } from '../../lib/ipc'
 import type { Product, TaxRate, Supplier } from '../../types/ipc'
 import { useConfirm } from '../../hooks/useConfirm'
+import { calcSalePrice, calcGainFromPrice } from '../../lib/pricing'
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
@@ -163,18 +164,6 @@ export default function ProductsPage() {
   )
 }
 
-/** Calculates sale price: costo * (1 + ganancia/100) * (1 + iva/100) */
-function calcSalePrice(cost: number, gainPct: number, ivaPct: number): number {
-  return cost * (1 + gainPct / 100) * (1 + ivaPct / 100)
-}
-
-/** Calculates gain percentage from sale price keeping cost and iva fixed */
-function calcGainPercentFromSalePrice(cost: number, salePrice: number, ivaPct: number): number {
-  const divisor = cost * (1 + ivaPct / 100)
-  if (divisor <= 0) return 0
-  return (salePrice / divisor - 1) * 100
-}
-
 function ProductForm({
   product,
   onClose,
@@ -243,7 +232,7 @@ function ProductForm({
   function handlePriceChange(value: string) {
     const nextPrice = parseFloat(value)
     const normalizedNextPrice = Number.isNaN(nextPrice) ? 0 : nextPrice
-    const nextGainPercent = calcGainPercentFromSalePrice(normalizedCost, normalizedNextPrice, ivaPct)
+    const nextGainPercent = calcGainFromPrice(normalizedCost, normalizedNextPrice, ivaPct)
     setForm(prev => ({ ...prev, price: value, gainPercent: String(nextGainPercent) }))
   }
 
@@ -442,7 +431,7 @@ function ProductForm({
                 onBlur={e => { if (e.target.value.trim() === '') handleGainPercentChange('0') }}
                 onFocus={e => e.target.select()}
                 min="0"
-                step="0.1"
+                step="0.01"
                 required
                 className="input"
                 placeholder="Ej: 50"
