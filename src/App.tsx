@@ -27,6 +27,7 @@ import WebCatalogPage from './pages/web-catalog/WebCatalogPage'
 import WebOrdersPage from './pages/web-orders/WebOrdersPage'
 import WebProductEditorPage from './pages/web-catalog/WebProductEditorPage'
 import WebCategoriesPage from './pages/web-catalog/WebCategoriesPage'
+import WebCatalogRemotePage from './pages/web-catalog/WebCatalogRemotePage'
 import CambiosPage from './pages/cambios/CambiosPage'
 import FinanceLayout from './pages/finance/FinanceLayout'
 import MovementsPage from './pages/finance/MovementsPage'
@@ -69,6 +70,7 @@ export default function App() {
             <Route path="web-orders" element={<WebOrdersPage />} />
             <Route path="web-catalog/product/:productId" element={<WebProductEditorPage />} />
             <Route path="web-catalog/categories" element={<WebCategoriesPage />} />
+            <Route path="web-catalog/remoto" element={<WebCatalogRemotePage />} />
             <Route path="cambios" element={<CambiosPage />} />
             <Route path="finance" element={<FinanceLayout />}>
               <Route index element={<Navigate to="/finance/movimientos" replace />} />

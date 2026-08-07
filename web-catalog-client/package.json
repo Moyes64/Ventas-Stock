@@ -1,0 +1,23 @@
+{
+  "name": "web-catalog-client",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Cliente web standalone para editar el catálogo web de Ventas-Stock desde otra computadora en la misma LAN (ver electron/modules/web-catalog-server).",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.55",
+    "@types/react-dom": "^18.2.19",
+    "@vitejs/plugin-react": "^4.2.1",
+    "typescript": "5.5.4",
+    "vite": "^5.1.1"
+  }
+}

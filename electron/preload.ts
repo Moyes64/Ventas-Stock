@@ -286,6 +286,14 @@ const electronAPI = {
     cancelSession: (id: number) => invoke('stockCount:cancelSession', id),
     deleteSession: (id: number) => invoke('stockCount:deleteSession', id),
   },
+
+  // Servidor LAN del catálogo web (para editarlo desde otra máquina en la misma red)
+  webCatalogServer: {
+    getStatus: () => invoke('webCatalogServer:getStatus'),
+    setEnabled: (enabled: boolean) => invoke('webCatalogServer:setEnabled', enabled),
+    regenerateToken: () => invoke('webCatalogServer:regenerateToken'),
+    getPairingInfo: () => invoke('webCatalogServer:getPairingInfo'),
+  },
 }
 
 contextBridge.exposeInMainWorld('electron', electronAPI)
