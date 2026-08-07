@@ -31,8 +31,6 @@ import CambiosPage from './pages/cambios/CambiosPage'
 import FinanceLayout from './pages/finance/FinanceLayout'
 import MovementsPage from './pages/finance/MovementsPage'
 import FinanceDashboardPage from './pages/finance/FinanceDashboardPage'
-import MpFeeRatesPage from './pages/finance/MpFeeRatesPage'
-import MpReconciliationPage from './pages/finance/MpReconciliationPage'
 import { HiddenOptionsProvider } from './context/HiddenOptionsContext'
 
 export default function App() {
@@ -76,8 +74,6 @@ export default function App() {
               <Route index element={<Navigate to="/finance/movimientos" replace />} />
               <Route path="movimientos" element={<MovementsPage />} />
               <Route path="dashboard" element={<FinanceDashboardPage />} />
-              <Route path="comisiones-mp" element={<MpFeeRatesPage />} />
-              <Route path="conciliacion-mp" element={<MpReconciliationPage />} />
             </Route>
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Route>
