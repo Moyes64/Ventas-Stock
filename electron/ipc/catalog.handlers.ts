@@ -34,6 +34,10 @@ export function registerCatalogHandlers(db: Database): void {
     return productService.delete(id)
   })
 
+  ipcMain.handle('catalog:hardDeleteProduct', (_event, id: number) => {
+    return productService.hardDelete(id)
+  })
+
   ipcMain.handle('catalog:getTaxRates', () => {
     return productService.getTaxRates()
   })

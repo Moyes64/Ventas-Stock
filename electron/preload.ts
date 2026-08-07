@@ -32,6 +32,7 @@ const electronAPI = {
     createProduct: (data: unknown) => invoke('catalog:createProduct', data),
     updateProduct: (id: number, data: unknown) => invoke('catalog:updateProduct', id, data),
     deleteProduct: (id: number) => invoke('catalog:deleteProduct', id),
+    hardDeleteProduct: (id: number) => invoke('catalog:hardDeleteProduct', id),
     getTaxRates: () => invoke('catalog:getTaxRates'),
     getCategories: () => invoke('catalog:getCategories'),
     listLowStock: () => invoke('catalog:listLowStock'),

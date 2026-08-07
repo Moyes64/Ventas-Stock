@@ -43,6 +43,20 @@ export default function ProductsPage() {
     }
   }
 
+  // Elimina de verdad (no solo desactiva). El backend rechaza el borrado si
+  // el producto tiene historial (ventas, stock, remitos, etc.) — acá solo se
+  // muestra ese error, no se filtra de antemano.
+  async function handleHardDelete(id: number) {
+    if (!(await confirm('¿Eliminar este producto definitivamente? Esta acción no se puede deshacer.', { danger: true }))) return
+    setError(null)
+    try {
+      await catalog.hardDeleteProduct(id)
+      await loadProducts()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al eliminar')
+    }
+  }
+
   const currency = (n: number) =>
     new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(n)
 
@@ -140,6 +154,11 @@ export default function ProductsPage() {
                         onClick={() => { void handleDelete(p.id) }}
                       >Desactivar</button>
                     )}
+                    <button
+                      className="btn btn-danger btn-sm"
+                      onClick={() => { void handleHardDelete(p.id) }}
+                      title="Eliminar de verdad — solo funciona si el producto no tiene ventas ni movimientos asociados"
+                    >Eliminar</button>
                   </td>
                 </tr>
               ))}

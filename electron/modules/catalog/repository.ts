@@ -131,6 +131,27 @@ export class ProductRepository {
     this.db.prepare('UPDATE products SET active = 0 WHERE id = ?').run(id)
   }
 
+  // Tablas que referencian products.id — un producto solo se puede eliminar
+  // de verdad (no solo desactivar) si no aparece en ninguna de estas, para
+  // no perder historial de ventas/stock/remitos/etc.
+  private static readonly REFERENCING_TABLES = [
+    'stock_movements', 'sale_items', 'remito_product_mappings',
+    'web_products', 'web_product_images', 'exchanges', 'stock_count_items',
+  ] as const
+
+  hasHistory(id: number): boolean {
+    return ProductRepository.REFERENCING_TABLES.some(table => {
+      const row = this.db
+        .prepare(`SELECT 1 FROM ${table} WHERE product_id = ? LIMIT 1`)
+        .get(id)
+      return row !== undefined
+    })
+  }
+
+  hardDelete(id: number): void {
+    this.db.prepare('DELETE FROM products WHERE id = ?').run(id)
+  }
+
   getTaxRates(): TaxRate[] {
     return this.db.prepare('SELECT * FROM tax_rates ORDER BY percentage ASC').all() as TaxRate[]
   }

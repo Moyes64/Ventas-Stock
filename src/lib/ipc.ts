@@ -95,6 +95,7 @@ export const catalog = {
   updateProduct: (id: number, data: Partial<Product>) =>
     electron.catalog.updateProduct(id, data) as Promise<Product>,
   deleteProduct: (id: number) => electron.catalog.deleteProduct(id) as Promise<void>,
+  hardDeleteProduct: (id: number) => electron.catalog.hardDeleteProduct(id) as Promise<void>,
   getTaxRates: () => electron.catalog.getTaxRates() as Promise<TaxRate[]>,
   getCategories: () => electron.catalog.getCategories() as Promise<Category[]>,
   listLowStock: () => electron.catalog.listLowStock() as Promise<Product[]>,

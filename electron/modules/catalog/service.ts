@@ -85,6 +85,20 @@ export class ProductService {
     this.repo.delete(id)
   }
 
+  // Elimina de verdad (no solo desactiva) — solo permitido si el producto no
+  // tiene ningún historial asociado (ventas, movimientos de stock, remitos,
+  // catálogo web, etc.), para no perder registros reales.
+  hardDelete(id: number): void {
+    const existing = this.repo.findById(id)
+    if (!existing) throw new Error(`Producto no encontrado: ${id}`)
+    if (this.repo.hasHistory(id)) {
+      throw new Error(
+        'No se puede eliminar: el producto tiene ventas, movimientos de stock u otro historial asociado. Usá "Desactivar" en su lugar.'
+      )
+    }
+    this.repo.hardDelete(id)
+  }
+
   getTaxRates(): TaxRate[] {
     return this.repo.getTaxRates()
   }
