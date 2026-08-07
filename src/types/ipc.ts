@@ -790,3 +790,19 @@ export interface StockCountServerStatus {
   token: string
   error: string | null
 }
+
+// ── Servidor LAN del catálogo web ────────────────────────────────────────
+
+export interface WebCatalogServerStatus {
+  running: boolean
+  enabled: boolean
+  port: number
+  lanIp: string | null
+  token: string
+  error: string | null
+}
+
+export interface WebCatalogPairingInfo {
+  url: string | null
+  qrDataUrl: string | null
+}

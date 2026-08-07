@@ -88,6 +88,10 @@
       {
         "from": "database/migrations",
         "to": "database/migrations"
+      },
+      {
+        "from": "web-catalog-client/dist",
+        "to": "web-catalog-client"
       }
     ],
     "npmRebuild": false,

@@ -348,6 +348,16 @@ export const webCatalog = {
   getImagesDir:    () => electron.webCatalog.getImagesDir() as Promise<string>,
 }
 
+// Servidor LAN del catálogo web
+import type { WebCatalogServerStatus, WebCatalogPairingInfo } from '../types/ipc'
+
+export const webCatalogServer = {
+  getStatus: () => electron.webCatalogServer.getStatus() as Promise<WebCatalogServerStatus>,
+  setEnabled: (enabled: boolean) => electron.webCatalogServer.setEnabled(enabled) as Promise<WebCatalogServerStatus>,
+  regenerateToken: () => electron.webCatalogServer.regenerateToken() as Promise<WebCatalogServerStatus>,
+  getPairingInfo: () => electron.webCatalogServer.getPairingInfo() as Promise<WebCatalogPairingInfo>,
+}
+
 // Mail
 export const mail = {
   sendInvoice: (saleId: number, toEmail: string) =>

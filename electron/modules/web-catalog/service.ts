@@ -30,9 +30,11 @@ function imagesDir(): string {
   return dir
 }
 
-function compressImage(sourcePath: string): Buffer {
-  const image = nativeImage.createFromPath(sourcePath)
-  if (image.isEmpty()) return fs.readFileSync(sourcePath)
+// Redimensiona/comprime una imagen ya cargada en memoria; si Electron no
+// pudo decodificarla devuelve los bytes originales tal cual (mejor subir
+// una imagen sin comprimir que no subir nada).
+function compressNativeImage(image: Electron.NativeImage, original: Buffer): Buffer {
+  if (image.isEmpty()) return original
 
   const { width, height } = image.getSize()
   const scale = Math.min(1, MAX_IMAGE_DIMENSION / Math.max(width, height))
@@ -41,6 +43,17 @@ function compressImage(sourcePath: string): Buffer {
     : image
 
   return resized.toJPEG(JPEG_QUALITY)
+}
+
+function compressImage(sourcePath: string): Buffer {
+  return compressNativeImage(nativeImage.createFromPath(sourcePath), fs.readFileSync(sourcePath))
+}
+
+// Usado por el servidor LAN del catálogo web (electron/modules/web-catalog-server):
+// ahí la imagen llega como bytes en memoria (upload desde un browser), no como
+// un path de archivo local, así que no se puede usar nativeImage.createFromPath.
+function compressImageBuffer(buffer: Buffer): Buffer {
+  return compressNativeImage(nativeImage.createFromBuffer(buffer), buffer)
 }
 
 interface WebCategoryRow {
@@ -248,9 +261,19 @@ export class WebCatalogService {
   }
 
   saveImage(productId: number, sourcePath: string, sortOrder: number): WebProductImage {
+    return this.persistImage(productId, compressImage(sourcePath), sortOrder)
+  }
+
+  // Usado por el servidor LAN (upload desde un browser en vez del diálogo
+  // nativo de archivos): la imagen llega como Buffer en memoria.
+  saveImageFromBuffer(productId: number, buffer: Buffer, sortOrder: number): WebProductImage {
+    return this.persistImage(productId, compressImageBuffer(buffer), sortOrder)
+  }
+
+  private persistImage(productId: number, jpeg: Buffer, sortOrder: number): WebProductImage {
     const filename = `${productId}_${Date.now()}.jpg`
     const dest = path.join(imagesDir(), filename)
-    fs.writeFileSync(dest, compressImage(sourcePath))
+    fs.writeFileSync(dest, jpeg)
 
     const result = this.db.prepare(`
       INSERT INTO web_product_images (product_id, filename, sort_order) VALUES (?,?,?)

@@ -112,6 +112,9 @@ export default function WebCatalogPage() {
           <button className="btn btn-ghost" onClick={() => navigate('/web-catalog/categories')}>
             🗂️ Categorías
           </button>
+          <button className="btn btn-ghost" onClick={() => navigate('/web-catalog/remoto')}>
+            📡 Acceso remoto
+          </button>
           <button className="btn btn-primary" onClick={() => setShowUnpublished(v => !v)}>
             + Agregar producto
           </button>

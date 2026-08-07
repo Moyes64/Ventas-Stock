@@ -1,11 +1,11 @@
-import { ipcMain, dialog, nativeImage, app } from 'electron'
+import { ipcMain, dialog, app } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import type { Database } from 'better-sqlite3'
 import { WebCatalogService } from '../modules/web-catalog/service'
 import type { SaveWebProductInput, SaveWebCategoryInput } from '../modules/web-catalog/types'
 
-export function registerWebCatalogHandlers(db: Database): void {
+export function registerWebCatalogHandlers(db: Database): WebCatalogService {
   const svc = new WebCatalogService(db)
 
   // ── Categorías ────────────────────────────────────────────────────────────
@@ -73,4 +73,6 @@ export function registerWebCatalogHandlers(db: Database): void {
   // Devuelve el directorio de imágenes para que el sync pueda leerlas
   ipcMain.handle('webCatalog:getImagesDir', () =>
     path.join(app.getPath('userData'), 'web-images'))
+
+  return svc
 }

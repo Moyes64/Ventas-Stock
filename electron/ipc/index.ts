@@ -23,9 +23,13 @@ import { registerCambiosHandlers } from './cambios.handlers'
 import { registerCreditsHandlers } from './credits.handlers'
 import { registerFinanceHandlers } from './finance.handlers'
 import { registerStockCountHandlers } from './stock-count.handlers'
+import { registerWebCatalogServerHandlers } from './web-catalog-server.handlers'
 import type { StockCountService } from '../modules/stock-count/service'
+import type { WebCatalogServerService } from '../modules/web-catalog-server/service'
 
-export function registerAllIpcHandlers(db: Database): { stockCountService: StockCountService } {
+export function registerAllIpcHandlers(
+  db: Database
+): { stockCountService: StockCountService; webCatalogServerService: WebCatalogServerService } {
   registerAuthHandlers(db)
   registerCatalogHandlers(db)
   registerCustomerHandlers(db)
@@ -45,11 +49,12 @@ export function registerAllIpcHandlers(db: Database): { stockCountService: Stock
   registerLabelConfigHandlers()
   registerCsrHandlers()
   registerMailHandlers(db)
-  registerWebCatalogHandlers(db)
+  const webCatalogService = registerWebCatalogHandlers(db)
   registerCambiosHandlers(db)
   registerCreditsHandlers(db)
   registerFinanceHandlers(db)
   const stockCountService = registerStockCountHandlers(db)
+  const webCatalogServerService = registerWebCatalogServerHandlers(webCatalogService)
 
-  return { stockCountService }
+  return { stockCountService, webCatalogServerService }
 }
