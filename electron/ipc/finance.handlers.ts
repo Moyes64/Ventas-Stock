@@ -8,6 +8,9 @@ import type {
   FinanceCategoryAppliesTo,
   CreateTransferInput,
   TransferFilters,
+  MpFeePaymentMethod,
+  CreateMpFeeRateInput,
+  SaveMpReconciliationInput,
 } from '../modules/finance/types'
 
 export function registerFinanceHandlers(db: Database): void {
@@ -86,5 +89,43 @@ export function registerFinanceHandlers(db: Database): void {
 
   ipcMain.handle('finance:getPartnersEquity', () => {
     return financeService.getPartnersEquity()
+  })
+
+  // Comisiones de Mercado Pago (QR / Débito / Crédito)
+  ipcMain.handle('finance:listMpFeeRates', (_event, paymentMethod?: MpFeePaymentMethod) => {
+    return financeService.listMpFeeRates(paymentMethod)
+  })
+
+  ipcMain.handle('finance:createMpFeeRate', (_event, input: CreateMpFeeRateInput) => {
+    return financeService.createMpFeeRate(input)
+  })
+
+  ipcMain.handle('finance:deleteMpFeeRate', (_event, id: number) => {
+    return financeService.deleteMpFeeRate(id)
+  })
+
+  // Conciliación venta por venta con el resumen de Mercado Pago
+  ipcMain.handle('finance:getMpReconciliationRows', (_event, fecha: string, paymentMethod?: MpFeePaymentMethod) => {
+    return financeService.getMpReconciliationRows(fecha, paymentMethod)
+  })
+
+  ipcMain.handle('finance:listMpReconciliations', (_event, dateFrom?: string, dateTo?: string) => {
+    return financeService.listMpReconciliations(dateFrom, dateTo)
+  })
+
+  ipcMain.handle('finance:saveMpReconciliation', (_event, input: SaveMpReconciliationInput) => {
+    return financeService.saveMpReconciliation(input)
+  })
+
+  ipcMain.handle('finance:confirmMpReconciliationAdjustment', (_event, id: number) => {
+    return financeService.confirmMpReconciliationAdjustment(id)
+  })
+
+  ipcMain.handle('finance:ignoreMpReconciliation', (_event, id: number) => {
+    return financeService.ignoreMpReconciliation(id)
+  })
+
+  ipcMain.handle('finance:reopenMpReconciliation', (_event, id: number) => {
+    return financeService.reopenMpReconciliation(id)
   })
 }

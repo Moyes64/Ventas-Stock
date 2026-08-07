@@ -15,6 +15,11 @@ import type {
   FinanceTransfer,
   CreateTransferInput,
   TransferFilters,
+  MpFeePaymentMethod,
+  FinanceMpFeeRate,
+  CreateMpFeeRateInput,
+  FinanceMpReconciliation,
+  MpReconciliationStatus,
 } from './types'
 
 interface PartnerRow {
@@ -63,6 +68,43 @@ interface TransferRow {
   descripcion: string | null
   fecha: string
   created_at: string
+}
+
+interface FeeRateRow {
+  id: number
+  payment_method: string
+  pct: number
+  iva_pct: number
+  vigente_desde: string
+  created_at: string
+}
+
+interface ReconciliationRow {
+  id: number
+  sale_id: number
+  fecha: string
+  payment_method: string
+  bruto_sistema: number
+  comision_sistema: number
+  bruto_real: number
+  comision_real: number
+  neto_real: number
+  diferencia: number
+  status: string
+  ajuste_movement_id: number | null
+  created_at: string
+  updated_at: string
+}
+
+interface MpReconciliationSaleRow {
+  saleId: number
+  paymentMethod: MpFeePaymentMethod
+  fecha: string
+  customerName: string | null
+  invoiceNumber: number | null
+  total: number
+  brutoSistema: number
+  comisionSistema: number
 }
 
 export class FinanceRepository {
@@ -199,6 +241,26 @@ export class FinanceRepository {
     const row = this.db
       .prepare('SELECT * FROM finance_movements WHERE sale_id = ?')
       .get(saleId) as MovementRow | undefined
+    return row ? this.mapMovement(row) : undefined
+  }
+
+  /** Todos los movimientos vinculados a una venta (ingreso "Venta" + egreso "Comisión Mercado Pago", si existe). */
+  listMovementsBySaleId(saleId: number): FinanceMovement[] {
+    const rows = this.db
+      .prepare('SELECT * FROM finance_movements WHERE sale_id = ?')
+      .all(saleId) as MovementRow[]
+    return rows.map(r => this.mapMovement(r))
+  }
+
+  /** El egreso de comisión MP vinculado a una venta, si existe. */
+  findMpFeeMovementBySaleId(saleId: number): FinanceMovement | undefined {
+    const row = this.db
+      .prepare(
+        `SELECT fm.* FROM finance_movements fm
+         JOIN finance_categories fc ON fc.id = fm.categoria_id
+         WHERE fm.sale_id = @saleId AND fc.name = @categoriaName`
+      )
+      .get({ saleId, categoriaName: 'Comisión Mercado Pago' }) as MovementRow | undefined
     return row ? this.mapMovement(row) : undefined
   }
 
@@ -485,6 +547,203 @@ export class FinanceRepository {
     return rows
   }
 
+  // ── Comisiones de Mercado Pago (QR / Débito / Crédito) ──────────────────────
+
+  /** Tasa vigente para un medio de pago a una fecha dada (la más reciente con vigente_desde <= fecha). */
+  findEffectiveMpFeeRate(paymentMethod: MpFeePaymentMethod, fecha: string): FinanceMpFeeRate | undefined {
+    const row = this.db
+      .prepare(
+        `SELECT * FROM finance_mp_fee_rates
+         WHERE payment_method = @paymentMethod AND vigente_desde <= @fecha
+         ORDER BY vigente_desde DESC, id DESC LIMIT 1`
+      )
+      .get({ paymentMethod, fecha }) as FeeRateRow | undefined
+    return row ? this.mapFeeRate(row) : undefined
+  }
+
+  findMpFeeRateById(id: number): FinanceMpFeeRate | undefined {
+    const row = this.db
+      .prepare('SELECT * FROM finance_mp_fee_rates WHERE id = ?')
+      .get(id) as FeeRateRow | undefined
+    return row ? this.mapFeeRate(row) : undefined
+  }
+
+  /** La versión más reciente cargada para un medio de pago (independiente de si ya está vigente o es futura). */
+  findLatestMpFeeRate(paymentMethod: MpFeePaymentMethod): FinanceMpFeeRate | undefined {
+    const row = this.db
+      .prepare(
+        `SELECT * FROM finance_mp_fee_rates WHERE payment_method = @paymentMethod
+         ORDER BY vigente_desde DESC, id DESC LIMIT 1`
+      )
+      .get({ paymentMethod }) as FeeRateRow | undefined
+    return row ? this.mapFeeRate(row) : undefined
+  }
+
+  listMpFeeRates(paymentMethod?: MpFeePaymentMethod): FinanceMpFeeRate[] {
+    const rows = paymentMethod
+      ? (this.db
+          .prepare('SELECT * FROM finance_mp_fee_rates WHERE payment_method = ? ORDER BY vigente_desde DESC, id DESC')
+          .all(paymentMethod) as FeeRateRow[])
+      : (this.db
+          .prepare('SELECT * FROM finance_mp_fee_rates ORDER BY payment_method ASC, vigente_desde DESC, id DESC')
+          .all() as FeeRateRow[])
+    return rows.map(r => this.mapFeeRate(r))
+  }
+
+  createMpFeeRate(input: CreateMpFeeRateInput): number {
+    const result = this.db
+      .prepare(
+        `INSERT INTO finance_mp_fee_rates (payment_method, pct, iva_pct, vigente_desde)
+         VALUES (@paymentMethod, @pct, @ivaPct, @vigenteDesde)`
+      )
+      .run({
+        paymentMethod: input.paymentMethod,
+        pct: input.pct,
+        ivaPct: input.ivaPct ?? 21,
+        vigenteDesde: input.vigenteDesde ?? localToday(),
+      })
+    return result.lastInsertRowid as number
+  }
+
+  deleteMpFeeRate(id: number): void {
+    this.db.prepare('DELETE FROM finance_mp_fee_rates WHERE id = ?').run(id)
+  }
+
+  /**
+   * Ventas de un día (opcionalmente filtradas por medio de pago) con comisión de
+   * Mercado Pago, junto con el bruto/comisión que Ventas-Stock ya asentó por cada
+   * una (según lo posteado en finance_movements). Una fila por venta, no un total.
+   */
+  listSalesForMpReconciliation(fecha: string, paymentMethod?: MpFeePaymentMethod): MpReconciliationSaleRow[] {
+    const conditions = [
+      's.sale_date = @fecha',
+      "s.status != 'CANCELLED'",
+      "s.payment_method IN ('qr', 'debito', 'credito', 'mercadopago')",
+    ]
+    const params: Record<string, unknown> = { fecha }
+    if (paymentMethod !== undefined) {
+      conditions.push('s.payment_method = @paymentMethod')
+      params.paymentMethod = paymentMethod
+    }
+    const rows = this.db
+      .prepare(
+        `SELECT s.id AS saleId, s.payment_method AS paymentMethod, s.sale_date AS fecha,
+                c.name AS customerName, s.invoice_number AS invoiceNumber, s.total AS total,
+                COALESCE(SUM(CASE WHEN fc.name = 'Venta' THEN fm.monto ELSE 0 END), 0) AS brutoSistema,
+                COALESCE(SUM(CASE WHEN fc.name = 'Comisión Mercado Pago' THEN fm.monto ELSE 0 END), 0) AS comisionSistema
+         FROM sales s
+         LEFT JOIN customers c ON c.id = s.customer_id
+         LEFT JOIN finance_movements fm ON fm.sale_id = s.id
+         LEFT JOIN finance_categories fc ON fc.id = fm.categoria_id
+         WHERE ${conditions.join(' AND ')}
+         GROUP BY s.id
+         ORDER BY s.id ASC`
+      )
+      .all(params) as MpReconciliationSaleRow[]
+    return rows
+  }
+
+  /** Bruto/comisión que Ventas-Stock ya asentó para una venta puntual, más su medio de pago y fecha. */
+  getMpSystemSummaryForSale(saleId: number): MpReconciliationSaleRow | undefined {
+    const row = this.db
+      .prepare(
+        `SELECT s.id AS saleId, s.payment_method AS paymentMethod, s.sale_date AS fecha,
+                c.name AS customerName, s.invoice_number AS invoiceNumber, s.total AS total,
+                COALESCE(SUM(CASE WHEN fc.name = 'Venta' THEN fm.monto ELSE 0 END), 0) AS brutoSistema,
+                COALESCE(SUM(CASE WHEN fc.name = 'Comisión Mercado Pago' THEN fm.monto ELSE 0 END), 0) AS comisionSistema
+         FROM sales s
+         LEFT JOIN customers c ON c.id = s.customer_id
+         LEFT JOIN finance_movements fm ON fm.sale_id = s.id
+         LEFT JOIN finance_categories fc ON fc.id = fm.categoria_id
+         WHERE s.id = @saleId
+         GROUP BY s.id`
+      )
+      .get({ saleId }) as MpReconciliationSaleRow | undefined
+    return row
+  }
+
+  // ── Conciliación venta por venta con el resumen de Mercado Pago ─────────────
+
+  findMpReconciliationBySaleId(saleId: number): FinanceMpReconciliation | undefined {
+    const row = this.db
+      .prepare('SELECT * FROM finance_mp_reconciliations WHERE sale_id = ?')
+      .get(saleId) as ReconciliationRow | undefined
+    return row ? this.mapReconciliation(row) : undefined
+  }
+
+  findMpReconciliationById(id: number): FinanceMpReconciliation | undefined {
+    const row = this.db
+      .prepare('SELECT * FROM finance_mp_reconciliations WHERE id = ?')
+      .get(id) as ReconciliationRow | undefined
+    return row ? this.mapReconciliation(row) : undefined
+  }
+
+  listMpReconciliations(dateFrom?: string, dateTo?: string): FinanceMpReconciliation[] {
+    const conditions: string[] = []
+    const params: Record<string, unknown> = {}
+    if (dateFrom !== undefined) {
+      conditions.push('fecha >= @dateFrom')
+      params.dateFrom = dateFrom
+    }
+    if (dateTo !== undefined) {
+      conditions.push('fecha <= @dateTo')
+      params.dateTo = dateTo
+    }
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+    const rows = this.db
+      .prepare(`SELECT * FROM finance_mp_reconciliations ${where} ORDER BY fecha DESC, payment_method ASC`)
+      .all(params) as ReconciliationRow[]
+    return rows.map(r => this.mapReconciliation(r))
+  }
+
+  /** Crea o reemplaza (por sale_id) el snapshot pendiente de conciliación de una venta. */
+  upsertMpReconciliationForSale(input: {
+    saleId: number
+    fecha: string
+    paymentMethod: MpFeePaymentMethod
+    brutoSistema: number
+    comisionSistema: number
+    brutoReal: number
+    comisionReal: number
+    netoReal: number
+    diferencia: number
+  }): number {
+    const existing = this.findMpReconciliationBySaleId(input.saleId)
+    if (existing) {
+      this.db
+        .prepare(
+          `UPDATE finance_mp_reconciliations SET
+             fecha = @fecha, payment_method = @paymentMethod,
+             bruto_sistema = @brutoSistema, comision_sistema = @comisionSistema,
+             bruto_real = @brutoReal, comision_real = @comisionReal, neto_real = @netoReal,
+             diferencia = @diferencia, status = 'pending', ajuste_movement_id = NULL,
+             updated_at = datetime('now')
+           WHERE id = @id`
+        )
+        .run({ id: existing.id, ...input })
+      return existing.id
+    }
+    const result = this.db
+      .prepare(
+        `INSERT INTO finance_mp_reconciliations
+           (sale_id, fecha, payment_method, bruto_sistema, comision_sistema, bruto_real, comision_real, neto_real, diferencia)
+         VALUES
+           (@saleId, @fecha, @paymentMethod, @brutoSistema, @comisionSistema, @brutoReal, @comisionReal, @netoReal, @diferencia)`
+      )
+      .run(input)
+    return result.lastInsertRowid as number
+  }
+
+  updateMpReconciliationStatus(id: number, status: MpReconciliationStatus, ajusteMovementId: number | null): void {
+    this.db
+      .prepare(
+        `UPDATE finance_mp_reconciliations
+         SET status = @status, ajuste_movement_id = @ajusteMovementId, updated_at = datetime('now')
+         WHERE id = @id`
+      )
+      .run({ id, status, ajusteMovementId })
+  }
+
   // ── Helpers privados ──────────────────────────────────────────────────────
 
   private buildDateAccountFilter(
@@ -565,6 +824,36 @@ export class FinanceRepository {
       descripcion: row.descripcion,
       fecha: row.fecha,
       createdAt: row.created_at,
+    }
+  }
+
+  private mapFeeRate(row: FeeRateRow): FinanceMpFeeRate {
+    return {
+      id: row.id,
+      paymentMethod: row.payment_method as MpFeePaymentMethod,
+      pct: row.pct,
+      ivaPct: row.iva_pct,
+      vigenteDesde: row.vigente_desde,
+      createdAt: row.created_at,
+    }
+  }
+
+  private mapReconciliation(row: ReconciliationRow): FinanceMpReconciliation {
+    return {
+      id: row.id,
+      saleId: row.sale_id,
+      fecha: row.fecha,
+      paymentMethod: row.payment_method as MpFeePaymentMethod,
+      brutoSistema: row.bruto_sistema,
+      comisionSistema: row.comision_sistema,
+      brutoReal: row.bruto_real,
+      comisionReal: row.comision_real,
+      netoReal: row.neto_real,
+      diferencia: row.diferencia,
+      status: row.status as MpReconciliationStatus,
+      ajusteMovementId: row.ajuste_movement_id,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
     }
   }
 }

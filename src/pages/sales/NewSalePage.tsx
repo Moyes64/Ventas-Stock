@@ -515,6 +515,7 @@ export default function NewSalePage() {
             >
               <option value="contado_efectivo">💵 Contado Efectivo</option>
               <option value="transferencia">🏦 Transferencia</option>
+              <option value="qr">📱 QR</option>
               <option value="debito">💳 Débito</option>
               <option value="credito">💳 Crédito</option>
               {selectedCustomerId && creditBalance !== null && creditBalance > 0 && (

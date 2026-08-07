@@ -7,12 +7,16 @@ import { useHiddenOptions } from '../../context/HiddenOptionsContext'
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   contado_efectivo: '💵 Contado Efectivo',
   transferencia: '🏦 Transferencia',
+  qr: '📱 QR',
   debito: '💳 Débito',
   credito: '💳 Crédito',
   credito_cliente: '🎁 Crédito del cliente',
+  mercadopago: '🛒 Mercado Pago (Web)',
 }
 
-const EDITABLE_PAYMENT_METHODS: PaymentMethod[] = ['contado_efectivo', 'transferencia', 'debito', 'credito']
+const EDITABLE_PAYMENT_METHODS: PaymentMethod[] = [
+  'contado_efectivo', 'transferencia', 'qr', 'debito', 'credito', 'mercadopago',
+]
 
 const STATUS_LABELS: Record<string, string> = {
   AUTHORIZED: '✅ Autorizada',

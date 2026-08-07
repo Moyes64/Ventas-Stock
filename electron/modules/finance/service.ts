@@ -18,13 +18,28 @@ import type {
   FinanceTransfer,
   CreateTransferInput,
   TransferFilters,
+  MpFeePaymentMethod,
+  FinanceMpFeeRate,
+  CreateMpFeeRateInput,
+  FinanceMpReconciliation,
+  SaveMpReconciliationInput,
+  MpReconciliationRow,
 } from './types'
 
 const RETIRO_SOCIO_CATEGORIA = 'Retiro de Socio'
 const VENTA_CATEGORIA = 'Venta'
+const COMISION_MP_CATEGORIA = 'Comisión Mercado Pago'
+const AJUSTE_CONCILIACION_CATEGORIA = 'Ajuste Conciliación MP'
 const MP_ANABELLA_ACCOUNT_NAME = 'Mercado Pago - Anabella'
 /** Medios de pago cuyo dinero se acredita en la cuenta MP-Anabella (posnet local, transferencias, web). */
-const MP_ANABELLA_PAYMENT_METHODS = new Set(['transferencia', 'debito', 'credito', 'mercadopago'])
+const MP_ANABELLA_PAYMENT_METHODS = new Set(['transferencia', 'debito', 'credito', 'mercadopago', 'qr'])
+/** Medios de pago a los que Mercado Pago les cobra comisión: posnet físico (QR/tarjeta) + tienda web. */
+const MP_FEE_METHODS: MpFeePaymentMethod[] = ['qr', 'debito', 'credito', 'mercadopago']
+const MP_FEE_PAYMENT_METHODS = new Set<MpFeePaymentMethod>(MP_FEE_METHODS)
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100
+}
 
 export class FinanceService {
   private readonly repo: FinanceRepository
@@ -226,6 +241,10 @@ export class FinanceService {
    * cobra una venta: Caja para efectivo, MP-Anabella para posnet/transferencia/web.
    * No-op para crédito de cliente (consumo de un crédito ya existente, no dinero nuevo)
    * o cualquier otro medio no mapeado.
+   *
+   * Para QR/Débito/Crédito, además del ingreso bruto por la venta, registra un
+   * segundo movimiento (egreso) por la comisión que cobra Mercado Pago, según la
+   * tasa vigente a la fecha de la venta — ver `registerMpFeeForSale`.
    */
   registerSaleIncome(input: {
     saleId: number
@@ -253,13 +272,81 @@ export class FinanceService {
       fecha: input.fecha,
       saleId: input.saleId,
     })
+
+    if (MP_FEE_PAYMENT_METHODS.has(input.paymentMethod as MpFeePaymentMethod)) {
+      this.registerMpFeeForSale(
+        input.saleId,
+        input.paymentMethod as MpFeePaymentMethod,
+        input.monto,
+        input.fecha,
+        account.id
+      )
+    }
+
     return this.repo.findMovementById(id) ?? null
   }
 
-  /** Revierte (elimina) el ingreso auto-generado por una venta, si existe. */
+  /**
+   * Descuenta la comisión de Mercado Pago (% + IVA, según la tasa vigente el
+   * día de la venta) como un egreso separado en la misma cuenta — visible en
+   * "Gastos por categoría" y vinculado a la venta (se borra junto con el
+   * ingreso si la venta se cancela o se reclasifica). No hace nada si todavía
+   * no hay una tasa configurada para ese medio de pago (mejor no descontar
+   * nada que asumir un % incorrecto).
+   */
+  private registerMpFeeForSale(
+    saleId: number,
+    paymentMethod: MpFeePaymentMethod,
+    monto: number,
+    fecha: string,
+    accountId: number
+  ): void {
+    const rate = this.repo.findEffectiveMpFeeRate(paymentMethod, fecha)
+    if (!rate) return
+    const comision = round2(monto * (rate.pct / 100) * (1 + rate.ivaPct / 100))
+    if (comision <= 0) return
+
+    const categoria = this.repo.findCategoryByName(COMISION_MP_CATEGORIA)
+    this.repo.createMovement({
+      accountId,
+      tipo: 'egreso',
+      categoriaId: categoria?.id ?? null,
+      monto: comision,
+      descripcion: `Comisión MP (${paymentMethod.toUpperCase()}) - Venta #${saleId}`,
+      fecha,
+      saleId,
+    })
+  }
+
+  /** Revierte (elimina) el ingreso y la comisión MP auto-generados por una venta, si existen. */
   reverseSaleIncome(saleId: number): void {
-    const movement = this.repo.findMovementBySaleId(saleId)
-    if (movement) this.repo.deleteMovement(movement.id)
+    for (const movement of this.repo.listMovementsBySaleId(saleId)) {
+      this.repo.deleteMovement(movement.id)
+    }
+  }
+
+  /**
+   * Resincroniza el egreso de comisión MP de una venta ya cargada tras cambiar
+   * su medio de pago (ej: una venta por QR que se había cargado por error como
+   * "Transferencia"). Borra la comisión anterior, si había, y registra la nueva
+   * según el medio de pago actual, en la misma cuenta donde ya está el ingreso
+   * de la venta. No mueve el ingreso entre cuentas — solo aplica cuando origen
+   * y destino comparten cuenta (QR/Transferencia/Débito/Crédito ya van todos a
+   * MP-Anabella hoy).
+   */
+  resyncSaleFee(input: { saleId: number; paymentMethod: string; monto: number; fecha: string }): void {
+    const existingFee = this.repo.findMpFeeMovementBySaleId(input.saleId)
+    if (existingFee) this.repo.deleteMovement(existingFee.id)
+
+    if (!MP_FEE_PAYMENT_METHODS.has(input.paymentMethod as MpFeePaymentMethod)) return
+
+    const ventaMovement = this.repo
+      .listMovementsBySaleId(input.saleId)
+      .find(m => m.tipo === 'ingreso')
+    const accountId = ventaMovement?.accountId ?? this.repo.findAccountByName(MP_ANABELLA_ACCOUNT_NAME)?.id
+    if (!accountId) return
+
+    this.registerMpFeeForSale(input.saleId, input.paymentMethod as MpFeePaymentMethod, input.monto, input.fecha, accountId)
   }
 
   // ── Reportes ──────────────────────────────────────────────────────────────
@@ -332,5 +419,163 @@ export class FinanceService {
         saldoPendiente: utilidadAcumulada - retirosRealizados,
       }
     })
+  }
+
+  // ── Comisiones de Mercado Pago (QR / Débito / Crédito) ──────────────────────
+
+  listMpFeeRates(paymentMethod?: MpFeePaymentMethod): FinanceMpFeeRate[] {
+    return this.repo.listMpFeeRates(paymentMethod)
+  }
+
+  createMpFeeRate(input: CreateMpFeeRateInput): FinanceMpFeeRate {
+    if (!MP_FEE_METHODS.includes(input.paymentMethod)) {
+      throw new Error('El medio de pago debe ser "qr", "debito", "credito" o "mercadopago"')
+    }
+    if (typeof input.pct !== 'number' || Number.isNaN(input.pct) || input.pct < 0) {
+      throw new Error('El % de comisión debe ser un número mayor o igual a cero')
+    }
+    if (input.ivaPct !== undefined && (Number.isNaN(input.ivaPct) || input.ivaPct < 0)) {
+      throw new Error('El % de IVA debe ser mayor o igual a cero')
+    }
+    const id = this.repo.createMpFeeRate(input)
+    const created = this.repo.findMpFeeRateById(id)
+    if (!created) throw new Error('Error al recuperar la tasa creada')
+    return created
+  }
+
+  /** Solo se puede borrar la versión más reciente de cada medio de pago — preserva el historial usado por ventas ya cargadas. */
+  deleteMpFeeRate(id: number): void {
+    const rate = this.repo.findMpFeeRateById(id)
+    if (!rate) throw new Error(`Tasa no encontrada: ${id}`)
+    const latest = this.repo.findLatestMpFeeRate(rate.paymentMethod)
+    if (!latest || latest.id !== id) {
+      throw new Error('Solo se puede eliminar la versión más reciente de la tasa — agregá una nueva versión en su lugar')
+    }
+    this.repo.deleteMpFeeRate(id)
+  }
+
+  // ── Conciliación venta por venta con el resumen de Mercado Pago ─────────────
+
+  /**
+   * Para una fecha dada (opcionalmente filtrada por medio de pago), una fila por
+   * cada venta con comisión de Mercado Pago: el cálculo automático de Ventas-Stock
+   * + la conciliación guardada, si existe. Reemplaza el total agregado por día que
+   * escondía qué venta puntual tenía la diferencia.
+   */
+  getMpReconciliationRows(fecha: string, paymentMethod?: MpFeePaymentMethod): MpReconciliationRow[] {
+    return this.repo.listSalesForMpReconciliation(fecha, paymentMethod).map(sale => ({
+      saleId: sale.saleId,
+      paymentMethod: sale.paymentMethod,
+      fecha: sale.fecha,
+      customerName: sale.customerName,
+      invoiceNumber: sale.invoiceNumber,
+      total: sale.total,
+      brutoSistema: sale.brutoSistema,
+      comisionSistema: sale.comisionSistema,
+      netoSistema: round2(sale.brutoSistema - sale.comisionSistema),
+      reconciliation: this.repo.findMpReconciliationBySaleId(sale.saleId) ?? null,
+    }))
+  }
+
+  listMpReconciliations(dateFrom?: string, dateTo?: string): FinanceMpReconciliation[] {
+    return this.repo.listMpReconciliations(dateFrom, dateTo)
+  }
+
+  /** Guarda los datos reales de una venta puntual del resumen de MP, y calcula la diferencia contra lo estimado. */
+  saveMpReconciliation(input: SaveMpReconciliationInput): FinanceMpReconciliation {
+    if ([input.brutoReal, input.comisionReal, input.netoReal].some(n => typeof n !== 'number' || Number.isNaN(n) || n < 0)) {
+      throw new Error('Los montos deben ser números mayores o iguales a cero')
+    }
+
+    const sale = this.repo.getMpSystemSummaryForSale(input.saleId)
+    if (!sale) throw new Error(`Venta no encontrada: ${input.saleId}`)
+    if (!MP_FEE_METHODS.includes(sale.paymentMethod)) {
+      throw new Error('Esta venta no corresponde a un medio de pago con comisión de Mercado Pago')
+    }
+
+    const existing = this.repo.findMpReconciliationBySaleId(input.saleId)
+    if (existing && existing.status === 'adjusted') {
+      throw new Error(
+        'Esta conciliación ya tiene un ajuste asentado. Reabrila (lo que revierte el ajuste) antes de volver a cargarla.'
+      )
+    }
+
+    const netoSistema = round2(sale.brutoSistema - sale.comisionSistema)
+    const diferencia = round2(netoSistema - input.netoReal)
+
+    const id = this.repo.upsertMpReconciliationForSale({
+      saleId: input.saleId,
+      fecha: sale.fecha,
+      paymentMethod: sale.paymentMethod,
+      brutoSistema: sale.brutoSistema,
+      comisionSistema: sale.comisionSistema,
+      brutoReal: input.brutoReal,
+      comisionReal: input.comisionReal,
+      netoReal: input.netoReal,
+      diferencia,
+    })
+    const saved = this.repo.findMpReconciliationById(id)
+    if (!saved) throw new Error('Error al recuperar la conciliación guardada')
+    return saved
+  }
+
+  /**
+   * Asienta el ajuste de la diferencia detectada en Cuenta MP-Anabella (nunca
+   * automático — requiere esta confirmación explícita). Si la diferencia es
+   * positiva (el sistema sobreestimó el neto), el ajuste es un egreso; si es
+   * negativa, un ingreso.
+   */
+  confirmMpReconciliationAdjustment(id: number): FinanceMpReconciliation {
+    const reconciliation = this.repo.findMpReconciliationById(id)
+    if (!reconciliation) throw new Error(`Conciliación no encontrada: ${id}`)
+    if (reconciliation.status === 'adjusted') throw new Error('Esta conciliación ya fue ajustada')
+    if (Math.abs(reconciliation.diferencia) < 0.01) {
+      throw new Error('No hay diferencia para ajustar')
+    }
+
+    const account = this.repo.findAccountByName(MP_ANABELLA_ACCOUNT_NAME)
+    if (!account) throw new Error('No se encontró la cuenta Mercado Pago - Anabella')
+    const categoria = this.repo.findCategoryByName(AJUSTE_CONCILIACION_CATEGORIA)
+
+    const movementId = this.repo.createMovement({
+      accountId: account.id,
+      tipo: reconciliation.diferencia > 0 ? 'egreso' : 'ingreso',
+      categoriaId: categoria?.id ?? null,
+      monto: Math.abs(reconciliation.diferencia),
+      descripcion: `Ajuste conciliación MP (${reconciliation.paymentMethod.toUpperCase()}) Venta #${reconciliation.saleId} - ${reconciliation.fecha}`,
+      fecha: reconciliation.fecha,
+    })
+
+    this.repo.updateMpReconciliationStatus(id, 'adjusted', movementId)
+    const updated = this.repo.findMpReconciliationById(id)
+    if (!updated) throw new Error('Error al recuperar la conciliación actualizada')
+    return updated
+  }
+
+  /** Marca la diferencia como aceptada (ej: redondeo) sin generar ningún movimiento. */
+  ignoreMpReconciliation(id: number): FinanceMpReconciliation {
+    const reconciliation = this.repo.findMpReconciliationById(id)
+    if (!reconciliation) throw new Error(`Conciliación no encontrada: ${id}`)
+    if (reconciliation.status === 'adjusted') throw new Error('Esta conciliación ya fue ajustada')
+    this.repo.updateMpReconciliationStatus(id, 'ignored', null)
+    const updated = this.repo.findMpReconciliationById(id)
+    if (!updated) throw new Error('Error al recuperar la conciliación actualizada')
+    return updated
+  }
+
+  /** Revierte un ajuste ya asentado (borra el movimiento) y vuelve la conciliación a "pending" para poder recargarla. */
+  reopenMpReconciliation(id: number): FinanceMpReconciliation {
+    const reconciliation = this.repo.findMpReconciliationById(id)
+    if (!reconciliation) throw new Error(`Conciliación no encontrada: ${id}`)
+    const ajusteMovementId = reconciliation.ajusteMovementId
+    // Primero desvincular la referencia (FK finance_mp_reconciliations.ajuste_movement_id)
+    // y recién después borrar el movimiento — al revés, el DELETE viola la FK.
+    this.repo.updateMpReconciliationStatus(id, 'pending', null)
+    if (ajusteMovementId) {
+      this.repo.deleteMovement(ajusteMovementId)
+    }
+    const updated = this.repo.findMpReconciliationById(id)
+    if (!updated) throw new Error('Error al recuperar la conciliación actualizada')
+    return updated
   }
 }

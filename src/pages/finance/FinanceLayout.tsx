@@ -19,6 +19,18 @@ export default function FinanceLayout() {
         >
           📊 Dashboard
         </NavLink>
+        <NavLink
+          to="/finance/comisiones-mp"
+          className={({ isActive }) => `sub-nav-item ${isActive ? 'active' : ''}`}
+        >
+          💳 Comisiones MP
+        </NavLink>
+        <NavLink
+          to="/finance/conciliacion-mp"
+          className={({ isActive }) => `sub-nav-item ${isActive ? 'active' : ''}`}
+        >
+          🔍 Conciliación MP
+        </NavLink>
       </nav>
       <div className="sub-page">
         <Outlet />

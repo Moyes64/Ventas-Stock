@@ -134,3 +134,73 @@ export interface PartnerEquity {
   retirosRealizados: number
   saldoPendiente: number
 }
+
+// ── Comisiones de Mercado Pago (QR / Débito / Crédito / tienda web) y conciliación ──
+
+/**
+ * Medios de pago a los que Mercado Pago les cobra comisión: 'qr'/'debito'/'credito'
+ * son el posnet físico; 'mercadopago' es la tienda online (Checkout Pro) — misma
+ * cuenta destino (MP-Anabella) pero comisión y acreditación muy distintas.
+ */
+export type MpFeePaymentMethod = 'qr' | 'debito' | 'credito' | 'mercadopago'
+
+export interface FinanceMpFeeRate {
+  id: number
+  paymentMethod: MpFeePaymentMethod
+  /** % de comisión antes de IVA (ej: 0.8 = 0.8%). */
+  pct: number
+  /** % de IVA que se aplica sobre la comisión (ej: 21). */
+  ivaPct: number
+  /** Fecha desde la cual esta tasa está vigente (inclusive). */
+  vigenteDesde: string
+  createdAt: string
+}
+
+export interface CreateMpFeeRateInput {
+  paymentMethod: MpFeePaymentMethod
+  pct: number
+  ivaPct?: number
+  vigenteDesde?: string
+}
+
+export type MpReconciliationStatus = 'pending' | 'adjusted' | 'ignored'
+
+export interface FinanceMpReconciliation {
+  id: number
+  saleId: number
+  fecha: string
+  paymentMethod: MpFeePaymentMethod
+  brutoSistema: number
+  comisionSistema: number
+  brutoReal: number
+  comisionReal: number
+  netoReal: number
+  /** (brutoSistema - comisionSistema) - netoReal. Positivo = el sistema sobreestimó el neto. */
+  diferencia: number
+  status: MpReconciliationStatus
+  ajusteMovementId: number | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SaveMpReconciliationInput {
+  saleId: number
+  brutoReal: number
+  comisionReal: number
+  netoReal: number
+}
+
+/** Una venta puntual (QR/Débito/Crédito/MP-Web) del día filtrado, con el
+ *  cálculo automático de Ventas-Stock y la conciliación guardada, si existe. */
+export interface MpReconciliationRow {
+  saleId: number
+  paymentMethod: MpFeePaymentMethod
+  fecha: string
+  customerName: string | null
+  invoiceNumber: number | null
+  total: number
+  brutoSistema: number
+  comisionSistema: number
+  netoSistema: number
+  reconciliation: FinanceMpReconciliation | null
+}

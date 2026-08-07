@@ -14,6 +14,7 @@ export type PaymentMethod =
   | 'credito_cliente'
   | 'WEB_ORDER'
   | 'mercadopago'
+  | 'qr'
 
 export interface SaleItem {
   id?: number

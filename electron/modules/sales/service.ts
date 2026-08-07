@@ -37,6 +37,21 @@ export class SaleService {
     this.saleRepo.updatePaymentMethod(id, paymentMethod)
     const sale = this.saleRepo.findById(id)
     if (!sale) throw new Error(`Venta no encontrada: ${id}`)
+
+    // Resincroniza la comisión de Mercado Pago con el medio de pago nuevo (ej:
+    // reclasificar una venta de "Transferencia" a "QR" agrega el egreso de
+    // comisión que no existía; no bloquea el cambio si falla.
+    try {
+      this.financeService.resyncSaleFee({
+        saleId: sale.id,
+        paymentMethod: sale.paymentMethod,
+        monto: sale.total,
+        fecha: sale.saleDate,
+      })
+    } catch (err) {
+      console.error('[sales] Error resincronizando comisión MP tras cambio de medio de pago:', err)
+    }
+
     return sale
   }
 

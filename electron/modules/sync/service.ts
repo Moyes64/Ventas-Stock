@@ -411,10 +411,14 @@ export class SyncService {
         }
       }
 
-      // Crear venta (mapear métodos de pago web a los valores locales aceptados)
+      // Crear venta (mapear métodos de pago web a los valores locales aceptados).
+      // 'mercadopago' se mapea a sí mismo (no a 'transferencia'): la comisión de
+      // Mercado Pago Checkout Pro (tienda online) es muy distinta a la del posnet
+      // físico y a una transferencia sin comisión — necesita su propia tasa, ver
+      // FinanceService.registerSaleIncome / migración 024.
       const saleDate = order.createdAt.slice(0, 10)
       const paymentMethodMap: Record<string, string> = {
-        mercadopago: 'transferencia',
+        mercadopago: 'mercadopago',
         credit_card: 'credito',
         debit_card: 'debito',
         cash: 'contado_efectivo',
