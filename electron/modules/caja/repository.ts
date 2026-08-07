@@ -110,6 +110,8 @@ export class CajaRepository {
       transferencia: 0,
       debito: 0,
       credito: 0,
+      qr: 0,
+      mercadopago: 0,
     }
     for (const row of rows) {
       result[row.payment_method] = row.total_amount

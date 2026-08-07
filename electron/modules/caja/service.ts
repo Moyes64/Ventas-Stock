@@ -75,6 +75,18 @@ export class CajaService {
     const movements = allMovements.filter(m => m.saleId === null)
     const salesByMethod = this.repo.getSalesSummaryByPaymentMethod(date)
 
+    // Transferencias entre cuentas que involucran a Caja ese día (dinero que
+    // físicamente entró o salió de la caja pero no pasa por finance_movements).
+    const transfers = cajaAccount
+      ? this.financeService.listTransfers({ accountId: cajaAccount.id, dateFrom: date, dateTo: date })
+      : []
+    const transfersInTotal = transfers
+      .filter(t => cajaAccount && t.toAccountId === cajaAccount.id)
+      .reduce((sum, t) => sum + t.monto, 0)
+    const transfersOutTotal = transfers
+      .filter(t => cajaAccount && t.fromAccountId === cajaAccount.id)
+      .reduce((sum, t) => sum + t.monto, 0)
+
     const cashSalesTotal = salesByMethod['contado_efectivo'] ?? 0
     const ingresosTotal = movements
       .filter(m => m.tipo === 'ingreso')
@@ -82,7 +94,8 @@ export class CajaService {
     const egresosTotal = movements
       .filter(m => m.tipo === 'egreso')
       .reduce((sum, m) => sum + m.monto, 0)
-    const expectedTotal = session.aperturaAmount + cashSalesTotal + ingresosTotal - egresosTotal
+    const expectedTotal =
+      session.aperturaAmount + cashSalesTotal + ingresosTotal - egresosTotal + transfersInTotal - transfersOutTotal
 
     return {
       session,
@@ -90,14 +103,19 @@ export class CajaService {
       cashSalesTotal,
       ingresosTotal,
       egresosTotal,
+      transfersInTotal,
+      transfersOutTotal,
       expectedTotal,
       salesByPaymentMethod: {
         contado_efectivo: salesByMethod['contado_efectivo'] ?? 0,
         transferencia: salesByMethod['transferencia'] ?? 0,
         debito: salesByMethod['debito'] ?? 0,
         credito: salesByMethod['credito'] ?? 0,
+        qr: salesByMethod['qr'] ?? 0,
+        mercadopago: salesByMethod['mercadopago'] ?? 0,
       },
       movements,
+      transfers,
     }
   }
 
