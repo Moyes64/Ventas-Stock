@@ -205,6 +205,8 @@ export const printing = {
     electron.printing.printInvoiceSystem(saleId) as Promise<{ success: boolean; error?: string }>,
   printDeliveryNoteSystem: (saleId: number) =>
     electron.printing.printDeliveryNoteSystem(saleId) as Promise<{ success: boolean; error?: string }>,
+  exportInvoicePdf: (saleId: number) =>
+    electron.printing.exportInvoicePdf(saleId) as Promise<{ success: boolean; filePath?: string; canceled?: boolean; error?: string }>,
   printBatch: (saleIds: number[]) =>
     electron.printing.printBatch(saleIds) as Promise<{ success: boolean; printed: number; errors: string[] }>,
   listForReprint: (filters: {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { invoicing as invoicingApi, printing, sales as salesApi } from '../../lib/ipc'
+import { invoicing as invoicingApi, printing, sales as salesApi, mail } from '../../lib/ipc'
 import { localToday } from '../../lib/date'
 import type { PaymentMethod, Sale } from '../../types/ipc'
 import { useHiddenOptions } from '../../context/HiddenOptionsContext'
@@ -52,9 +52,17 @@ export default function InvoicingPage() {
   const [retrying, setRetrying] = useState<number | null>(null)
   const [printingId, setPrintingId] = useState<number | null>(null)
   const [changePrintingId, setChangePrintingId] = useState<number | null>(null)
+  const [pdfExportingId, setPdfExportingId] = useState<number | null>(null)
+  const [mailingId, setMailingId] = useState<number | null>(null)
   const [batchPrinting, setBatchPrinting] = useState(false)
   const [printError, setPrintError] = useState<string | null>(null)
   const [batchMsg, setBatchMsg] = useState<string | null>(null)
+
+  // Prompt de email cuando el cliente no tiene uno cargado (mismo patrón que NewSalePage.tsx)
+  const [emailPromptFor, setEmailPromptFor] = useState<number | null>(null)
+  const [emailPromptValue, setEmailPromptValue] = useState('')
+  const [emailPromptError, setEmailPromptError] = useState<string | null>(null)
+  const [emailSending, setEmailSending] = useState(false)
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [editingPaymentId, setEditingPaymentId] = useState<number | null>(null)
   const [savingPaymentId, setSavingPaymentId] = useState<number | null>(null)
@@ -133,6 +141,54 @@ export default function InvoicingPage() {
     } catch (err) {
       setPrintError(err instanceof Error ? err.message : 'Error al imprimir ticket de cambio')
     } finally { setChangePrintingId(null) }
+  }
+
+  async function handleExportPdf(inv: Sale) {
+    setPdfExportingId(inv.id)
+    setPrintError(null)
+    try {
+      const res = await printing.exportInvoicePdf(inv.id)
+      if (!res.success && !res.canceled) setPrintError(res.error ?? 'Error al generar el PDF')
+    } catch (err) {
+      setPrintError(err instanceof Error ? err.message : 'Error al generar el PDF')
+    } finally { setPdfExportingId(null) }
+  }
+
+  async function handleSendMail(inv: Sale) {
+    if (!inv.customerEmail) {
+      setEmailPromptFor(inv.id)
+      setEmailPromptValue('')
+      setEmailPromptError(null)
+      return
+    }
+    setMailingId(inv.id)
+    setPrintError(null)
+    try {
+      const res = await mail.sendInvoice(inv.id, inv.customerEmail)
+      if (!res.success) setPrintError(res.error ?? 'Error al enviar email')
+    } catch (err) {
+      setPrintError(err instanceof Error ? err.message : 'Error al enviar email')
+    } finally { setMailingId(null) }
+  }
+
+  async function handleSendMailFromPrompt() {
+    if (emailPromptFor === null) return
+    if (!emailPromptValue || !emailPromptValue.includes('@')) {
+      setEmailPromptError('Ingresá un email válido.')
+      return
+    }
+    setEmailSending(true)
+    setEmailPromptError(null)
+    try {
+      const res = await mail.sendInvoice(emailPromptFor, emailPromptValue)
+      if (res.success) {
+        setEmailPromptFor(null)
+      } else {
+        setEmailPromptError(res.error ?? 'Error al enviar email')
+      }
+    } catch (err) {
+      setEmailPromptError(err instanceof Error ? err.message : 'Error al enviar email')
+    } finally { setEmailSending(false) }
   }
 
   async function handleUpdatePaymentMethod(saleId: number, paymentMethod: PaymentMethod) {
@@ -393,6 +449,22 @@ export default function InvoicingPage() {
                     >
                       {changePrintingId === inv.id ? '⏳' : '🔄'}
                     </button>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => void handleExportPdf(inv)}
+                      disabled={pdfExportingId === inv.id}
+                      title="Guardar como PDF"
+                    >
+                      {pdfExportingId === inv.id ? '⏳' : '📄'}
+                    </button>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => void handleSendMail(inv)}
+                      disabled={mailingId === inv.id}
+                      title={inv.customerEmail ? `Enviar por email a ${inv.customerEmail}` : 'Enviar por email'}
+                    >
+                      {mailingId === inv.id ? '⏳' : '📧'}
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -401,6 +473,40 @@ export default function InvoicingPage() {
               )}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {emailPromptFor !== null && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <div className="modal-header">
+              <h2>Enviar comprobante por email</h2>
+              <button className="btn btn-ghost" onClick={() => setEmailPromptFor(null)}>✕</button>
+            </div>
+            <div className="form" style={{ padding: '1rem' }}>
+              <div className="form-row">
+                <label className="label">Email del cliente *</label>
+                <input
+                  type="email"
+                  value={emailPromptValue}
+                  onChange={e => setEmailPromptValue(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') void handleSendMailFromPrompt() }}
+                  className="input"
+                  placeholder="cliente@ejemplo.com"
+                  autoFocus
+                />
+              </div>
+              {emailPromptError && <p className="error">{emailPromptError}</p>}
+              <div className="form-actions">
+                <button className="btn btn-secondary" onClick={() => setEmailPromptFor(null)} disabled={emailSending}>
+                  Cancelar
+                </button>
+                <button className="btn btn-primary" onClick={() => void handleSendMailFromPrompt()} disabled={emailSending}>
+                  {emailSending ? 'Enviando...' : 'Enviar'}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -2,6 +2,7 @@ import { ipcMain } from 'electron'
 import type { Database } from 'better-sqlite3'
 import { PrintingService } from '../modules/printing/service'
 import { printSystemTicket } from '../modules/printing/system-printer'
+import { exportInvoicePdf } from '../modules/printing/pdf'
 import { buildChangeTicketBuffer } from '../modules/printing/escpos-change-ticket'
 import { buildStockReportBuffer } from '../modules/printing/escpos-stock-report'
 import { buildPriceReportBuffer } from '../modules/printing/escpos-price-report'
@@ -93,6 +94,23 @@ export function registerPrintingHandlers(db: Database): void {
       const ticketData = await printingService.buildTicketData(sale)
       await printSystemTicket(ticketData, 'delivery')
       return { success: true }
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  // Exporta el comprobante a PDF (mismo HTML "documento" que ya usa el email)
+  ipcMain.handle('printing:exportInvoicePdf', async (_event, saleId: number) => {
+    try {
+      const { SaleRepository } = await import('../modules/sales/repository')
+      const saleRepo = new SaleRepository(db)
+      const sale = saleRepo.findById(saleId)
+      if (!sale) return { success: false, error: `Venta no encontrada: ${saleId}` }
+
+      const ticketData = await printingService.buildTicketData(sale)
+      if (!ticketData) return { success: false, error: `No se pudo construir el comprobante N° ${saleId}.` }
+
+      return await exportInvoicePdf(ticketData)
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : String(err) }
     }
