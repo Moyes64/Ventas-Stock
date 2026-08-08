@@ -260,6 +260,9 @@ html, body, #root {
 .table tbody tr:last-child td { border-bottom: none; }
 .table tbody tr:hover { background: #f8fafc; }
 
+.sortable-th { cursor: pointer; user-select: none; }
+.sortable-th:hover { color: var(--color-text); }
+
 .row--inactive { opacity: 0.5; }
 .row--warning { background: #fffbeb !important; }
 .empty-row { text-align: center; color: var(--color-text-muted); padding: 32px !important; }

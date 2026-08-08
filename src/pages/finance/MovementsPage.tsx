@@ -14,6 +14,8 @@ import type {
 const RETIRO_SOCIO = 'Retiro de Socio'
 const PAGO_PROVEEDORES = 'Pago a Proveedores'
 
+type MovementSortKey = 'id' | 'fecha' | 'cuenta' | 'tipo' | 'categoria' | 'socioProveedor' | 'descripcion' | 'monto' | 'acreditacion'
+
 export default function MovementsPage() {
   const [accounts, setAccounts] = useState<FinanceAccount[]>([])
   const [categories, setCategories] = useState<FinanceCategory[]>([])
@@ -31,6 +33,10 @@ export default function MovementsPage() {
   const [filterDateTo, setFilterDateTo] = useState(localToday)
   const [filterAccountId, setFilterAccountId] = useState<number | ''>('')
   const [filterTipo, setFilterTipo] = useState<'ingreso' | 'egreso' | ''>('')
+
+  // Orden de la tabla de movimientos (se activa clickeando el encabezado de la columna)
+  const [sortKey, setSortKey] = useState<MovementSortKey>('fecha')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
   // Form de alta
   const [accountId, setAccountId] = useState<number | ''>('')
@@ -278,6 +284,46 @@ export default function MovementsPage() {
 
   const totalIngresos = movements.filter(m => m.tipo === 'ingreso').reduce((s, m) => s + m.monto, 0)
   const totalEgresos = movements.filter(m => m.tipo === 'egreso').reduce((s, m) => s + m.monto, 0)
+
+  function socioProveedorLabel(m: FinanceMovement): string {
+    return m.partnerId ? partnerName(m.partnerId) : m.supplierId ? supplierName(m.supplierId) : ''
+  }
+
+  function sortValue(m: FinanceMovement, key: MovementSortKey): string | number {
+    switch (key) {
+      case 'id': return m.id
+      case 'fecha': return m.fecha
+      case 'cuenta': return accountName(m.accountId)
+      case 'tipo': return m.tipo
+      case 'categoria': return categoryName(m.categoriaId)
+      case 'socioProveedor': return socioProveedorLabel(m)
+      case 'descripcion': return m.descripcion
+      case 'monto': return m.monto
+      case 'acreditacion': return m.fechaAcreditacion ?? ''
+    }
+  }
+
+  function handleSort(key: MovementSortKey) {
+    if (key === sortKey) {
+      setSortDir(prev => (prev === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
+  }
+
+  // Orden estable: a igualdad de valor, se conserva el orden que trajo el backend (fecha DESC, created_at DESC).
+  const sortedMovements = [...movements].sort((a, b) => {
+    const va = sortValue(a, sortKey)
+    const vb = sortValue(b, sortKey)
+    const cmp = va < vb ? -1 : va > vb ? 1 : 0
+    return sortDir === 'asc' ? cmp : -cmp
+  })
+
+  function sortIndicator(key: MovementSortKey): string {
+    if (key !== sortKey) return ''
+    return sortDir === 'asc' ? ' ▲' : ' ▼'
+  }
 
   return (
     <div className="caja-section caja-section--wide">
@@ -608,20 +654,22 @@ export default function MovementsPage() {
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Fecha</th>
-                    <th>Cuenta</th>
-                    <th>Tipo</th>
-                    <th>Categoría</th>
-                    <th>Socio / Proveedor</th>
-                    <th>Descripción</th>
-                    <th>Monto</th>
-                    <th>Acreditación</th>
+                    <th className="sortable-th" onClick={() => handleSort('id')} title="Ordenar por #">#{sortIndicator('id')}</th>
+                    <th className="sortable-th" onClick={() => handleSort('fecha')} title="Ordenar por fecha">Fecha{sortIndicator('fecha')}</th>
+                    <th className="sortable-th" onClick={() => handleSort('cuenta')} title="Ordenar por cuenta">Cuenta{sortIndicator('cuenta')}</th>
+                    <th className="sortable-th" onClick={() => handleSort('tipo')} title="Ordenar por tipo">Tipo{sortIndicator('tipo')}</th>
+                    <th className="sortable-th" onClick={() => handleSort('categoria')} title="Ordenar por categoría">Categoría{sortIndicator('categoria')}</th>
+                    <th className="sortable-th" onClick={() => handleSort('socioProveedor')} title="Ordenar por socio/proveedor">Socio / Proveedor{sortIndicator('socioProveedor')}</th>
+                    <th className="sortable-th" onClick={() => handleSort('descripcion')} title="Ordenar por descripción">Descripción{sortIndicator('descripcion')}</th>
+                    <th className="sortable-th" onClick={() => handleSort('monto')} title="Ordenar por monto">Monto{sortIndicator('monto')}</th>
+                    <th className="sortable-th" onClick={() => handleSort('acreditacion')} title="Ordenar por acreditación">Acreditación{sortIndicator('acreditacion')}</th>
                     <th></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {movements.map(m => (
+                  {sortedMovements.map(m => (
                     <tr key={m.id}>
+                      <td className="text-muted">{m.id}</td>
                       <td>{m.fecha}</td>
                       <td>{accountName(m.accountId)}</td>
                       <td>
@@ -630,7 +678,7 @@ export default function MovementsPage() {
                         </span>
                       </td>
                       <td>{categoryName(m.categoriaId)}</td>
-                      <td>{m.partnerId ? partnerName(m.partnerId) : m.supplierId ? supplierName(m.supplierId) : '—'}</td>
+                      <td>{socioProveedorLabel(m) || '—'}</td>
                       <td>{m.descripcion}</td>
                       <td className={m.tipo === 'egreso' ? 'text-danger' : ''}>
                         {m.tipo === 'egreso' ? '−' : '+'}{currency(m.monto)}
@@ -662,7 +710,7 @@ export default function MovementsPage() {
                 </tbody>
                 <tfoot>
                   <tr>
-                    <td colSpan={6}><strong>Totales</strong></td>
+                    <td colSpan={7}><strong>Totales</strong></td>
                     <td>
                       <div>+{currency(totalIngresos)}</div>
                       <div className="text-danger">−{currency(totalEgresos)}</div>
