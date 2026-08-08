@@ -14,7 +14,18 @@ import type {
 const RETIRO_SOCIO = 'Retiro de Socio'
 const PAGO_PROVEEDORES = 'Pago a Proveedores'
 
-type MovementSortKey = 'id' | 'fecha' | 'cuenta' | 'tipo' | 'categoria' | 'socioProveedor' | 'descripcion' | 'monto' | 'acreditacion'
+type MovementSortKey = 'fecha' | 'cuenta' | 'tipo' | 'categoria' | 'socioProveedor' | 'descripcion' | 'monto' | 'acreditacion'
+
+// Para agrupar al ordenar por Descripción: el ingreso de una venta y su comisión/ajuste
+// asociado comparten el mismo "Venta #N" en el texto aunque no compartan sale_id (los
+// ajustes de Conciliación MP no lo tienen, ver FinanceService.confirmMpReconciliationAdjustment).
+// Se devuelve un string homogéneo para que el comparador genérico funcione: los que tienen
+// número de venta ordenan primero por ese número (con padding para orden numérico correcto),
+// el resto cae después, ordenado alfabéticamente por su propia descripción.
+function descripcionSortValue(descripcion: string): string {
+  const match = /venta\s*#(\d+)/i.exec(descripcion)
+  return match ? `0_${match[1].padStart(10, '0')}` : `1_${descripcion}`
+}
 
 export default function MovementsPage() {
   const [accounts, setAccounts] = useState<FinanceAccount[]>([])
@@ -291,13 +302,12 @@ export default function MovementsPage() {
 
   function sortValue(m: FinanceMovement, key: MovementSortKey): string | number {
     switch (key) {
-      case 'id': return m.id
       case 'fecha': return m.fecha
       case 'cuenta': return accountName(m.accountId)
       case 'tipo': return m.tipo
       case 'categoria': return categoryName(m.categoriaId)
       case 'socioProveedor': return socioProveedorLabel(m)
-      case 'descripcion': return m.descripcion
+      case 'descripcion': return descripcionSortValue(m.descripcion)
       case 'monto': return m.monto
       case 'acreditacion': return m.fechaAcreditacion ?? ''
     }
@@ -654,13 +664,12 @@ export default function MovementsPage() {
               <table className="table">
                 <thead>
                   <tr>
-                    <th className="sortable-th" onClick={() => handleSort('id')} title="Ordenar por #">#{sortIndicator('id')}</th>
                     <th className="sortable-th" onClick={() => handleSort('fecha')} title="Ordenar por fecha">Fecha{sortIndicator('fecha')}</th>
                     <th className="sortable-th" onClick={() => handleSort('cuenta')} title="Ordenar por cuenta">Cuenta{sortIndicator('cuenta')}</th>
                     <th className="sortable-th" onClick={() => handleSort('tipo')} title="Ordenar por tipo">Tipo{sortIndicator('tipo')}</th>
                     <th className="sortable-th" onClick={() => handleSort('categoria')} title="Ordenar por categoría">Categoría{sortIndicator('categoria')}</th>
                     <th className="sortable-th" onClick={() => handleSort('socioProveedor')} title="Ordenar por socio/proveedor">Socio / Proveedor{sortIndicator('socioProveedor')}</th>
-                    <th className="sortable-th" onClick={() => handleSort('descripcion')} title="Ordenar por descripción">Descripción{sortIndicator('descripcion')}</th>
+                    <th className="sortable-th" onClick={() => handleSort('descripcion')} title="Ordenar por Venta # (agrupa venta y comisión/ajuste asociados)">Descripción{sortIndicator('descripcion')}</th>
                     <th className="sortable-th" onClick={() => handleSort('monto')} title="Ordenar por monto">Monto{sortIndicator('monto')}</th>
                     <th className="sortable-th" onClick={() => handleSort('acreditacion')} title="Ordenar por acreditación">Acreditación{sortIndicator('acreditacion')}</th>
                     <th></th>
@@ -669,7 +678,6 @@ export default function MovementsPage() {
                 <tbody>
                   {sortedMovements.map(m => (
                     <tr key={m.id}>
-                      <td className="text-muted">{m.id}</td>
                       <td>{m.fecha}</td>
                       <td>{accountName(m.accountId)}</td>
                       <td>
@@ -710,7 +718,7 @@ export default function MovementsPage() {
                 </tbody>
                 <tfoot>
                   <tr>
-                    <td colSpan={7}><strong>Totales</strong></td>
+                    <td colSpan={6}><strong>Totales</strong></td>
                     <td>
                       <div>+{currency(totalIngresos)}</div>
                       <div className="text-danger">−{currency(totalEgresos)}</div>

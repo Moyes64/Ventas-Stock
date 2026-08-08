@@ -118,6 +118,10 @@ export default function ProductEditorView({ productId, onBack }: { productId: nu
     }
   }
 
+  // Las acciones de imagen actualizan solo `product.images` en memoria — a propósito NO
+  // llaman a load(), que también pisaría `form` con lo último guardado en el servidor y
+  // borraría cualquier cambio de texto que Anabella todavía no haya guardado (bug reportado:
+  // subir una imagen faltante después de cargar los campos de texto borraba todo lo tipeado).
   async function handleFileChosen(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     e.target.value = ''
@@ -126,8 +130,8 @@ export default function ProductEditorView({ productId, onBack }: { productId: nu
     setError(null)
     try {
       const base64 = await fileToBase64(file)
-      await api.uploadImage(productId, product.images.length, base64)
-      await load()
+      const image = await api.uploadImage(productId, product.images.length, base64)
+      setProduct(prev => (prev ? { ...prev, images: [...prev.images, image] } : prev))
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Error al subir la imagen')
     } finally {
@@ -139,7 +143,7 @@ export default function ProductEditorView({ productId, onBack }: { productId: nu
     if (!window.confirm('¿Eliminar esta imagen?')) return
     try {
       await api.deleteImage(imageId)
-      await load()
+      setProduct(prev => (prev ? { ...prev, images: prev.images.filter(i => i.id !== imageId) } : prev))
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Error al eliminar la imagen')
     }
@@ -153,7 +157,7 @@ export default function ProductEditorView({ productId, onBack }: { productId: nu
     ;[imgs[index], imgs[target]] = [imgs[target], imgs[index]]
     try {
       await api.reorderImages(productId, imgs.map(i => i.id))
-      await load()
+      setProduct(prev => (prev ? { ...prev, images: imgs } : prev))
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Error al reordenar')
     }
