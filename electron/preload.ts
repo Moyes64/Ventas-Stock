@@ -91,7 +91,8 @@ const electronAPI = {
   printing: {
     printSale: (saleId: number) => invoke('printing:printSale', saleId),
     buildTicketData: (saleId: number) => invoke('printing:buildTicketData', saleId),
-    printInvoiceSystem: (saleId: number) => invoke('printing:printInvoiceSystem', saleId),
+    printInvoiceSystem: (saleId: number, includeChangeTicket = true) =>
+      invoke('printing:printInvoiceSystem', saleId, includeChangeTicket),
     printDeliveryNoteSystem: (saleId: number) => invoke('printing:printDeliveryNoteSystem', saleId),
     exportInvoicePdf: (saleId: number) => invoke('printing:exportInvoicePdf', saleId),
     printBatch: (saleIds: number[]) => invoke('printing:printBatch', saleIds),

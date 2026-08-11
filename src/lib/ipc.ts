@@ -202,8 +202,8 @@ export const printing = {
     electron.printing.printSale(saleId) as Promise<{ success: boolean; error?: string }>,
   buildTicketData: (saleId: number) =>
     electron.printing.buildTicketData(saleId),
-  printInvoiceSystem: (saleId: number) =>
-    electron.printing.printInvoiceSystem(saleId) as Promise<{ success: boolean; error?: string }>,
+  printInvoiceSystem: (saleId: number, includeChangeTicket = true) =>
+    electron.printing.printInvoiceSystem(saleId, includeChangeTicket) as Promise<{ success: boolean; error?: string }>,
   printDeliveryNoteSystem: (saleId: number) =>
     electron.printing.printDeliveryNoteSystem(saleId) as Promise<{ success: boolean; error?: string }>,
   exportInvoicePdf: (saleId: number) =>

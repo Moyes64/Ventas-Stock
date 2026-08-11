@@ -123,8 +123,10 @@ export default function InvoicingPage() {
     setPrintingId(inv.id)
     setPrintError(null)
     try {
+      // false: es reimpresión, no el cierre de una venta — no forzar un ticket
+      // de cambio térmico automático (ver printing.handlers.ts).
       const res = inv.status === 'AUTHORIZED'
-        ? await printing.printInvoiceSystem(inv.id)
+        ? await printing.printInvoiceSystem(inv.id, false)
         : await printing.printDeliveryNoteSystem(inv.id)
       if (!res.success) setPrintError(res.error ?? 'Error al imprimir')
     } catch (err) {

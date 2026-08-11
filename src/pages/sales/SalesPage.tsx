@@ -62,8 +62,10 @@ export default function SalesPage() {
     setPrintingId(sale.id)
     setPrintError(null)
     try {
+      // false: es reimpresión desde el listado de ventas, no el cierre de una
+      // venta — no forzar un ticket de cambio térmico automático.
       const res = sale.status === 'AUTHORIZED'
-        ? await printing.printInvoiceSystem(sale.id)
+        ? await printing.printInvoiceSystem(sale.id, false)
         : await printing.printDeliveryNoteSystem(sale.id)
       if (!res.success) setPrintError(res.error ?? 'Error al imprimir')
     } catch (err) {

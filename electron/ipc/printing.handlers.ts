@@ -68,7 +68,14 @@ export function registerPrintingHandlers(db: Database): void {
   })
 
   // System printing: opens the OS print dialog (no thermal printer required)
-  ipcMain.handle('printing:printInvoiceSystem', async (_event, saleId: number) => {
+  //
+  // includeChangeTicket (default true): al cerrar una venta en el mostrador
+  // tiene sentido imprimir factura + ticket de cambio juntos en el momento.
+  // Pero esta misma función también la usa la reimpresión desde Facturación
+  // (venta ya vieja) — ahí forzar un ticket de cambio térmico en cada
+  // reimpresión no tiene sentido y rompe la reimpresión entera si no hay
+  // térmica conectada. Los llamados de reimpresión pasan `false`.
+  ipcMain.handle('printing:printInvoiceSystem', async (_event, saleId: number, includeChangeTicket = true) => {
     try {
       const { SaleRepository } = await import('../modules/sales/repository')
       const saleRepo = new SaleRepository(db)
@@ -77,7 +84,7 @@ export function registerPrintingHandlers(db: Database): void {
 
       const ticketData = await printingService.buildTicketData(sale)
       await printSystemTicket(ticketData, 'invoice')
-      await printChangeTicketForSale(db, saleId)
+      if (includeChangeTicket) await printChangeTicketForSale(db, saleId)
       return { success: true }
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : String(err) }
@@ -116,7 +123,9 @@ export function registerPrintingHandlers(db: Database): void {
     }
   })
 
-  // Impresión en lote: imprime todas las facturas de una lista de IDs
+  // Impresión en lote: imprime todas las facturas de una lista de IDs.
+  // Es siempre reimpresión (nunca el cierre de una venta en el mostrador), así
+  // que no dispara el ticket de cambio automático — ver printInvoiceSystem.
   ipcMain.handle('printing:printBatch', async (_event, saleIds: number[]) => {
     const { SaleRepository } = await import('../modules/sales/repository')
     const saleRepo = new SaleRepository(db)
@@ -130,7 +139,6 @@ export function registerPrintingHandlers(db: Database): void {
         const ticketData = await printingService.buildTicketData(sale)
         const isInvoice = sale.status === 'AUTHORIZED'
         await printSystemTicket(ticketData, isInvoice ? 'invoice' : 'delivery')
-        if (isInvoice) await printChangeTicketForSale(db, saleId)
         printed++
       } catch (err) {
         errors.push(`Venta ${saleId}: ${err instanceof Error ? err.message : String(err)}`)
