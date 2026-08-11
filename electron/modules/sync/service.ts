@@ -7,7 +7,7 @@ import { URL } from 'url'
 const httpsAgent = new https.Agent({ rejectUnauthorized: false })
 import type { Database } from 'better-sqlite3'
 import { app } from 'electron'
-import { localToday } from '../../lib/date'
+import { localToday, utcToLocalDate } from '../../lib/date'
 import type {
   SyncConfig, SyncPayload, SyncResult, SyncStockItem, SyncVentasHoy, SyncSaleHistory, SyncCaja,
   SyncWebCategory, SyncWebProduct, SyncWebImage, WebOrder, PullResult, SyncFinance,
@@ -418,7 +418,9 @@ export class SyncService {
       // Mercado Pago Checkout Pro (tienda online) es muy distinta a la del posnet
       // físico y a una transferencia sin comisión — necesita su propia tasa, ver
       // FinanceService.registerSaleIncome / migración 024.
-      const saleDate = order.createdAt.slice(0, 10)
+      // order.createdAt viene del servidor de Hostinger en UTC — convertir a fecha
+      // local (ART) en vez de tomar el día calendario UTC (ver utcToLocalDate).
+      const saleDate = utcToLocalDate(order.createdAt)
       const paymentMethodMap: Record<string, string> = {
         mercadopago: 'mercadopago',
         credit_card: 'credito',

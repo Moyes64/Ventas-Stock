@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { sync } from '../../lib/ipc'
+import { sync, invoicing } from '../../lib/ipc'
 import type { PullResult } from '../../types/ipc'
 
 interface WebOrder {
@@ -35,6 +35,7 @@ export default function WebOrdersPage() {
   const [allOrders, setAllOrders] = useState<WebOrder[]>([])
   const [markingId, setMarkingId] = useState<string | null>(null)
   const [printingId, setPrintingId] = useState<string | null>(null)
+  const [invoicingId, setInvoicingId] = useState<string | null>(null)
 
   const loadOrders = useCallback(async () => {
     setLoading(true)
@@ -93,6 +94,31 @@ export default function WebOrdersPage() {
       alert(err instanceof Error ? err.message : 'Error al marcar como procesada')
     } finally {
       setMarkingId(null)
+    }
+  }
+
+  async function handleGenerateInvoice(order: WebOrder) {
+    if (!window.confirm(
+      `¿Generar la factura AFIP de este pedido por ${fmt(order.total)}?\n\n` +
+      'Esta acción emite un comprobante fiscal real (ambiente de producción) y no se puede deshacer.'
+    )) {
+      return
+    }
+    setInvoicingId(order.externalId)
+    try {
+      const res = await invoicing.retryCAE(order.id)
+      if (!res.success) {
+        alert(`Error al facturar: ${res.error ?? 'Error desconocido'}`)
+        return
+      }
+      // Una vez facturado, el pedido pasa a formar parte de "Facturación" como
+      // cualquier otra venta y deja de listarse acá (ver electron/modules/sync/service.ts
+      // listWebOrders, que solo trae ventas en estado WEB_ORDER/PROCESSED).
+      await loadOrders()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Error al generar la factura')
+    } finally {
+      setInvoicingId(null)
     }
   }
 
@@ -370,6 +396,24 @@ export default function WebOrdersPage() {
                           }}
                         >
                           {markingId === order.externalId ? '⏳ Procesando...' : '✅ Marcar como procesada'}
+                        </button>
+                      )}
+                      {tab === 'processed' && (
+                        <button
+                          onClick={() => { void handleGenerateInvoice(order) }}
+                          disabled={invoicingId === order.externalId}
+                          style={{
+                            padding: '6px 14px',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            backgroundColor: invoicingId === order.externalId ? '#9ca3af' : '#7c3aed',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: invoicingId === order.externalId ? 'not-allowed' : 'pointer',
+                          }}
+                        >
+                          {invoicingId === order.externalId ? '⏳ Facturando...' : '🧾 Generar factura'}
                         </button>
                       )}
                     </div>
