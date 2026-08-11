@@ -41,6 +41,7 @@ export interface TicketData {
   // Totals
   grossSubtotal: number      // Sum of items with IVA, before parameters
   discountLines: DiscountLine[] // Only tipo='-' parameters (for invoice display)
+  otherCharges?: { label: string; amount: number }  // Envío / recargo tarjeta (ventas web) — ya incluido en `total`
   subtotal: number           // Adjusted subtotal without IVA (after all parameters; not displayed)
   taxAmount: number
   total: number

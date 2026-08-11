@@ -108,6 +108,9 @@ export interface WebOrder {
   deliveryType: 'pickup' | 'shipping'
   deliveryAddress: string
   total: number
+  shippingAmount: number
+  surchargeAmount: number
+  surchargePct: number
   paymentMethod: string
   mpPaymentId: string
   items: WebOrderItem[]

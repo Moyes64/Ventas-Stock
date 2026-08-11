@@ -429,10 +429,21 @@ export class SyncService {
         transferencia: 'transferencia',
       }
       const localPaymentMethod = paymentMethodMap[order.paymentMethod] ?? 'transferencia'
+
+      // El total del pedido ya incluye envío y/o recargo por tarjeta de crédito,
+      // pero sale_items solo tiene los productos — sin esto, el comprobante
+      // impreso/emailado muestra un TOTAL más alto que la suma de los ítems sin
+      // ninguna explicación (ver conversación: recargo de $2 sobre $20 invisible).
+      const chargeLabels: string[] = []
+      if (order.shippingAmount > 0) chargeLabels.push('Envío a domicilio')
+      if (order.surchargeAmount > 0) chargeLabels.push(`Recargo tarjeta de crédito (${order.surchargePct}%)`)
+      const otherChargesAmount = order.shippingAmount + order.surchargeAmount
+      const otherChargesLabel = chargeLabels.join(' + ')
+
       const saleRes = this.db.prepare(`
-        INSERT INTO sales (customer_id, sale_date, status, payment_method, total, is_black_sale, created_at)
-        VALUES (?,?,'WEB_ORDER',?,?,0,datetime('now','localtime'))
-      `).run(customerId, saleDate, localPaymentMethod, order.total)
+        INSERT INTO sales (customer_id, sale_date, status, payment_method, total, other_charges_amount, other_charges_label, is_black_sale, created_at)
+        VALUES (?,?,'WEB_ORDER',?,?,?,?,0,datetime('now','localtime'))
+      `).run(customerId, saleDate, localPaymentMethod, order.total, otherChargesAmount, otherChargesLabel)
       const saleId = saleRes.lastInsertRowid as number
 
       // Insertar items y descontar stock

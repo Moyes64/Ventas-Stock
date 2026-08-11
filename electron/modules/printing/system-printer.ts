@@ -221,6 +221,12 @@ function generateTicketHTML(ticketData: TicketData, documentType: 'invoice' | 'd
       <span>-${formatCurrency(d.amount)}</span>
     </div>`).join('')}
     ` : ``}
+    ${ticketData.otherCharges ? `
+    <div class="total-row">
+      <span>${escapeHtml(ticketData.otherCharges.label)}:</span>
+      <span>${formatCurrency(ticketData.otherCharges.amount)}</span>
+    </div>
+    ` : ``}
     <div class="total-row total-row--final">
       <span>TOTAL:</span>
       <span>${formatCurrency(ticketData.total)}</span>

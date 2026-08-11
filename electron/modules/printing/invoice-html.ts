@@ -59,7 +59,11 @@ export function buildInvoiceHtml(ticket: Awaited<ReturnType<PrintingService['bui
         <th style="padding:6px 8px;text-align:right">Total</th>
       </tr>
     </thead>
-    <tbody>${itemRows}</tbody>
+    <tbody>${itemRows}${ticket.otherCharges ? `
+      <tr>
+        <td colspan="3" style="padding:4px 8px;text-align:right">${ticket.otherCharges.label}:</td>
+        <td style="padding:4px 8px;text-align:right">${fmt(ticket.otherCharges.amount)}</td>
+      </tr>` : ''}</tbody>
   </table>
 
   <hr style="border:1px solid #ddd">

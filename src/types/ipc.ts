@@ -177,6 +177,8 @@ export interface Sale {
   taxAmount: number       // IVA on adjusted subtotal
   total: number           // subtotal + taxAmount
   discountAmount: number  // Net reduction in subtotal (positive = money saved)
+  otherChargesAmount: number  // Envío / recargo tarjeta (ventas web) — ya incluido en `total`
+  otherChargesLabel: string
   paymentMethod: PaymentMethod
   saleDate: string
   invoiceType: number | null

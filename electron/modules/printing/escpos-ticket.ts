@@ -153,6 +153,11 @@ export function buildEscPosTicket(ticketData: TicketData, _darkness: number): Bu
       p(txt(label.slice(0, W_B - amt.length).padEnd(W_B - amt.length) + amt), lf(1))
     }
   }
+  if (ticketData.otherCharges) {
+    const label = `${ticketData.otherCharges.label}:`
+    const amt   = formatArs(ticketData.otherCharges.amount)
+    p(txt(label.slice(0, W_B - amt.length).padEnd(W_B - amt.length) + amt), lf(1))
+  }
 
   // TOTAL en Font A (más grande y prominente)
   const totalAmt = formatArs(ticketData.total)

@@ -11,6 +11,8 @@ interface SaleRow {
   tax_amount: number
   total: number
   discount_amount: number
+  other_charges_amount: number
+  other_charges_label: string
   payment_method: string
   sale_date: string
   invoice_type: number | null
@@ -290,6 +292,8 @@ export class SaleRepository {
       taxAmount: row.tax_amount,
       total: row.total,
       discountAmount: row.discount_amount ?? 0,
+      otherChargesAmount: row.other_charges_amount ?? 0,
+      otherChargesLabel: row.other_charges_label ?? '',
       paymentMethod: (row.payment_method ?? 'contado_efectivo') as Sale['paymentMethod'],
       saleDate: row.sale_date,
       invoiceType: row.invoice_type,

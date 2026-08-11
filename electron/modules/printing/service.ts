@@ -162,6 +162,9 @@ export class PrintingService {
       })),
       grossSubtotal,
       discountLines,
+      otherCharges: sale.otherChargesAmount > 0
+        ? { label: sale.otherChargesLabel || 'Otros cargos', amount: sale.otherChargesAmount }
+        : undefined,
       subtotal: sale.subtotal,
       taxAmount: sale.taxAmount,
       total: sale.total,
