@@ -23,6 +23,7 @@ export interface SystemParams {
   smtpFromName: string
   // Tienda web
   costoEnvioWeb: number
+  recargoTarjetaCreditoWeb: number   // % de recargo sobre pagos con tarjeta de crédito en la tienda web
   // Cambios y devoluciones
   diasCambio: number
 }
@@ -48,5 +49,6 @@ export const DEFAULT_SYSTEM_PARAMS: SystemParams = {
   smtpPass: '',
   smtpFromName: '',
   costoEnvioWeb: 0,
+  recargoTarjetaCreditoWeb: 10,
   diasCambio: 30,
 }

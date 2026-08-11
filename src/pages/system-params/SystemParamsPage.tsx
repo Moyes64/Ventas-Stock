@@ -31,6 +31,7 @@ const EMPTY: SystemParams = {
   smtpPass: '',
   smtpFromName: '',
   costoEnvioWeb: 0,
+  recargoTarjetaCreditoWeb: 10,
   diasCambio: 30,
 }
 
@@ -503,6 +504,23 @@ export default function SystemParamsPage() {
               />
               <span className="field-hint">
                 Ingresar 0 para envío gratis. Se actualiza en la tienda web con la próxima sincronización.
+              </span>
+            </div>
+            <div className="form-group">
+              <label className="label">Recargo tarjeta de crédito (%)</label>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step={0.5}
+                value={form.recargoTarjetaCreditoWeb}
+                onChange={e => setForm(f => ({ ...f, recargoTarjetaCreditoWeb: parseFloat(e.target.value) || 0 }))}
+                className="input"
+                placeholder="Ej: 10"
+              />
+              <span className="field-hint">
+                Se suma al total cuando el cliente elige pagar con tarjeta de crédito en la tienda web.
+                El carrito debe avisarlo antes de pagar. Ingresar 0 para desactivar el recargo.
               </span>
             </div>
             <div className="form-group">

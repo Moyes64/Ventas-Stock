@@ -323,6 +323,7 @@ export interface SystemParams {
   smtpPass: string
   smtpFromName: string
   costoEnvioWeb: number
+  recargoTarjetaCreditoWeb: number
   diasCambio: number
 }
 

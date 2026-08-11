@@ -121,7 +121,9 @@ export class SyncService {
     const today = localToday()
     const empresa = process.env.VITE_EMPRESA_RAZON_SOCIAL ?? 'Empresa'
 
-    const costoEnvioWeb = new SystemParamsService().get().costoEnvioWeb ?? 0
+    const systemParams = new SystemParamsService().get()
+    const costoEnvioWeb = systemParams.costoEnvioWeb ?? 0
+    const recargoTarjetaCreditoWeb = systemParams.recargoTarjetaCreditoWeb ?? 0
 
     return {
       timestamp: new Date().toISOString(),
@@ -132,7 +134,7 @@ export class SyncService {
       caja: this.buildCaja(today),
       webCategories: this.buildWebCategories(),
       webProducts: this.buildWebProducts(),
-      webParams: { costoEnvioWeb },
+      webParams: { costoEnvioWeb, recargoTarjetaCreditoWeb },
       finance: this.buildFinance(today),
     }
   }

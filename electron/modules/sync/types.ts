@@ -178,7 +178,7 @@ export interface SyncPayload {
   caja: SyncCaja
   webCategories: SyncWebCategory[]
   webProducts: SyncWebProduct[]
-  webParams?: { costoEnvioWeb: number }
+  webParams?: { costoEnvioWeb: number; recargoTarjetaCreditoWeb: number }
   finance: SyncFinance
 }
 
