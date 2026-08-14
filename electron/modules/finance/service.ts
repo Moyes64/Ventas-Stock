@@ -325,30 +325,6 @@ export class FinanceService {
     }
   }
 
-  /**
-   * Resincroniza el egreso de comisión MP de una venta ya cargada tras cambiar
-   * su medio de pago (ej: una venta por QR que se había cargado por error como
-   * "Transferencia"). Borra la comisión anterior, si había, y registra la nueva
-   * según el medio de pago actual, en la misma cuenta donde ya está el ingreso
-   * de la venta. No mueve el ingreso entre cuentas — solo aplica cuando origen
-   * y destino comparten cuenta (QR/Transferencia/Débito/Crédito ya van todos a
-   * MP-Anabella hoy).
-   */
-  resyncSaleFee(input: { saleId: number; paymentMethod: string; monto: number; fecha: string }): void {
-    const existingFee = this.repo.findMpFeeMovementBySaleId(input.saleId)
-    if (existingFee) this.repo.deleteMovement(existingFee.id)
-
-    if (!MP_FEE_PAYMENT_METHODS.has(input.paymentMethod as MpFeePaymentMethod)) return
-
-    const ventaMovement = this.repo
-      .listMovementsBySaleId(input.saleId)
-      .find(m => m.tipo === 'ingreso')
-    const accountId = ventaMovement?.accountId ?? this.repo.findAccountByName(MP_ANABELLA_ACCOUNT_NAME)?.id
-    if (!accountId) return
-
-    this.registerMpFeeForSale(input.saleId, input.paymentMethod as MpFeePaymentMethod, input.monto, input.fecha, accountId)
-  }
-
   // ── Reportes ──────────────────────────────────────────────────────────────
 
   getAccountBalances(): AccountBalance[] {

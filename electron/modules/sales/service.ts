@@ -38,18 +38,24 @@ export class SaleService {
     const sale = this.saleRepo.findById(id)
     if (!sale) throw new Error(`Venta no encontrada: ${id}`)
 
-    // Resincroniza la comisión de Mercado Pago con el medio de pago nuevo (ej:
-    // reclasificar una venta de "Transferencia" a "QR" agrega el egreso de
-    // comisión que no existía; no bloquea el cambio si falla.
+    // Re-genera el ingreso (y su comisión MP, si corresponde) desde cero con el
+    // medio de pago nuevo. Antes esto solo resincronizaba la comisión dejando el
+    // ingreso donde ya estaba — al reclasificar entre grupos de cuenta distintos
+    // (ej: "Contado Efectivo" -> "Débito") el ingreso se quedaba mal en Caja y
+    // solo la comisión se movía, dejando Caja con la venta completa menos la
+    // comisión en vez de sin nada. Borrar + recrear usa el mismo ruteo de cuenta
+    // que la creación original, así que siempre termina en la cuenta correcta.
+    // No bloquea el cambio si falla.
     try {
-      this.financeService.resyncSaleFee({
+      this.financeService.reverseSaleIncome(sale.id)
+      this.financeService.registerSaleIncome({
         saleId: sale.id,
         paymentMethod: sale.paymentMethod,
         monto: sale.total,
         fecha: sale.saleDate,
       })
     } catch (err) {
-      console.error('[sales] Error resincronizando comisión MP tras cambio de medio de pago:', err)
+      console.error('[sales] Error resincronizando finanzas tras cambio de medio de pago:', err)
     }
 
     return sale
