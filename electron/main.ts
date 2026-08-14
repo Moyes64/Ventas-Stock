@@ -55,7 +55,7 @@ async function createWindow(): Promise<void> {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
     },
     show: false, // Show only after ready-to-show
   })
@@ -64,9 +64,19 @@ async function createWindow(): Promise<void> {
     mainWindow.show()
   })
 
-  // Open external links in default browser
+  // Open external links in default browser.
+  // Only http/https — otherwise shell.openExternal() would happily hand a
+  // file:/UNC path (\\servidor\recurso) to the OS shell, which on Windows can
+  // trigger an automatic NTLM auth attempt and leak the session hash.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url).catch(() => undefined)
+    try {
+      const { protocol } = new URL(url)
+      if (protocol === 'http:' || protocol === 'https:') {
+        shell.openExternal(url).catch(() => undefined)
+      }
+    } catch {
+      // Malformed URL — ignore rather than pass it to the shell.
+    }
     return { action: 'deny' }
   })
 
