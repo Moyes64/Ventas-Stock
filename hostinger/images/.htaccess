@@ -1,0 +1,19 @@
+# Defensa en profundidad: aunque upload-image.php ya valida la extensión con
+# una lista blanca, esta carpeta nunca debería poder ejecutar código — es un
+# directorio de imágenes públicas, no de scripts. Esto cubre tanto esta
+# carpeta como products/ (Apache hereda .htaccess a subdirectorios).
+<FilesMatch "\.(php|php\d?|phtml|pht|phar|cgi|pl|py)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Por si el hosting tiene el módulo de PHP como handler en vez de mod_php,
+# esto es un cinturón extra sobre el mismo objetivo.
+<IfModule mod_php.c>
+    php_flag engine off
+</IfModule>
+<IfModule mod_php7.c>
+    php_flag engine off
+</IfModule>
+
+Options -Indexes -ExecCGI

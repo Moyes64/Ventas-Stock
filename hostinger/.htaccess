@@ -1,0 +1,55 @@
+Options -Indexes
+
+# Bloquear acceso directo a db.php
+<Files "db.php">
+    Order allow,deny
+    Deny from all
+</Files>
+
+# Bloquear acceso directo a config.local.php — no debería filtrar nada
+# mientras el hosting ejecute todo .php como script, pero es la barrera
+# explícita en vez de depender de eso (ver hallazgo A4).
+<Files "config.local.php">
+    Order allow,deny
+    Deny from all
+</Files>
+
+# Cualquier archivo de backup/editor que quede suelto en el servidor (ej. al
+# editar por FTP/File Manager) no debería servirse nunca como texto plano —
+# si alguno es justo config.local.php.bak o similar, ahí sí filtraría todas
+# las credenciales de una sola vez.
+<FilesMatch "\.(bak|old|swp|save|orig|txt)$|~$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+RewriteEngine On
+
+# Forzar HTTPS (ver B3 de la auditoría): sin esto, alguien que entra por
+# http:// de casualidad (link viejo, autocompletado del navegador) manda
+# password del dashboard o datos de checkout sin cifrar antes de que nada lo
+# redirija.
+RewriteCond %{HTTPS} off
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# HSTS: le dice al navegador que, una vez que entró por HTTPS, nunca más
+# intente HTTP en este dominio directamente — cierra la ventana entre el
+# primer request y el redirect de arriba en visitas futuras.
+<IfModule mod_headers.c>
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+</IfModule>
+
+# Redirigir /api/orders/pending → orders.php?action=pending
+RewriteRule ^api/orders/pending/?$ api/orders.php?action=pending [QSA,L]
+
+# Redirigir /api/orders/{id}/status → orders.php?action=status&id={id}
+RewriteRule ^api/orders/([^/]+)/status/?$ api/orders.php?action=status&id=$1 [QSA,L]
+
+# El resto de /api/orders → orders.php
+RewriteRule ^api/orders/?$ api/orders.php [QSA,L]
+
+# Webhook MercadoPago
+RewriteRule ^api/webhook/?$ api/webhook.php [QSA,L]
+
+# Parámetros públicos de la tienda
+RewriteRule ^api/params/?$ api/params.php [QSA,L]

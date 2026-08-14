@@ -45,8 +45,9 @@ certs/Certificados Ambiente de Prueba/
 # Nested backup checkout (has its own .git, .env, node_modules)
 /Ventas-Stock/
 
-# Hostinger deployment (contains DB credentials; manage separately)
-/hostinger/
+# Hostinger deployment — versionado desde 2026-08-14 (ver B1 de la auditoría
+# de seguridad) salvo el único archivo con credenciales reales.
+/hostinger/api/config.local.php
 
 # Logs
 logs/
