@@ -335,15 +335,23 @@ export class FinanceService {
 
     return accounts.map(account => {
       let balance: number
+      // Para Caja, las transferencias deben sumarse desde la misma fecha que el
+      // anchor (no desde foundingDate): el anchor (apertura/cierre físico) ya
+      // refleja el efecto de cualquier transferencia anterior a esa fecha —
+      // sumarlas de nuevo desde foundingDate las contaba dos veces.
+      let transfersFrom = foundingDate
       if (cashAccount && account.id === cashAccount.id) {
         const anchor = this.repo.getLatestCajaAnchor()
-        balance = anchor && anchor.date >= foundingDate
-          ? anchor.amount + this.repo.sumFinanceMovementsNet(account.id, anchor.date, undefined, today)
-          : this.repo.sumFinanceMovementsNet(account.id, foundingDate, undefined, today)
+        if (anchor && anchor.date >= foundingDate) {
+          balance = anchor.amount + this.repo.sumFinanceMovementsNet(account.id, anchor.date, undefined, today)
+          transfersFrom = anchor.date
+        } else {
+          balance = this.repo.sumFinanceMovementsNet(account.id, foundingDate, undefined, today)
+        }
       } else {
         balance = this.repo.sumFinanceMovementsNet(account.id, foundingDate, undefined, today)
       }
-      balance += this.repo.sumTransfersNet(account.id, foundingDate)
+      balance += this.repo.sumTransfersNet(account.id, transfersFrom)
 
       const { pendingAmount, nextAccreditationDate } = this.repo.pendingAccreditationSummary(account.id, today)
       return {
