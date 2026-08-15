@@ -1,5 +1,5 @@
 import type { Database } from 'better-sqlite3'
-import { localToday } from '../../lib/date'
+import { localToday, localNow } from '../../lib/date'
 import type { Sale, SaleItem, AppliedParameter, CreateSaleInput } from './types'
 
 interface SaleRow {
@@ -135,8 +135,8 @@ export class SaleRepository {
     }
   ): number {
     const insertSale = this.db.prepare(
-      `INSERT INTO sales (customer_id, user_id, invoice_type, subtotal, tax_amount, total, discount_amount, is_black_sale, payment_method, sale_date)
-       VALUES (@customerId, @userId, @invoiceType, @subtotal, @taxAmount, @total, @discountAmount, @isBlackSale, @paymentMethod, @saleDate)`
+      `INSERT INTO sales (customer_id, user_id, invoice_type, subtotal, tax_amount, total, discount_amount, is_black_sale, payment_method, sale_date, created_at, updated_at)
+       VALUES (@customerId, @userId, @invoiceType, @subtotal, @taxAmount, @total, @discountAmount, @isBlackSale, @paymentMethod, @saleDate, @createdAt, @createdAt)`
     )
 
     const insertItem = this.db.prepare(
@@ -161,6 +161,7 @@ export class SaleRepository {
         isBlackSale: data.isBlackSale ? 1 : 0,
         paymentMethod: data.paymentMethod ?? 'contado_efectivo',
         saleDate: localToday(),   // fecha local ART, no UTC
+        createdAt: localNow(),    // hora local ART, no UTC (el DEFAULT de la tabla usa UTC)
       })
       const id = r.lastInsertRowid as number
 
