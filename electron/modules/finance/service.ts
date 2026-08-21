@@ -382,7 +382,10 @@ export class FinanceService {
 
     // Nota: el monto de apertura inicial de Caja no entra acá — es plata que ya
     // existía, no utilidad generada por el negocio.
-    const totalIngresos = this.repo.sumFinanceMovementsByTipo('ingreso', undefined, foundingDate)
+    // Los ingresos todavía pendientes de acreditación (ej. Mercado Pago) se excluyen:
+    // no son plata disponible para retirar hasta que efectivamente se acrediten.
+    const asOfDate = localToday()
+    const totalIngresos = this.repo.sumFinanceMovementsByTipo('ingreso', undefined, foundingDate, undefined, undefined, asOfDate)
     const totalEgresosSinRetiros = retiroCategoria
       ? this.repo.sumFinanceMovementsByTipo('egreso', undefined, foundingDate, undefined, retiroCategoria.id)
       : this.repo.sumFinanceMovementsByTipo('egreso', undefined, foundingDate)

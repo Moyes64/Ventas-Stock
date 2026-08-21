@@ -473,7 +473,8 @@ export class FinanceRepository {
     accountId?: number,
     dateFrom?: string,
     dateTo?: string,
-    excludeCategoriaId?: number
+    excludeCategoriaId?: number,
+    asOfDate?: string
   ): number {
     const { where, params } = this.buildDateAccountFilter(accountId, dateFrom, dateTo)
     const conditions = where ? [where.replace(/^WHERE /, '')] : []
@@ -482,6 +483,12 @@ export class FinanceRepository {
     if (excludeCategoriaId !== undefined) {
       conditions.push('(categoria_id IS NULL OR categoria_id != @excludeCategoriaId)')
       params.excludeCategoriaId = excludeCategoriaId
+    }
+    // Los ingresos cuya fecha_acreditacion todavía no llegó no son plata disponible
+    // todavía, aunque ya estén registrados como movimiento (ver sumFinanceMovementsNet).
+    if (asOfDate !== undefined) {
+      conditions.push('(fecha_acreditacion IS NULL OR fecha_acreditacion <= @asOfDate)')
+      params.asOfDate = asOfDate
     }
     const row = this.db
       .prepare(
