@@ -57,7 +57,10 @@ function countBuckets(array $rows, string $field, array $labels): array {
     }
     $out = [];
     foreach ($labels as $value => $label) {
-        $out[] = ['value' => $value, 'label' => $label, 'count' => $counts[$value]];
+        // (string) porque PHP normaliza claves de array numéricas ('1', '2')
+        // a int — sin este cast, json_encode manda esos dos buckets como
+        // número en vez de string y rompe la consistencia con el resto.
+        $out[] = ['value' => (string)$value, 'label' => $label, 'count' => $counts[$value]];
     }
     return $out;
 }
