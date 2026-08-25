@@ -346,6 +346,15 @@ html, body, #root {
   gap: 4px;
 }
 
+.filter-bar .checkbox-label {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
 .filter-bar__actions {
   display: flex;
   align-items: flex-end;
@@ -1690,6 +1699,69 @@ code {
   font-size: 15px;
   font-weight: 600;
   color: var(--color-text);
+}
+
+/* ── Bar List (preferencias de búsqueda) ──────────────────────────────────── */
+.barlist {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.barlist-row {
+  display: grid;
+  grid-template-columns: 110px 1fr 36px;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.barlist-label {
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.barlist-track {
+  height: 10px;
+  border-radius: 5px;
+  background: var(--color-border);
+  overflow: hidden;
+}
+
+.barlist-fill {
+  height: 100%;
+  border-radius: 5px;
+  transition: width 0.3s ease;
+}
+
+.barlist-count {
+  color: var(--color-text-muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.barlist-empty {
+  color: var(--color-text-muted);
+  font-size: 14px;
+  padding: 12px 0;
+}
+
+.search-analytics-report {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.search-buckets-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+
+@media (max-width: 900px) {
+  .search-buckets-grid { grid-template-columns: 1fr; }
 }
 
 .ranking-tables {

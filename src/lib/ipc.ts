@@ -23,6 +23,7 @@ import type {
   BackupInfo,
   DailySummaryReport,
   SalesSummary,
+  SearchAnalyticsReport,
   RankingItem,
   PurchasesReport,
   IncompleteEntry,
@@ -241,6 +242,12 @@ export const reporting = {
     electron.reporting.purchasesBySupplier(filters) as Promise<PurchasesReport>,
   incompleteEntries: (filters: { dateFrom?: string; dateTo?: string }) =>
     electron.reporting.incompleteEntries(filters) as Promise<IncompleteEntry[]>,
+}
+
+// Search analytics (buscador rápido de pandorabox-web)
+export const searchAnalytics = {
+  getReport: (filters: { dateFrom?: string; dateTo?: string; includeInternal?: boolean }) =>
+    electron.searchAnalytics.getReport(filters) as Promise<SearchAnalyticsReport>,
 }
 
 // Backup

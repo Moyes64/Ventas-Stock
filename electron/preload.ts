@@ -115,6 +115,11 @@ const electronAPI = {
     incompleteEntries: (filters: unknown) => invoke('reporting:incompleteEntries', filters),
   },
 
+  // Search analytics (buscador rápido de pandorabox-web)
+  searchAnalytics: {
+    getReport: (filters: unknown) => invoke('searchAnalytics:getReport', filters),
+  },
+
   // Backup
   backup: {
     create: () => invoke('backup:create'),

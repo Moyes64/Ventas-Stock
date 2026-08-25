@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { reporting, suppliers, stock } from '../../lib/ipc'
+import { reporting, searchAnalytics, suppliers, stock } from '../../lib/ipc'
 import { localToday, localFirstOfMonth, localCurrentMonth } from '../../lib/date'
-import type { DailySummaryReport, RankingItem, PurchasesReport, IncompleteEntry, Supplier, SalesSummary } from '../../types/ipc'
+import type { DailySummaryReport, RankingItem, PurchasesReport, IncompleteEntry, Supplier, SalesSummary, SearchAnalyticsReport } from '../../types/ipc'
 import { useHiddenOptions } from '../../context/HiddenOptionsContext'
 import { PieChart, PIE_COLORS as COLORS } from '../../components/charts/PieChart'
 import { LineChart, type LineChartSeries } from '../../components/charts/LineChart'
+import { BarList } from '../../components/charts/BarList'
 
 /**
  * Piso del reporte "Ventas por día": antes de esta fecha hay un agujero real
@@ -170,13 +171,21 @@ export default function ReportingPage() {
   const { isHiddenOptionsVisible } = useHiddenOptions()
   const [dateFrom, setDateFrom] = useState(localFirstOfMonth)
   const [dateTo, setDateTo] = useState(localToday)
-  const [activeReport, setActiveReport] = useState<'daily' | 'evolution' | 'products' | 'purchases' | 'lowstock'>('daily')
+  const [activeReport, setActiveReport] = useState<'daily' | 'evolution' | 'products' | 'purchases' | 'lowstock' | 'searches'>('daily')
 
   // Ventas por día (evolución mes a mes) state
   const [evolutionData, setEvolutionData] = useState<SalesSummary[]>([])
   const [evolutionLoading, setEvolutionLoading] = useState(false)
   const [evolutionError, setEvolutionError] = useState<string | null>(null)
   const [evolutionMonth, setEvolutionMonth] = useState(localCurrentMonth)
+
+  // Búsquedas de clientes (buscador rápido de pandorabox-web) state
+  const [searchDateFrom, setSearchDateFrom] = useState(localFirstOfMonth)
+  const [searchDateTo, setSearchDateTo] = useState(localToday)
+  const [includeInternalSearches, setIncludeInternalSearches] = useState(false)
+  const [searchReport, setSearchReport] = useState<SearchAnalyticsReport | null>(null)
+  const [searchLoading, setSearchLoading] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
 
   // Purchases (compras por proveedor) state
   const [purchaseDateFrom, setPurchaseDateFrom] = useState(localFirstOfMonth)
@@ -298,6 +307,28 @@ export default function ReportingPage() {
     points: evolutionByMonth.get(evolutionMonth) ?? [],
   }]
 
+  async function loadSearchReport() {
+    setSearchLoading(true)
+    setSearchError(null)
+    try {
+      const data = await searchAnalytics.getReport({
+        dateFrom: searchDateFrom,
+        dateTo: searchDateTo,
+        includeInternal: includeInternalSearches,
+      })
+      setSearchReport(data)
+    } catch (err) {
+      setSearchError(err instanceof Error ? err.message : 'Error al cargar las búsquedas de clientes')
+    } finally {
+      setSearchLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activeReport === 'searches' && !searchReport && !searchLoading) void loadSearchReport()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeReport])
+
   async function loadReport() {
     setLoading(true)
     setError(null)
@@ -328,13 +359,18 @@ export default function ReportingPage() {
       </div>
 
       <div className="tab-bar">
-        {(['daily', 'evolution', 'products', 'purchases', 'lowstock'] as const).map(t => (
+        {(['daily', 'evolution', 'products', 'purchases', 'lowstock', 'searches'] as const).map(t => (
           <button
             key={t}
             className={`tab ${activeReport === t ? 'tab--active' : ''}`}
             onClick={() => setActiveReport(t)}
           >
-            {t === 'daily' ? 'Resumen Diario' : t === 'evolution' ? '📈 Ventas por día' : t === 'products' ? 'Productos' : t === 'purchases' ? '🛒 Compras' : 'Stock Bajo'}
+            {t === 'daily' ? 'Resumen Diario'
+              : t === 'evolution' ? '📈 Ventas por día'
+              : t === 'products' ? 'Productos'
+              : t === 'purchases' ? '🛒 Compras'
+              : t === 'searches' ? '🔎 Búsquedas web'
+              : 'Stock Bajo'}
           </button>
         ))}
       </div>
@@ -697,6 +733,72 @@ export default function ReportingPage() {
       )}
 
       {activeReport === 'lowstock' && <p className="page-subtitle">Próximamente: Reporte de stock bajo</p>}
+
+      {activeReport === 'searches' && (
+        <div className="search-analytics-report">
+          <p className="page-subtitle">
+            Búsquedas hechas con el buscador rápido de pandorabox-web (&quot;Encontrá el regalo
+            perfecto&quot;) — para tener una idea de qué precio, edad y cantidad de jugadores busca
+            la clientela potencial. Requiere tener configurado &quot;Sync Web&quot; y haber subido
+            search-logs.php al hosting.
+          </p>
+
+          <div className="filter-bar filter-bar--wrap">
+            <label>
+              Desde:
+              <input type="date" value={searchDateFrom} onChange={e => setSearchDateFrom(e.target.value)} className="input" />
+            </label>
+            <label>
+              Hasta:
+              <input type="date" value={searchDateTo} onChange={e => setSearchDateTo(e.target.value)} className="input" />
+            </label>
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={includeInternalSearches}
+                onChange={e => setIncludeInternalSearches(e.target.checked)}
+              />
+              Incluir pruebas internas
+            </label>
+            <button onClick={() => { void loadSearchReport() }} className="btn btn-secondary">🔍 Generar</button>
+          </div>
+
+          {searchLoading && <p>Cargando...</p>}
+          {searchError && <p className="error">{searchError}</p>}
+
+          {!searchLoading && !searchError && searchReport && (
+            <>
+              <div className="stats-grid">
+                <div className="stat-card">
+                  <div className="stat-value">{searchReport.totalSearches}</div>
+                  <div className="stat-label">
+                    Búsquedas {includeInternalSearches ? '(incluye pruebas internas)' : 'de clientes reales'}
+                  </div>
+                </div>
+              </div>
+
+              {searchReport.totalSearches === 0 ? (
+                <p className="empty-row">Sin búsquedas para el período seleccionado</p>
+              ) : (
+                <div className="search-buckets-grid">
+                  <div className="pie-wrapper">
+                    <h3 className="pie-title">💲 Precio</h3>
+                    <BarList items={searchReport.priceBuckets} color="#4f8ef7" />
+                  </div>
+                  <div className="pie-wrapper">
+                    <h3 className="pie-title">🎂 Edad sugerida</h3>
+                    <BarList items={searchReport.ageBuckets} color="#f7874f" />
+                  </div>
+                  <div className="pie-wrapper">
+                    <h3 className="pie-title">🧑‍🤝‍🧑 Cantidad de jugadores</h3>
+                    <BarList items={searchReport.playersBuckets} color="#4fd38e" />
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       {isHiddenOptionsVisible && (
         <div className="hidden-options-section">

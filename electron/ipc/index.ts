@@ -8,6 +8,7 @@ import { registerSalesHandlers } from './sales.handlers'
 import { registerInvoicingHandlers } from './invoicing.handlers'
 import { registerPrintingHandlers } from './printing.handlers'
 import { registerReportingHandlers } from './reporting.handlers'
+import { registerSearchAnalyticsHandlers } from './search-analytics.handlers'
 import { registerBackupHandlers } from './backup.handlers'
 import { registerParameterHandlers } from './parameters.handlers'
 import { registerCajaHandlers } from './caja.handlers'
@@ -39,6 +40,7 @@ export function registerAllIpcHandlers(
   registerInvoicingHandlers(db)
   registerPrintingHandlers(db)
   registerReportingHandlers(db)
+  registerSearchAnalyticsHandlers(db)
   registerBackupHandlers()
   registerParameterHandlers(db)
   registerCajaHandlers(db)

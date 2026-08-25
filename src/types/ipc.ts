@@ -224,6 +224,19 @@ export interface SalesSummary {
   processedCount: number
 }
 
+export interface SearchBucketCount {
+  value: string
+  label: string
+  count: number
+}
+
+export interface SearchAnalyticsReport {
+  totalSearches: number
+  priceBuckets: SearchBucketCount[]
+  ageBuckets: SearchBucketCount[]
+  playersBuckets: SearchBucketCount[]
+}
+
 export interface RankingItem {
   productId: number
   productName: string

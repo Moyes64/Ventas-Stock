@@ -211,6 +211,29 @@ function recordOrderCreationAttempt(string $ip): void {
     $pdo->exec('DELETE FROM order_creation_attempts WHERE created_at < (NOW() - INTERVAL 1 DAY)');
 }
 
+// Más laxo que el de órdenes: es solo una analítica sin costo (ni de plata ni
+// de stock) si alguien la spamea, pero igual conviene un piso para que un
+// script no la use para llenar la tabla de basura sin ningún freno.
+define('SEARCH_LOG_RATE_LIMIT_MAX_ATTEMPTS', 30);
+define('SEARCH_LOG_RATE_LIMIT_WINDOW_MINUTES', 5);
+
+function isSearchLogRateLimited(string $ip): bool {
+    $pdo = getConnection();
+    $stmt = $pdo->prepare(
+        'SELECT COUNT(*) AS n FROM search_log_attempts
+         WHERE ip = ?
+           AND created_at > (NOW() - INTERVAL ' . SEARCH_LOG_RATE_LIMIT_WINDOW_MINUTES . ' MINUTE)'
+    );
+    $stmt->execute([$ip]);
+    return (int)$stmt->fetch()['n'] >= SEARCH_LOG_RATE_LIMIT_MAX_ATTEMPTS;
+}
+
+function recordSearchLogAttempt(string $ip): void {
+    $pdo = getConnection();
+    $pdo->prepare('INSERT INTO search_log_attempts (ip) VALUES (?)')->execute([$ip]);
+    $pdo->exec('DELETE FROM search_log_attempts WHERE created_at < (NOW() - INTERVAL 1 DAY)');
+}
+
 function initSchema(): void {
     $pdo = getConnection();
 
@@ -368,6 +391,32 @@ function initSchema(): void {
     // Rate limiting — creación de órdenes web (ver isOrderCreationRateLimited() / A1)
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS order_creation_attempts (
+            id         INT AUTO_INCREMENT PRIMARY KEY,
+            ip         VARCHAR(45) NOT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX (ip, created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+
+    // Búsquedas del buscador rápido de la home (precio / edad / jugadores) —
+    // ver search-logs.php. is_internal marca pruebas propias (localhost o
+    // navegador marcado con ?qa=1) para no mezclarlas con clientes reales.
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS search_logs (
+            id          INT AUTO_INCREMENT PRIMARY KEY,
+            created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            precio      VARCHAR(20),
+            edad        VARCHAR(20),
+            jugadores   VARCHAR(20),
+            is_internal TINYINT(1) NOT NULL DEFAULT 0,
+            INDEX (created_at),
+            INDEX (is_internal)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+
+    // Rate limiting — registro de búsquedas (mismo criterio que order_creation_attempts)
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS search_log_attempts (
             id         INT AUTO_INCREMENT PRIMARY KEY,
             ip         VARCHAR(45) NOT NULL,
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
