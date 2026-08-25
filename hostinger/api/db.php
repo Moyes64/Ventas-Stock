@@ -398,21 +398,25 @@ function initSchema(): void {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
 
-    // Búsquedas del buscador rápido de la home (precio / edad / jugadores) —
-    // ver search-logs.php. is_internal marca pruebas propias (localhost o
+    // Búsquedas del buscador rápido de la home (filtro por precio) — ver
+    // search-logs.php. is_internal marca pruebas propias (localhost o
     // navegador marcado con ?qa=1) para no mezclarlas con clientes reales.
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS search_logs (
             id          INT AUTO_INCREMENT PRIMARY KEY,
             created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             precio      VARCHAR(20),
-            edad        VARCHAR(20),
-            jugadores   VARCHAR(20),
             is_internal TINYINT(1) NOT NULL DEFAULT 0,
             INDEX (created_at),
             INDEX (is_internal)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
+
+    // El buscador se simplificó a solo precio (se sacaron edad y cantidad de
+    // jugadores tras revisar la usabilidad) — migración no destructiva para
+    // instalaciones que ya tenían esas columnas.
+    try { $pdo->exec("ALTER TABLE search_logs DROP COLUMN edad"); } catch (\Exception $e) {}
+    try { $pdo->exec("ALTER TABLE search_logs DROP COLUMN jugadores"); } catch (\Exception $e) {}
 
     // Rate limiting — registro de búsquedas (mismo criterio que order_creation_attempts)
     $pdo->exec("

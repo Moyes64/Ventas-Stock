@@ -1,19 +1,23 @@
 <?php
 /**
  * search-logs.php — Analítica del buscador rápido de la home de pandorabox-web
- * ("Encontrá el regalo perfecto": precio / edad sugerida / cantidad de jugadores).
+ * ("Encontrá el regalo perfecto": filtro por rango de precio).
  *
  * POST /api/search-logs.php  → pandorabox-web registra una búsqueda (público,
  *                               sin API key, origen restringido — mismo
  *                               criterio que POST /api/orders).
- *                               body: { precio?, edad?, jugadores?, internal? }
+ *                               body: { precio, internal? }
  * GET  /api/search-logs.php  → Ventas-Stock trae el reporte agregado para la
  *                               sección Reportes (requiere X-Api-Key).
  *                               ?dateFrom=YYYY-MM-DD&dateTo=YYYY-MM-DD&includeInternal=1
  *
- * Los valores válidos de precio/edad/jugadores son los mismos rangos que
- * lib/filters.ts en pandorabox-web — si esos rangos cambian ahí, actualizar
- * las listas de abajo también.
+ * Los valores válidos de precio son los mismos rangos que lib/filters.ts en
+ * pandorabox-web — si esos rangos cambian ahí, actualizar la lista de abajo
+ * también.
+ *
+ * Nota: hasta 2026-08-25 este endpoint también trackeaba edad sugerida y
+ * cantidad de jugadores — se sacaron tras revisar la usabilidad del buscador
+ * (ver historial de git y la migración DROP COLUMN en db.php).
  *
  * Subir a: public_html/pandorabox/api/search-logs.php
  */
@@ -30,23 +34,6 @@ const PRICE_BUCKETS = [
     'mas-80'   => '+$80.000',
 ];
 
-const AGE_BUCKETS = [
-    '0-2'    => '0 a 2 años',
-    '3-5'    => '3 a 5 años',
-    '6-8'    => '6 a 8 años',
-    '9-12'   => '9 a 12 años',
-    '13-17'  => '13 a 17 años',
-    'adultos' => 'Adultos',
-];
-
-const PLAYERS_BUCKETS = [
-    '1'   => '1 jugador',
-    '2'   => '2 jugadores',
-    '3-4' => '3 a 4 jugadores',
-    '5-6' => '5 a 6 jugadores',
-    '7+'  => '7 o más jugadores',
-];
-
 /** Cuenta cuántas filas caen en cada bucket de $field, en el mismo orden que $labels. */
 function countBuckets(array $rows, string $field, array $labels): array {
     $counts = array_fill_keys(array_keys($labels), 0);
@@ -57,9 +44,9 @@ function countBuckets(array $rows, string $field, array $labels): array {
     }
     $out = [];
     foreach ($labels as $value => $label) {
-        // (string) porque PHP normaliza claves de array numéricas ('1', '2')
-        // a int — sin este cast, json_encode manda esos dos buckets como
-        // número en vez de string y rompe la consistencia con el resto.
+        // (string) porque PHP normaliza claves de array numéricas a int —
+        // no aplica hoy (los values de precio no son numéricos), se deja
+        // por las dudas si se agrega algún bucket numérico más adelante.
         $out[] = ['value' => (string)$value, 'label' => $label, 'count' => $counts[$value]];
     }
     return $out;
@@ -88,23 +75,19 @@ if ($method === 'POST') {
 
     $body = json_decode(file_get_contents('php://input'), true) ?? [];
 
-    $precio    = (isset($body['precio'])    && array_key_exists($body['precio'], PRICE_BUCKETS))    ? $body['precio']    : null;
-    $edad      = (isset($body['edad'])      && array_key_exists($body['edad'], AGE_BUCKETS))         ? $body['edad']      : null;
-    $jugadores = (isset($body['jugadores']) && array_key_exists($body['jugadores'], PLAYERS_BUCKETS)) ? $body['jugadores'] : null;
-    $internal  = !empty($body['internal']) ? 1 : 0;
+    $precio = (isset($body['precio']) && array_key_exists($body['precio'], PRICE_BUCKETS)) ? $body['precio'] : null;
+    $internal = !empty($body['internal']) ? 1 : 0;
 
-    if ($precio === null && $edad === null && $jugadores === null) {
+    if ($precio === null) {
         http_response_code(400);
-        echo json_encode(['error' => 'La búsqueda no tiene ningún filtro válido']);
+        echo json_encode(['error' => 'La búsqueda no tiene un precio válido']);
         exit;
     }
 
     try {
         $pdo = getConnection();
-        $stmt = $pdo->prepare(
-            'INSERT INTO search_logs (precio, edad, jugadores, is_internal) VALUES (?, ?, ?, ?)'
-        );
-        $stmt->execute([$precio, $edad, $jugadores, $internal]);
+        $stmt = $pdo->prepare('INSERT INTO search_logs (precio, is_internal) VALUES (?, ?)');
+        $stmt->execute([$precio, $internal]);
         echo json_encode(['ok' => true]);
     } catch (Exception $e) {
         apiError($e);
@@ -139,15 +122,13 @@ if ($method === 'GET') {
         }
         $where = $conditions ? ('WHERE ' . implode(' AND ', $conditions)) : '';
 
-        $stmt = $pdo->prepare("SELECT precio, edad, jugadores FROM search_logs $where");
+        $stmt = $pdo->prepare("SELECT precio FROM search_logs $where");
         $stmt->execute($params);
         $rows = $stmt->fetchAll();
 
         echo json_encode([
             'totalSearches' => count($rows),
             'priceBuckets' => countBuckets($rows, 'precio', PRICE_BUCKETS),
-            'ageBuckets' => countBuckets($rows, 'edad', AGE_BUCKETS),
-            'playersBuckets' => countBuckets($rows, 'jugadores', PLAYERS_BUCKETS),
         ]);
     } catch (Exception $e) {
         apiError($e);

@@ -1754,16 +1754,6 @@ code {
   gap: 8px;
 }
 
-.search-buckets-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 24px;
-}
-
-@media (max-width: 900px) {
-  .search-buckets-grid { grid-template-columns: 1fr; }
-}
-
 .ranking-tables {
   display: grid;
   grid-template-columns: 1fr 1fr;

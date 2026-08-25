@@ -233,8 +233,6 @@ export interface SearchBucketCount {
 export interface SearchAnalyticsReport {
   totalSearches: number
   priceBuckets: SearchBucketCount[]
-  ageBuckets: SearchBucketCount[]
-  playersBuckets: SearchBucketCount[]
 }
 
 export interface RankingItem {

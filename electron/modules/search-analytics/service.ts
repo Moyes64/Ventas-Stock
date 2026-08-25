@@ -9,7 +9,7 @@ import type { SearchAnalyticsFilters, SearchAnalyticsReport } from './types'
 const httpsAgent = new https.Agent({ rejectUnauthorized: false })
 
 /**
- * Trae el reporte de preferencias de búsqueda (precio / edad / jugadores) del
+ * Trae el reporte de preferencias de búsqueda (rango de precio) del
  * buscador rápido de pandorabox-web, para mostrarlo en Reportes. No guarda
  * nada en SQLite local — es una consulta en vivo al mismo backend Hostinger
  * que ya usa "Sync Web" (misma URL/API key), igual que pullOrders().
