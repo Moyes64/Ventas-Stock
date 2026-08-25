@@ -4,6 +4,7 @@ export interface SalesSummary {
   totalAmount: number
   authorizedCount: number
   internalReceiptCount: number
+  processedCount: number
 }
 
 export interface ProductReport {

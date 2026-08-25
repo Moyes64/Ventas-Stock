@@ -1,9 +1,30 @@
 import { useEffect, useState } from 'react'
 import { reporting, suppliers, stock } from '../../lib/ipc'
 import { localToday, localFirstOfMonth, localCurrentMonth } from '../../lib/date'
-import type { DailySummaryReport, RankingItem, PurchasesReport, IncompleteEntry, Supplier } from '../../types/ipc'
+import type { DailySummaryReport, RankingItem, PurchasesReport, IncompleteEntry, Supplier, SalesSummary } from '../../types/ipc'
 import { useHiddenOptions } from '../../context/HiddenOptionsContext'
 import { PieChart, PIE_COLORS as COLORS } from '../../components/charts/PieChart'
+import { LineChart, type LineChartSeries } from '../../components/charts/LineChart'
+
+/**
+ * Piso del reporte "Ventas por día": antes de esta fecha hay un agujero real
+ * de datos (10/may/2026 al 23/jun/2026 sin ventas cargadas en producción, entre
+ * un backup viejo con solo 5 ventas de principios de mayo y el reinicio del
+ * 24/jun). Se decidió con el usuario arrancar acá para no mostrar un hueco
+ * confuso en el gráfico.
+ */
+const EVOLUTION_START_DATE = '2026-06-24'
+
+function daysInMonth(yearMonth: string): number {
+  const [y, m] = yearMonth.split('-').map(Number)
+  return new Date(y, m, 0).getDate()
+}
+
+function monthLabel(yearMonth: string): string {
+  const [y, m] = yearMonth.split('-').map(Number)
+  const label = new Intl.DateTimeFormat('es-AR', { month: 'long', year: 'numeric' }).format(new Date(y, m - 1, 1))
+  return label.charAt(0).toUpperCase() + label.slice(1)
+}
 
 interface EntryDraft {
   voucherType: string
@@ -149,7 +170,13 @@ export default function ReportingPage() {
   const { isHiddenOptionsVisible } = useHiddenOptions()
   const [dateFrom, setDateFrom] = useState(localFirstOfMonth)
   const [dateTo, setDateTo] = useState(localToday)
-  const [activeReport, setActiveReport] = useState<'daily' | 'products' | 'purchases' | 'lowstock'>('daily')
+  const [activeReport, setActiveReport] = useState<'daily' | 'evolution' | 'products' | 'purchases' | 'lowstock'>('daily')
+
+  // Ventas por día (evolución mes a mes) state
+  const [evolutionData, setEvolutionData] = useState<SalesSummary[]>([])
+  const [evolutionLoading, setEvolutionLoading] = useState(false)
+  const [evolutionError, setEvolutionError] = useState<string | null>(null)
+  const [evolutionMonth, setEvolutionMonth] = useState(localCurrentMonth)
 
   // Purchases (compras por proveedor) state
   const [purchaseDateFrom, setPurchaseDateFrom] = useState(localFirstOfMonth)
@@ -231,6 +258,46 @@ export default function ReportingPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeReport])
 
+  async function loadEvolution() {
+    setEvolutionLoading(true)
+    setEvolutionError(null)
+    try {
+      const data = await reporting.salesByDateRange({ dateFrom: EVOLUTION_START_DATE, dateTo: localToday() })
+      setEvolutionData(data)
+    } catch (err) {
+      setEvolutionError(err instanceof Error ? err.message : 'Error al cargar la evolución de ventas')
+    } finally {
+      setEvolutionLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activeReport === 'evolution' && evolutionData.length === 0 && !evolutionLoading) void loadEvolution()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeReport])
+
+  // Agrupa las filas diarias por mes (YYYY-MM) para armar las series de los gráficos
+  const evolutionByMonth = new Map<string, LineChartSeries['points']>()
+  for (const row of evolutionData) {
+    const [, , dayStr] = row.date.split('-')
+    const key = row.date.slice(0, 7)
+    if (!evolutionByMonth.has(key)) evolutionByMonth.set(key, [])
+    evolutionByMonth.get(key)!.push({ x: Number(dayStr), y: row.totalAmount })
+  }
+  const evolutionMonths = Array.from(evolutionByMonth.keys()).sort()
+
+  const evolutionAllMonthsSeries: LineChartSeries[] = evolutionMonths.map((key, idx) => ({
+    label: monthLabel(key),
+    color: COLORS[idx % COLORS.length],
+    points: evolutionByMonth.get(key) ?? [],
+  }))
+
+  const evolutionSelectedSeries: LineChartSeries[] = [{
+    label: monthLabel(evolutionMonth),
+    color: COLORS[evolutionMonths.indexOf(evolutionMonth) % COLORS.length] ?? COLORS[0],
+    points: evolutionByMonth.get(evolutionMonth) ?? [],
+  }]
+
   async function loadReport() {
     setLoading(true)
     setError(null)
@@ -261,13 +328,13 @@ export default function ReportingPage() {
       </div>
 
       <div className="tab-bar">
-        {(['daily', 'products', 'purchases', 'lowstock'] as const).map(t => (
+        {(['daily', 'evolution', 'products', 'purchases', 'lowstock'] as const).map(t => (
           <button
             key={t}
             className={`tab ${activeReport === t ? 'tab--active' : ''}`}
             onClick={() => setActiveReport(t)}
           >
-            {t === 'daily' ? 'Resumen Diario' : t === 'products' ? 'Productos' : t === 'purchases' ? '🛒 Compras' : 'Stock Bajo'}
+            {t === 'daily' ? 'Resumen Diario' : t === 'evolution' ? '📈 Ventas por día' : t === 'products' ? 'Productos' : t === 'purchases' ? '🛒 Compras' : 'Stock Bajo'}
           </button>
         ))}
       </div>
@@ -345,6 +412,46 @@ export default function ReportingPage() {
             <p className="empty-row">Sin datos para el período seleccionado</p>
           )}
         </>
+      )}
+
+      {activeReport === 'evolution' && (
+        <div className="evolution-report">
+          <p className="page-subtitle">
+            Total facturado por día (ventas autorizadas, comprobantes internos y pedidos web despachados),
+            desde el {EVOLUTION_START_DATE.split('-').reverse().join('/')} hasta hoy.
+          </p>
+
+          {evolutionLoading && <p>Cargando...</p>}
+          {evolutionError && <p className="error">{evolutionError}</p>}
+
+          {!evolutionLoading && !evolutionError && (
+            <>
+              <div className="linechart-section">
+                <h3 className="linechart-section-title">Todos los meses juntos</h3>
+                <LineChart series={evolutionAllMonthsSeries} maxDay={31} />
+              </div>
+
+              <div className="linechart-section">
+                <div className="linechart-section-header">
+                  <h3 className="linechart-section-title">Detalle de un mes</h3>
+                  <label>
+                    Mes:
+                    <select
+                      className="input"
+                      value={evolutionMonth}
+                      onChange={e => setEvolutionMonth(e.target.value)}
+                    >
+                      {Array.from(new Set([...evolutionMonths, localCurrentMonth()])).sort().map(key => (
+                        <option key={key} value={key}>{monthLabel(key)}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <LineChart series={evolutionSelectedSeries} maxDay={daysInMonth(evolutionMonth)} />
+              </div>
+            </>
+          )}
+        </div>
       )}
 
       {activeReport === 'products' && (

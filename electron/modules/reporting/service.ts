@@ -29,9 +29,14 @@ interface PurchaseRow {
 export class ReportingService {
   constructor(private readonly db: Database) {}
 
+  /**
+   * Total facturado por día. Cuenta AUTHORIZED + INTERNAL_RECEIPT + PROCESSED
+   * (pedidos web ya despachados), a diferencia de dailySummary() que no incluye
+   * PROCESSED — este método está pensado para el reporte "Ventas por día".
+   */
   salesByDateRange(filters: ReportFilters): SalesSummary[] {
     const params: Record<string, unknown> = {}
-    const conditions: string[] = ["status IN ('AUTHORIZED', 'INTERNAL_RECEIPT')"]
+    const conditions: string[] = ["status IN ('AUTHORIZED', 'INTERNAL_RECEIPT', 'PROCESSED')"]
 
     if (filters.dateFrom) {
       conditions.push('sale_date >= @dateFrom')
@@ -51,7 +56,8 @@ export class ReportingService {
            COUNT(*) AS salesCount,
            SUM(total) AS totalAmount,
            SUM(CASE WHEN status = 'AUTHORIZED' THEN 1 ELSE 0 END) AS authorizedCount,
-           SUM(CASE WHEN status = 'INTERNAL_RECEIPT' THEN 1 ELSE 0 END) AS internalReceiptCount
+           SUM(CASE WHEN status = 'INTERNAL_RECEIPT' THEN 1 ELSE 0 END) AS internalReceiptCount,
+           SUM(CASE WHEN status = 'PROCESSED' THEN 1 ELSE 0 END) AS processedCount
          FROM sales
          ${where}
          GROUP BY sale_date

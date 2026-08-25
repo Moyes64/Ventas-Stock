@@ -1614,6 +1614,84 @@ code {
   flex-shrink: 0;
 }
 
+/* ── Line Chart (evolución de ventas) ─────────────────────────────────────── */
+.linechart-wrapper {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.linechart-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.linechart-grid {
+  stroke: var(--color-border);
+  stroke-width: 1;
+}
+
+.linechart-axis-label {
+  fill: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.linechart-empty {
+  color: var(--color-text-muted);
+  font-size: 14px;
+  padding: 20px 0;
+}
+
+.linechart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  margin-top: 12px;
+  font-size: 12px;
+}
+
+.linechart-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text);
+}
+
+.linechart-legend-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.evolution-report {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.linechart-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.linechart-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.linechart-section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
 .ranking-tables {
   display: grid;
   grid-template-columns: 1fr 1fr;
