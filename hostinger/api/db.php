@@ -165,6 +165,21 @@ function clientIp(): string {
     return $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
 }
 
+/**
+ * Fecha/hora actual en horario de Argentina, lista para insertar en una
+ * columna DATETIME. No depender de CURRENT_TIMESTAMP de MySQL ni de date('now')
+ * de PHP para esto: ambos usan el timezone configurado en el server/hosting
+ * (no necesariamente ART = UTC-3), lo que corre los límites de "día" cerca de
+ * medianoche y hace que un reporte filtrado por fecha local (como
+ * search-logs.php) se coma o desplace registros de último momento — mismo
+ * síntoma que bug_sale_time_utc_dashboard, pero acá conviene arreglar el dato
+ * guardado en vez de solo la conversión al mostrarlo, porque este valor se
+ * compara directo contra fechas locales en el WHERE del reporte.
+ */
+function argentinaNow(): string {
+    return (new DateTime('now', new DateTimeZone('America/Argentina/Buenos_Aires')))->format('Y-m-d H:i:s');
+}
+
 // ── Rate limiting simple basado en MySQL (sin dependencias externas) ───────
 // Mismo criterio en los dos usos (login del dashboard, creación de órdenes):
 // contar intentos recientes por IP en una tabla chica, y podar lo viejo en

@@ -19,6 +19,10 @@
  * cantidad de jugadores — se sacaron tras revisar la usabilidad del buscador
  * (ver historial de git y la migración DROP COLUMN en db.php).
  *
+ * Nota: created_at se inserta explícito en hora Argentina (argentinaNow() en
+ * db.php) en vez de dejar el DEFAULT CURRENT_TIMESTAMP de la columna — ver
+ * ese helper para el porqué (afecta el filtro por fecha del GET de abajo).
+ *
  * Subir a: public_html/pandorabox/api/search-logs.php
  */
 
@@ -86,8 +90,12 @@ if ($method === 'POST') {
 
     try {
         $pdo = getConnection();
-        $stmt = $pdo->prepare('INSERT INTO search_logs (precio, is_internal) VALUES (?, ?)');
-        $stmt->execute([$precio, $internal]);
+        // created_at explícito en hora Argentina (ver argentinaNow() en db.php) en
+        // vez del DEFAULT CURRENT_TIMESTAMP de la columna, que usa el timezone del
+        // hosting y podía correr una búsqueda de último momento al "día siguiente"
+        // en el reporte filtrado por fecha local.
+        $stmt = $pdo->prepare('INSERT INTO search_logs (created_at, precio, is_internal) VALUES (?, ?, ?)');
+        $stmt->execute([argentinaNow(), $precio, $internal]);
         echo json_encode(['ok' => true]);
     } catch (Exception $e) {
         apiError($e);
