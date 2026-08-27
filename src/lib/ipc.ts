@@ -404,6 +404,8 @@ export const caja = {
     electron.caja.getOpenSession() as Promise<CashSession | undefined>,
   getSessionByDate: (date: string) =>
     electron.caja.getSessionByDate(date) as Promise<CashSession | undefined>,
+  getSuggestedApertura: (sessionDate: string) =>
+    electron.caja.getSuggestedApertura(sessionDate) as Promise<{ amount: number; fromDate: string } | null>,
   listSessions: (limit?: number) =>
     electron.caja.listSessions(limit) as Promise<CashSession[]>,
   getCierreSummary: (date: string) =>

@@ -222,6 +222,7 @@ const electronAPI = {
     openSession: (input: unknown) => invoke('caja:openSession', input),
     getOpenSession: () => invoke('caja:getOpenSession'),
     getSessionByDate: (date: string) => invoke('caja:getSessionByDate', date),
+    getSuggestedApertura: (sessionDate: string) => invoke('caja:getSuggestedApertura', sessionDate),
     listSessions: (limit?: number) => invoke('caja:listSessions', limit),
     getCierreSummary: (date: string) => invoke('caja:getCierreSummary', date),
     closeSession: (date: string, cierreAmount: number) =>

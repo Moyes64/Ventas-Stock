@@ -19,6 +19,10 @@ export function registerCajaHandlers(db: Database): void {
     return cajaService.getSessionByDate(date)
   })
 
+  ipcMain.handle('caja:getSuggestedApertura', (_event, sessionDate: string) => {
+    return cajaService.getSuggestedApertura(sessionDate)
+  })
+
   ipcMain.handle('caja:listSessions', (_event, limit?: number) => {
     return cajaService.listSessions(limit)
   })

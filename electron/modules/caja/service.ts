@@ -50,6 +50,18 @@ export class CajaService {
     return this.repo.findOpenSession()
   }
 
+  /**
+   * Sugerencia de monto de apertura para `sessionDate`: el monto del último
+   * cierre de caja registrado antes de esa fecha (a confirmar por el usuario).
+   */
+  getSuggestedApertura(sessionDate: string): { amount: number; fromDate: string } | null {
+    const lastSession = this.repo.findLastSessionBefore(sessionDate)
+    if (!lastSession || lastSession.status !== 'closed' || lastSession.cierreAmount === null) {
+      return null
+    }
+    return { amount: lastSession.cierreAmount, fromDate: lastSession.sessionDate }
+  }
+
   getSessionByDate(date: string): CashSession | undefined {
     return this.repo.findSessionByDate(date)
   }

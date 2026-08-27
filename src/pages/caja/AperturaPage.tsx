@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { caja } from '../../lib/ipc'
-import { localToday } from '../../lib/date'
+import { localToday, formatWeekdayDate } from '../../lib/date'
 import type { CashSession } from '../../types/ipc'
 
 export default function AperturaPage() {
@@ -8,17 +8,24 @@ export default function AperturaPage() {
   const [sessionDate, setSessionDate] = useState(today)
   const [aperturaAmount, setAperturaAmount] = useState('')
   const [existingSession, setExistingSession] = useState<CashSession | null | undefined>(undefined)
+  const [suggestion, setSuggestion] = useState<{ amount: number; fromDate: string } | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
   async function checkSession(date: string) {
     setExistingSession(undefined)
+    setSuggestion(null)
     setError(null)
     setSuccess(null)
     try {
       const session = await caja.getSessionByDate(date)
       setExistingSession(session ?? null)
+      if (!session) {
+        const suggested = await caja.getSuggestedApertura(date)
+        setSuggestion(suggested)
+        setAperturaAmount(suggested ? String(suggested.amount) : '')
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al verificar la caja')
     }
@@ -94,6 +101,12 @@ export default function AperturaPage() {
         <>
           <div className="form-group">
             <label className="label">Monto en caja al abrir</label>
+            {suggestion && (
+              <p className="section-desc">
+                💡 Monto propuesto: cierre del {formatWeekdayDate(suggestion.fromDate)}.
+                Verifique el efectivo real antes de confirmar.
+              </p>
+            )}
             <input
               type="number"
               min="0"
