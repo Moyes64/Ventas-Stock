@@ -21,6 +21,7 @@ import { registerCsrHandlers } from './csr.handlers'
 import { registerMailHandlers } from './mail.handlers'
 import { registerWebCatalogHandlers } from './web-catalog.handlers'
 import { registerCambiosHandlers } from './cambios.handlers'
+import { registerFreeExchangeHandlers } from './free-exchange.handlers'
 import { registerCreditsHandlers } from './credits.handlers'
 import { registerFinanceHandlers } from './finance.handlers'
 import { registerStockCountHandlers } from './stock-count.handlers'
@@ -53,6 +54,7 @@ export function registerAllIpcHandlers(
   registerMailHandlers(db)
   const webCatalogService = registerWebCatalogHandlers(db)
   registerCambiosHandlers(db)
+  registerFreeExchangeHandlers(db)
   registerCreditsHandlers(db)
   registerFinanceHandlers(db)
   const stockCountService = registerStockCountHandlers(db)

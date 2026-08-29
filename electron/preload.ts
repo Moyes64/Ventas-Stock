@@ -245,6 +245,12 @@ const electronAPI = {
     list: (limit?: number) => invoke('cambios:list', limit),
   },
 
+  // Devolución sin ticket de cambio (carrito de productos devueltos/nuevos, sin venta original)
+  freeExchange: {
+    confirm: (input: unknown) => invoke('free-exchange:confirm', input),
+    list: (limit?: number) => invoke('free-exchange:list', limit),
+  },
+
   // Finanzas (ingresos/egresos multi-cuenta y patrimonio de socios)
   finance: {
     listPartners: () => invoke('finance:listPartners'),

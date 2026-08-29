@@ -246,20 +246,26 @@ export class FinanceService {
    * segundo movimiento (egreso) por la comisión que cobra Mercado Pago, según la
    * tasa vigente a la fecha de la venta — ver `registerMpFeeForSale`.
    */
+  /** Resuelve la cuenta destino del ingreso según el medio de pago: Caja para efectivo,
+   *  MP-Anabella para posnet/transferencia/web. `undefined` para cualquier otro medio
+   *  no mapeado (ej: crédito de cliente, que no es dinero nuevo). */
+  private resolveIncomeAccount(paymentMethod: string): FinanceAccount | undefined {
+    if (paymentMethod === 'contado_efectivo') {
+      return this.repo.findCashAccount()
+    }
+    if (MP_ANABELLA_PAYMENT_METHODS.has(paymentMethod)) {
+      return this.repo.findAccountByName(MP_ANABELLA_ACCOUNT_NAME)
+    }
+    return undefined
+  }
+
   registerSaleIncome(input: {
     saleId: number
     paymentMethod: string
     monto: number
     fecha: string
   }): FinanceMovement | null {
-    let account: FinanceAccount | undefined
-    if (input.paymentMethod === 'contado_efectivo') {
-      account = this.repo.findCashAccount()
-    } else if (MP_ANABELLA_PAYMENT_METHODS.has(input.paymentMethod)) {
-      account = this.repo.findAccountByName(MP_ANABELLA_ACCOUNT_NAME)
-    } else {
-      return null
-    }
+    const account = this.resolveIncomeAccount(input.paymentMethod)
     if (!account) return null
     const categoria = this.repo.findCategoryByName(VENTA_CATEGORIA)
 
@@ -287,13 +293,61 @@ export class FinanceService {
   }
 
   /**
-   * Descuenta la comisión de Mercado Pago (% + IVA, según la tasa vigente el
-   * día de la venta) como un egreso separado en la misma cuenta — visible en
-   * "Gastos por categoría" y vinculado a la venta (se borra junto con el
-   * ingreso si la venta se cancela o se reclasifica). No hace nada si todavía
-   * no hay una tasa configurada para ese medio de pago (mejor no descontar
-   * nada que asumir un % incorrecto).
+   * Igual que `registerSaleIncome` pero para operaciones que no son una Sale — por
+   * ahora, la diferencia a favor del comercio en una devolución sin ticket de cambio
+   * (el cliente entrega un producto más caro que el que devuelve). No queda ligado a
+   * ninguna venta (`saleId` null en el movimiento); la descripción identifica el
+   * origen. Igual que en una venta, si el medio de pago es posnet/web, descuenta
+   * además la comisión de Mercado Pago vigente.
    */
+  registerExchangeDifferenceIncome(input: {
+    freeExchangeId: number
+    paymentMethod: string
+    monto: number
+    fecha: string
+  }): FinanceMovement | null {
+    const account = this.resolveIncomeAccount(input.paymentMethod)
+    if (!account) return null
+    const categoria = this.repo.findCategoryByName(VENTA_CATEGORIA)
+    const descripcion = `Diferencia cambio sin ticket #${input.freeExchangeId}`
+
+    const id = this.repo.createMovement({
+      accountId: account.id,
+      tipo: 'ingreso',
+      categoriaId: categoria?.id ?? null,
+      monto: input.monto,
+      descripcion,
+      fecha: input.fecha,
+    })
+
+    if (MP_FEE_PAYMENT_METHODS.has(input.paymentMethod as MpFeePaymentMethod)) {
+      const comision = this.calcMpFee(input.paymentMethod as MpFeePaymentMethod, input.monto, input.fecha)
+      if (comision !== null) {
+        const feeCategoria = this.repo.findCategoryByName(COMISION_MP_CATEGORIA)
+        this.repo.createMovement({
+          accountId: account.id,
+          tipo: 'egreso',
+          categoriaId: feeCategoria?.id ?? null,
+          monto: comision,
+          descripcion: `Comisión MP (${input.paymentMethod.toUpperCase()}) - ${descripcion}`,
+          fecha: input.fecha,
+        })
+      }
+    }
+
+    return this.repo.findMovementById(id) ?? null
+  }
+
+  /** Calcula la comisión de MP (% + IVA, según la tasa vigente a la fecha) para un
+   *  monto y medio de pago dados. `null` si todavía no hay una tasa configurada, o
+   *  si la comisión calculada es cero (mejor no descontar nada que asumir mal). */
+  private calcMpFee(paymentMethod: MpFeePaymentMethod, monto: number, fecha: string): number | null {
+    const rate = this.repo.findEffectiveMpFeeRate(paymentMethod, fecha)
+    if (!rate) return null
+    const comision = round2(monto * (rate.pct / 100) * (1 + rate.ivaPct / 100))
+    return comision > 0 ? comision : null
+  }
+
   private registerMpFeeForSale(
     saleId: number,
     paymentMethod: MpFeePaymentMethod,
@@ -301,10 +355,8 @@ export class FinanceService {
     fecha: string,
     accountId: number
   ): void {
-    const rate = this.repo.findEffectiveMpFeeRate(paymentMethod, fecha)
-    if (!rate) return
-    const comision = round2(monto * (rate.pct / 100) * (1 + rate.ivaPct / 100))
-    if (comision <= 0) return
+    const comision = this.calcMpFee(paymentMethod, monto, fecha)
+    if (comision === null) return
 
     const categoria = this.repo.findCategoryByName(COMISION_MP_CATEGORIA)
     this.repo.createMovement({

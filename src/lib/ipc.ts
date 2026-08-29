@@ -396,6 +396,14 @@ export const cambios = {
     electron.cambios.list(limit) as Promise<import('../types/ipc').ExchangeRecord[]>,
 }
 
+// Devolución sin ticket de cambio
+export const freeExchange = {
+  confirm: (input: import('../types/ipc').ConfirmFreeExchangeInput) =>
+    electron.freeExchange.confirm(input) as Promise<import('../types/ipc').ConfirmFreeExchangeResult>,
+  list: (limit?: number) =>
+    electron.freeExchange.list(limit) as Promise<import('../types/ipc').FreeExchangeRecord[]>,
+}
+
 // Caja
 export const caja = {
   openSession: (input: { sessionDate: string; aperturaAmount: number }) =>

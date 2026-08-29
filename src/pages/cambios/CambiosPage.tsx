@@ -1,10 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { cambios } from '../../lib/ipc'
 import type { ExchangePreview, ExchangeRecord } from '../../types/ipc'
+import FreeExchangeTab from './FreeExchangeTab'
 
 type Step = 'scan' | 'preview' | 'done'
+type Mode = 'ticket' | 'sinTicket'
 
 export default function CambiosPage() {
+  const [mode, setMode] = useState<Mode>('ticket')
   const [step, setStep] = useState<Step>('scan')
   const [rawQr, setRawQr] = useState('')
   const [preview, setPreview] = useState<ExchangePreview | null>(null)
@@ -85,10 +88,42 @@ export default function CambiosPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">🔄 Cambios y Devoluciones</h1>
-          <p className="page-subtitle">Escaneá el QR del ticket de cambio para procesar</p>
+          <p className="page-subtitle">
+            {mode === 'ticket'
+              ? 'Escaneá el QR del ticket de cambio para procesar'
+              : 'Escaneá el producto que devuelve el cliente y el que se lleva a cambio'}
+          </p>
         </div>
       </div>
 
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
+        <button
+          onClick={() => setMode('ticket')}
+          style={{
+            padding: '8px 16px', borderRadius: '8px', fontWeight: 700, fontSize: '13px',
+            border: mode === 'ticket' ? '1px solid #2563eb' : '1px solid #d1d5db', cursor: 'pointer',
+            backgroundColor: mode === 'ticket' ? '#2563eb' : 'white',
+            color: mode === 'ticket' ? 'white' : '#374151',
+          }}
+        >
+          🎫 Con ticket
+        </button>
+        <button
+          onClick={() => setMode('sinTicket')}
+          style={{
+            padding: '8px 16px', borderRadius: '8px', fontWeight: 700, fontSize: '13px',
+            border: mode === 'sinTicket' ? '1px solid #2563eb' : '1px solid #d1d5db', cursor: 'pointer',
+            backgroundColor: mode === 'sinTicket' ? '#2563eb' : 'white',
+            color: mode === 'sinTicket' ? 'white' : '#374151',
+          }}
+        >
+          📦 Sin ticket
+        </button>
+      </div>
+
+      {mode === 'sinTicket' ? (
+        <FreeExchangeTab />
+      ) : (
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', alignItems: 'start' }}>
 
         {/* Panel izquierdo: escaneo / preview / done */}
@@ -268,6 +303,7 @@ export default function CambiosPage() {
           )}
         </div>
       </div>
+      )}
     </div>
   )
 }

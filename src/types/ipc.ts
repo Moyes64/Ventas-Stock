@@ -381,6 +381,53 @@ export interface ExchangeRecord {
   customer_name: string | null
 }
 
+// ── Devolución sin ticket de cambio ────────────────────────────────────────
+
+export interface FreeExchangeItemInput {
+  productId: number
+  quantity: number
+  unitPrice: number
+}
+
+export interface ConfirmFreeExchangeInput {
+  customerId?: number | null
+  returnedItems: FreeExchangeItemInput[]
+  newItems: FreeExchangeItemInput[]
+  settlementMethod?: string
+  notes?: string
+}
+
+export interface ConfirmFreeExchangeResult {
+  ok: boolean
+  error?: string
+  id?: number
+  returnedTotal?: number
+  newTotal?: number
+  difference?: number
+}
+
+export interface FreeExchangeItemRecord {
+  free_exchange_id: number
+  direction: 'RETURN' | 'NEW'
+  quantity: number
+  unit_price: number
+  subtotal: number
+  product_name: string
+}
+
+export interface FreeExchangeRecord {
+  id: number
+  customer_id: number | null
+  customer_name: string | null
+  returned_total: number
+  new_total: number
+  difference: number
+  settlement_method: string | null
+  notes: string | null
+  created_at: string
+  items: FreeExchangeItemRecord[]
+}
+
 // ── Web Catalog ──────────────────────────────────────────────────────────
 
 export interface WebCategory {
