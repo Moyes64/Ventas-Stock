@@ -470,6 +470,13 @@ export const finance = {
     electron.finance.ignoreMpReconciliation(id) as Promise<FinanceMpReconciliation>,
   reopenMpReconciliation: (id: number) =>
     electron.finance.reopenMpReconciliation(id) as Promise<FinanceMpReconciliation>,
+  exportMovements: (content: string, defaultName: string) =>
+    electron.finance.exportMovements(content, defaultName) as Promise<{
+      success: boolean
+      filePath?: string
+      canceled?: boolean
+      error?: string
+    }>,
 }
 
 // Conteo de stock

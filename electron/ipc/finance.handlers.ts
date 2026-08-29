@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { ipcMain, dialog } from 'electron'
+import fs from 'fs'
 import type { Database } from 'better-sqlite3'
 import { FinanceService } from '../modules/finance/service'
 import type {
@@ -127,5 +128,24 @@ export function registerFinanceHandlers(db: Database): void {
 
   ipcMain.handle('finance:reopenMpReconciliation', (_event, id: number) => {
     return financeService.reopenMpReconciliation(id)
+  })
+
+  // Exportar movimientos a un archivo CSV que se abre con Excel
+  ipcMain.handle('finance:exportMovements', async (_event, content: string, defaultName: string) => {
+    const { filePath, canceled } = await dialog.showSaveDialog({
+      title: 'Exportar movimientos a Excel',
+      defaultPath: defaultName,
+      filters: [{ name: 'CSV (Excel)', extensions: ['csv'] }],
+    })
+
+    if (canceled || !filePath) return { success: false, canceled: true }
+
+    try {
+      // BOM inicial para que Excel interprete el archivo como UTF-8 (acentos, símbolo $).
+      fs.writeFileSync(filePath, String.fromCharCode(0xfeff) + content, 'utf-8')
+      return { success: true, filePath }
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) }
+    }
   })
 }

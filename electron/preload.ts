@@ -283,6 +283,8 @@ const electronAPI = {
     confirmMpReconciliationAdjustment: (id: number) => invoke('finance:confirmMpReconciliationAdjustment', id),
     ignoreMpReconciliation: (id: number) => invoke('finance:ignoreMpReconciliation', id),
     reopenMpReconciliation: (id: number) => invoke('finance:reopenMpReconciliation', id),
+    exportMovements: (content: string, defaultName: string) =>
+      invoke('finance:exportMovements', content, defaultName),
   },
 
   // Conteo de stock (servidor local + sesiones de conciliación)

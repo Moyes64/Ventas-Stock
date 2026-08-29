@@ -77,6 +77,10 @@ export default function MovementsPage() {
   const [accreditSaving, setAccreditSaving] = useState(false)
   const [accreditError, setAccreditError] = useState<string | null>(null)
 
+  // Exportar a Excel los movimientos del período/filtros seleccionados
+  const [exporting, setExporting] = useState(false)
+  const [exportMsg, setExportMsg] = useState<string | null>(null)
+
   const categoriasDelTipo = categories.filter(c => c.appliesTo === tipo || c.appliesTo === 'ambos')
   const categoriaSeleccionada = categories.find(c => c.id === categoriaId)
   const requiereSocio = categoriaSeleccionada?.name === RETIRO_SOCIO
@@ -333,6 +337,63 @@ export default function MovementsPage() {
   function sortIndicator(key: MovementSortKey): string {
     if (key !== sortKey) return ''
     return sortDir === 'asc' ? ' ▲' : ' ▼'
+  }
+
+  // ── Exportar a Excel ──────────────────────────────────────────────────────
+  // Se genera un CSV separado por ';' (formato que Excel es-AR abre directo). El
+  // BOM UTF-8 lo agrega el proceso principal al guardar. Se exportan los mismos
+  // movimientos que se ven en pantalla, respetando filtros y orden de columnas.
+  function csvCell(value: string | number): string {
+    const s = String(value)
+    return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+  }
+
+  // Sin símbolo ni separador de miles y con coma decimal, para que Excel lo lea como número.
+  function montoCsv(n: number): string {
+    return n.toFixed(2).replace('.', ',')
+  }
+
+  function buildMovementsCsv(): string {
+    const headers = ['Fecha', 'Cuenta', 'Tipo', 'Categoría', 'Socio / Proveedor', 'Descripción', 'Monto', 'Acreditación']
+    const rows = sortedMovements.map(m => [
+      m.fecha,
+      accountName(m.accountId),
+      m.tipo === 'ingreso' ? 'Ingreso' : 'Egreso',
+      m.categoriaId === null ? '' : categoryName(m.categoriaId),
+      socioProveedorLabel(m),
+      m.descripcion,
+      montoCsv(m.tipo === 'egreso' ? -m.monto : m.monto),
+      m.fechaAcreditacion
+        ? `${m.fechaAcreditacion > today ? 'Pendiente' : 'Acreditado'} ${m.fechaAcreditacion}`
+        : '',
+    ])
+    const totals = [
+      ['', '', '', '', '', '', '', ''],
+      ['Total ingresos', '', '', '', '', '', montoCsv(totalIngresos), ''],
+      ['Total egresos', '', '', '', '', '', montoCsv(-totalEgresos), ''],
+    ]
+    return [headers, ...rows, ...totals].map(r => r.map(csvCell).join(';')).join('\r\n')
+  }
+
+  async function handleExport() {
+    if (sortedMovements.length === 0) return
+    setExporting(true)
+    setExportMsg(null)
+    try {
+      const defaultName = `Movimientos_${filterDateFrom}_a_${filterDateTo}.csv`
+      const result = await finance.exportMovements(buildMovementsCsv(), defaultName)
+      if (result.canceled) {
+        // el usuario canceló el diálogo — no hacer nada
+      } else if (result.success) {
+        setExportMsg(`✅ Exportado a: ${result.filePath ?? ''}`)
+      } else {
+        setExportMsg(`❌ ${result.error ?? 'No se pudo exportar el archivo'}`)
+      }
+    } catch (err) {
+      setExportMsg(`❌ ${err instanceof Error ? err.message : 'No se pudo exportar el archivo'}`)
+    } finally {
+      setExporting(false)
+    }
   }
 
   return (
@@ -650,7 +711,18 @@ export default function MovementsPage() {
             <option value="egreso">Egreso</option>
           </select>
         </label>
+        <button
+          className="btn btn-secondary"
+          style={{ marginLeft: 'auto' }}
+          onClick={() => { void handleExport() }}
+          disabled={exporting || movements.length === 0}
+          title="Exportar a Excel los movimientos del período y filtros seleccionados"
+        >
+          {exporting ? '⏳ Exportando...' : '📊 Exportar a Excel'}
+        </button>
       </div>
+
+      {exportMsg && <p className="page-subtitle">{exportMsg}</p>}
 
       {loading && <p>Cargando...</p>}
       {error && <p className="error">{error}</p>}
