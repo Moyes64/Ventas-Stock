@@ -122,19 +122,38 @@ export class PrintingService {
     // Calculate gross subtotal (before parameter adjustments) from item lines, including IVA
     const grossSubtotal = items.reduce((sum, item) => sum + item.subtotal, 0)
 
-    // Build discount lines (only tipo='-') from persisted sale_parameters.
-    // Surcharges (tipo='+') still update runningBase to keep amounts accurate
-    // but are intentionally excluded from the printed invoice per requirements.
+    // Build discount/surcharge lines from persisted sale_parameters.
+    // Discounts (tipo='-') se muestran como líneas propias con signo negativo.
+    // Recargos (tipo='+') — ej. recargo por tarjeta de crédito — también deben
+    // aparecer: ya están sumados en `sale.total`, y sin una línea que los explique
+    // el total impreso no coincide con la suma de los ítems. Se agrupan más abajo
+    // en `otherCharges` (misma línea que ya usan las ventas web).
     const appliedParams = this.saleRepo.getAppliedParameters(sale.id)
     const discountLines: TicketData['discountLines'] = []
+    const surchargeLines: Array<{ descripcion: string; porcentaje: number; amount: number }> = []
     let runningBase = grossSubtotal
     for (const param of appliedParams) {
+      const amount = runningBase * (param.porcentaje / 100)
       if (param.tipo === '-') {
-        const amount = runningBase * (param.porcentaje / 100)
         discountLines.push({ descripcion: param.descripcion, porcentaje: param.porcentaje, amount })
         runningBase *= 1 - param.porcentaje / 100
       } else {
+        surchargeLines.push({ descripcion: param.descripcion, porcentaje: param.porcentaje, amount })
         runningBase *= 1 + param.porcentaje / 100
+      }
+    }
+
+    // Cargo adicional a mostrar como línea propia (ya incluido en `sale.total`):
+    //   - Ventas web: viene en sale.otherChargesAmount / sale.otherChargesLabel.
+    //   - Ventas de mostrador: se arma con los recargos por parámetro (tipo='+').
+    // Ambos casos son mutuamente excluyentes en la práctica.
+    let otherCharges: TicketData['otherCharges']
+    if (sale.otherChargesAmount > 0) {
+      otherCharges = { label: sale.otherChargesLabel || 'Otros cargos', amount: sale.otherChargesAmount }
+    } else if (surchargeLines.length > 0) {
+      otherCharges = {
+        label: surchargeLines.map(s => `${s.descripcion} (${s.porcentaje}%)`).join(' + '),
+        amount: surchargeLines.reduce((sum, s) => sum + s.amount, 0),
       }
     }
 
@@ -162,9 +181,7 @@ export class PrintingService {
       })),
       grossSubtotal,
       discountLines,
-      otherCharges: sale.otherChargesAmount > 0
-        ? { label: sale.otherChargesLabel || 'Otros cargos', amount: sale.otherChargesAmount }
-        : undefined,
+      otherCharges,
       subtotal: sale.subtotal,
       taxAmount: sale.taxAmount,
       total: sale.total,
