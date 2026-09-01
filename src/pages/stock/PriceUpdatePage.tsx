@@ -7,16 +7,17 @@ type MatchSource = 'barcode' | 'sku' | 'name' | 'manual' | null
 
 interface Row {
   productId: number
-  sku: string
-  barcode: string | null
+  sku: string             // SKU interno — no se muestra, se usa solo internamente
+  barcode: string | null  // no se muestra, se usa solo para el matching
   name: string
-  currentPrice: number
-  gainPercent: number     // % de ganancia guardado en el sistema (antes de esta actualización)
+  currentCost: number     // costo actual guardado en el sistema (sin IVA)
+  currentPrice: number    // PVP actual (con IVA)
+  gainPercent: string     // % de ganancia — editable, sincronizado con Nuevo PVP
   ivaPct: number
-  supplierCode: string    // código de proveedor guardado en el producto
+  supplierCode: string    // código de proveedor guardado en el producto — no se muestra, se usa para el matching
   excelRowIndex: number | null
   matchSource: MatchSource
-  finalPrice: string      // editable — se puede redondear a mano
+  finalPrice: string      // Nuevo PVP — editable, sincronizado con % Ganancia
   include: boolean
   saveSupplierCode: boolean
 }
@@ -125,8 +126,9 @@ export default function PriceUpdatePage() {
           sku: p.sku,
           barcode: p.barcode,
           name: p.name,
+          currentCost: p.cost,
           currentPrice: p.price,
-          gainPercent: p.gainPercent,
+          gainPercent: String(p.gainPercent),
           ivaPct,
           supplierCode: p.supplierCode,
           excelRowIndex: null,
@@ -160,7 +162,7 @@ export default function PriceUpdatePage() {
       built.forEach(row => {
         if (row.excelRowIndex === null) return
         const excelPrice = parsed.rows[row.excelRowIndex].price
-        row.finalPrice = String(round2(calcSalePrice(excelPrice, row.gainPercent, row.ivaPct)))
+        row.finalPrice = String(round2(calcSalePrice(excelPrice, parseFloat(row.gainPercent) || 0, row.ivaPct)))
         row.include = true
       })
 
@@ -188,7 +190,7 @@ export default function PriceUpdatePage() {
     }
     const row = rows[idx]
     const excelRow = excelRows[excelIdx]
-    const finalPrice = String(round2(calcSalePrice(excelRow.price, row.gainPercent, row.ivaPct)))
+    const finalPrice = String(round2(calcSalePrice(excelRow.price, parseFloat(row.gainPercent) || 0, row.ivaPct)))
     updateRow(idx, {
       excelRowIndex: excelIdx,
       matchSource: 'manual',
@@ -196,6 +198,30 @@ export default function PriceUpdatePage() {
       include: true,
       saveSupplierCode: !!excelRow.sku && normalizeCode(excelRow.sku) !== normalizeCode(row.supplierCode),
     })
+  }
+
+  /** Editar % Ganancia recalcula el Nuevo PVP a partir del costo del excel */
+  function handleGainChange(idx: number, value: string) {
+    const row = rows[idx]
+    const excelRow = row.excelRowIndex !== null ? excelRows[row.excelRowIndex] : null
+    if (!excelRow) { updateRow(idx, { gainPercent: value }); return }
+    const gainNum = parseFloat(value)
+    const finalPrice = Number.isFinite(gainNum)
+      ? String(round2(calcSalePrice(excelRow.price, gainNum, row.ivaPct)))
+      : row.finalPrice
+    updateRow(idx, { gainPercent: value, finalPrice })
+  }
+
+  /** Editar el Nuevo PVP (para redondear a mano) recalcula el % Ganancia resultante */
+  function handleFinalPriceChange(idx: number, value: string) {
+    const row = rows[idx]
+    const excelRow = row.excelRowIndex !== null ? excelRows[row.excelRowIndex] : null
+    if (!excelRow) { updateRow(idx, { finalPrice: value }); return }
+    const priceNum = parseFloat(value)
+    const gainPercent = Number.isFinite(priceNum)
+      ? String(calcGainFromPrice(excelRow.price, priceNum, row.ivaPct))
+      : row.gainPercent
+    updateRow(idx, { finalPrice: value, gainPercent })
   }
 
   function toggleAllMatched(include: boolean) {
@@ -358,24 +384,20 @@ export default function PriceUpdatePage() {
               <thead>
                 <tr>
                   <th>✓</th>
-                  <th>SKU interno</th>
-                  <th>Cód. proveedor</th>
-                  <th>Cód. Barras</th>
                   <th>Producto</th>
-                  <th>Precio actual</th>
-                  <th>Precio excel (costo)</th>
+                  <th>Costo actual</th>
+                  <th>Costo Excel</th>
+                  <th>Dif. %</th>
                   <th>% Ganancia</th>
-                  <th>Precio final</th>
-                  <th>Var. %</th>
-                  <th>Fuente</th>
+                  <th>PVP Actual</th>
+                  <th>Nuevo PVP</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row, idx) => {
                   const excelRow = row.excelRowIndex !== null ? excelRows[row.excelRowIndex] : null
-                  const finalPriceNum = parseFloat(row.finalPrice)
-                  const variation = excelRow && row.currentPrice > 0 && !Number.isNaN(finalPriceNum)
-                    ? ((finalPriceNum - row.currentPrice) / row.currentPrice) * 100
+                  const diffPct = excelRow && row.currentCost > 0
+                    ? ((excelRow.price - row.currentCost) / row.currentCost) * 100
                     : null
                   return (
                     <tr key={row.productId} className={!excelRow ? 'row--warning' : !row.include ? 'row--disabled' : ''}>
@@ -387,9 +409,6 @@ export default function PriceUpdatePage() {
                           onChange={e => updateRow(idx, { include: e.target.checked })}
                         />
                       </td>
-                      <td className="text-muted" style={{ fontSize: '0.85em' }}>{row.sku}</td>
-                      <td className={!excelRow ? '' : 'text-muted'} style={{ fontSize: '0.85em' }}>{row.supplierCode || '—'}</td>
-                      <td className="text-muted" style={{ fontSize: '0.8em' }}>{row.barcode || '—'}</td>
                       <td style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.name}>
                         {row.name}
                         {!excelRow && (
@@ -421,9 +440,27 @@ export default function PriceUpdatePage() {
                           </div>
                         )}
                       </td>
-                      <td>{currency(row.currentPrice)}</td>
+                      <td>{currency(row.currentCost)}</td>
                       <td>{excelRow ? currency(excelRow.price) : '—'}</td>
-                      <td className="text-muted">{row.gainPercent.toFixed(1)}%</td>
+                      <td>
+                        {diffPct !== null ? (
+                          <span className={`badge ${diffPct < 0 ? 'badge--danger' : Math.abs(diffPct) > 25 ? 'badge--warning' : 'badge--success'}`}>
+                            {diffPct > 0 ? '+' : ''}{diffPct.toFixed(1)}%
+                          </span>
+                        ) : '—'}
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          step="0.1"
+                          className="input input--qty"
+                          style={{ width: 75 }}
+                          value={row.gainPercent}
+                          disabled={!excelRow}
+                          onChange={e => handleGainChange(idx, e.target.value)}
+                        />%
+                      </td>
+                      <td>{currency(row.currentPrice)}</td>
                       <td>
                         <input
                           type="number"
@@ -432,24 +469,8 @@ export default function PriceUpdatePage() {
                           style={{ width: 100 }}
                           value={row.finalPrice}
                           disabled={!excelRow}
-                          onChange={e => updateRow(idx, { finalPrice: e.target.value })}
+                          onChange={e => handleFinalPriceChange(idx, e.target.value)}
                         />
-                      </td>
-                      <td>
-                        {variation !== null ? (
-                          <span className={`badge ${variation < 0 ? 'badge--danger' : Math.abs(variation) > 25 ? 'badge--warning' : 'badge--success'}`}>
-                            {variation > 0 ? '+' : ''}{variation.toFixed(1)}%
-                          </span>
-                        ) : '—'}
-                      </td>
-                      <td>
-                        {row.matchSource ? (
-                          <span className={`badge ${SOURCE_LABELS[row.matchSource].cls}`} style={{ fontSize: '0.75em' }}>
-                            {SOURCE_LABELS[row.matchSource].label}
-                          </span>
-                        ) : (
-                          <span className="badge badge--danger" style={{ fontSize: '0.75em' }}>❌ Sin coincidencia</span>
-                        )}
                       </td>
                     </tr>
                   )
