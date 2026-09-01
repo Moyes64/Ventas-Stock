@@ -221,8 +221,8 @@ export const printing = {
     electron.printing.printChangeTicket(saleId) as Promise<{ success: boolean; error?: string }>,
   printStockReport: () =>
     electron.printing.printStockReport() as Promise<{ success: boolean; error?: string; count?: number }>,
-  printPriceReport: () =>
-    electron.printing.printPriceReport() as Promise<{ success: boolean; error?: string; count?: number }>,
+  printPriceReport: (supplierId?: number) =>
+    electron.printing.printPriceReport(supplierId) as Promise<{ success: boolean; error?: string; count?: number }>,
 }
 
 // Reporting

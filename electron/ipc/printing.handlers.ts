@@ -11,6 +11,7 @@ import { sendEscPos } from '../modules/printer-config/service'
 import { SystemParamsService } from '../modules/system-params/service'
 import { StockService } from '../modules/stock/service'
 import { ProductService } from '../modules/catalog/service'
+import { SupplierService } from '../modules/suppliers/service'
 
 async function printChangeTicketForSale(db: Database, saleId: number): Promise<void> {
   const { SaleRepository } = await import('../modules/sales/repository')
@@ -179,8 +180,9 @@ export function registerPrintingHandlers(db: Database): void {
     }
   })
 
-  // Listado de precios: producto, costo, ganancia y precio al público
-  ipcMain.handle('printing:printPriceReport', async () => {
+  // Listado de precios: producto, costo, ganancia y precio al público.
+  // Si se pasa supplierId, se filtra a solo los productos de ese proveedor.
+  ipcMain.handle('printing:printPriceReport', async (_event, supplierId?: number) => {
     try {
       const printerCfg = new PrinterConfigService().get()
       const isReady = printerCfg.connectionType === 'usb'
@@ -191,8 +193,20 @@ export function registerPrintingHandlers(db: Database): void {
       }
 
       const productService = new ProductService(db)
-      const products = productService.list()
-      const buffer = buildPriceReportBuffer(products)
+      const allProducts = productService.list()
+      const products = supplierId
+        ? allProducts.filter(p => p.supplierId === supplierId)
+        : allProducts
+
+      if (supplierId && products.length === 0) {
+        return { success: false, error: 'El proveedor seleccionado no tiene productos activos cargados.' }
+      }
+
+      const supplierName = supplierId
+        ? new SupplierService(db).getById(supplierId)?.name
+        : undefined
+
+      const buffer = buildPriceReportBuffer(products, supplierName)
       await sendEscPos(printerCfg, buffer)
       return { success: true, count: products.length }
     } catch (err) {

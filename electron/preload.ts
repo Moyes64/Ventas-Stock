@@ -99,7 +99,7 @@ const electronAPI = {
     listForReprint: (filters: unknown) => invoke('printing:listForReprint', filters),
     printChangeTicket: (saleId: number) => invoke('printing:printChangeTicket', saleId),
     printStockReport: () => invoke('printing:printStockReport'),
-    printPriceReport: () => invoke('printing:printPriceReport'),
+    printPriceReport: (supplierId?: number) => invoke('printing:printPriceReport', supplierId),
   },
 
   // Reporting

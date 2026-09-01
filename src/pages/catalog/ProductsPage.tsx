@@ -12,9 +12,15 @@ export default function ProductsPage() {
   const [showForm, setShowForm] = useState(false)
   const [editProduct, setEditProduct] = useState<Product | null>(null)
   const [printingReport, setPrintingReport] = useState(false)
+  const [suppliersList, setSuppliersList] = useState<Supplier[]>([])
+  const [printSupplierId, setPrintSupplierId] = useState<number | ''>('')
   const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { confirm, dialog: confirmDialog } = useConfirm()
+
+  useEffect(() => {
+    void suppliersApi.list(true).then(setSuppliersList)
+  }, [])
 
   async function loadProducts() {
     setLoading(true)
@@ -63,9 +69,12 @@ export default function ProductsPage() {
   async function handlePrintPriceReport() {
     setPrintingReport(true)
     try {
-      const result = await printingApi.printPriceReport()
+      const result = await printingApi.printPriceReport(printSupplierId || undefined)
+      const supplierLabel = printSupplierId
+        ? ` — ${suppliersList.find(s => s.id === printSupplierId)?.name ?? ''}`
+        : ''
       if (result.success) {
-        setToast({ type: 'success', text: `Listado de precios enviado a la impresora (${result.count ?? products.length} artículos)` })
+        setToast({ type: 'success', text: `Listado de precios enviado a la impresora${supplierLabel} (${result.count ?? products.length} artículos)` })
       } else {
         setToast({ type: 'error', text: result.error ?? 'Error al imprimir el listado' })
       }
@@ -86,6 +95,18 @@ export default function ProductsPage() {
           <button className="btn btn-primary" onClick={() => { setEditProduct(null); setShowForm(true) }}>
             + Nuevo Producto
           </button>
+          <select
+            className="input"
+            style={{ maxWidth: 220 }}
+            value={printSupplierId}
+            onChange={e => setPrintSupplierId(e.target.value === '' ? '' : Number(e.target.value))}
+            title="Filtrar el listado a imprimir por proveedor"
+          >
+            <option value="">Imprimir: todos los proveedores</option>
+            {suppliersList.map(s => (
+              <option key={s.id} value={s.id}>Imprimir: {s.name}</option>
+            ))}
+          </select>
           <button className="btn btn-secondary" disabled={printingReport} onClick={() => void handlePrintPriceReport()}>
             🖨️ {printingReport ? 'Imprimiendo…' : 'Imprimir listado de precios'}
           </button>

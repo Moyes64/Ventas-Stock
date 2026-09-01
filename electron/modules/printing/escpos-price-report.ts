@@ -20,7 +20,7 @@ function money(n: number): string {
   return n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-export function buildPriceReportBuffer(products: Product[]): Buffer {
+export function buildPriceReportBuffer(products: Product[], supplierName?: string): Buffer {
   const parts: Buffer[] = []
   const p = (...bufs: Buffer[]) => parts.push(...bufs)
 
@@ -33,6 +33,11 @@ export function buildPriceReportBuffer(products: Product[]): Buffer {
   p(cmdAlign('center'), cmdBold(true))
   p(txt('LISTADO DE PRECIOS'), lf(1))
   p(cmdBold(false))
+  if (supplierName) {
+    p(cmdBold(true))
+    p(txt(`Proveedor: ${supplierName}`), lf(1))
+    p(cmdBold(false))
+  }
   p(txt(`Fecha: ${fecha} ${hora}`), lf(1))
   p(txt(`Total articulos: ${products.length}`), lf(1))
   p(sep())
