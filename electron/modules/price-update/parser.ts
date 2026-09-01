@@ -71,13 +71,22 @@ export function parsePriceExcel(filePath: string): ParseExcelResult {
 
   const rawHeaders = raw[0].map(h => String(h ?? '').trim())
   const headers = raw[0].map(normalizeHeader)
-  const skuCol = findColumn(headers, ['sku', 'codigo de proveedor', 'codigo prov', 'articulo', 'codigo'])
+
+  // Código de barras primero, con palabras clave específicas (no ambiguas con "código" a secas)
   const barcodeCol = findColumn(headers, ['codigo de barras', 'cod. barras', 'barras', 'ean'])
+
+  // SKU / código de proveedor: se busca primero con palabras clave específicas en TODAS las
+  // columnas; solo si ninguna columna matchea eso se recurre al comodín genérico "codigo",
+  // y siempre evitando la columna ya asignada a código de barras. Si el comodín genérico se
+  // probara junto con "sku" en una sola pasada, una columna "Código de barras" que aparezca
+  // antes que la de "SKU" en la planilla "robaría" el match por contener la palabra "código".
+  let finalSkuCol = findColumn(headers, ['sku', 'codigo de proveedor', 'codigo prov', 'articulo'])
+  if (finalSkuCol === -1) {
+    finalSkuCol = headers.findIndex((h, i) => i !== barcodeCol && h.includes('codigo'))
+  }
+
   const descCol = findColumn(headers, ['descripcion', 'descripción', 'nombre', 'producto', 'detalle'])
   const priceCol = findColumn(headers, ['precio', 'costo'])
-
-  // Evitar que "codigo de barras" también matchee como columna de código genérico
-  const finalSkuCol = skuCol === barcodeCol ? -1 : skuCol
 
   const detectedColumns = {
     sku: finalSkuCol >= 0 ? rawHeaders[finalSkuCol] : null,
