@@ -437,6 +437,9 @@ export default function StockPage() {
   const [mvtFilterDateFrom, setMvtFilterDateFrom] = useState('')
   const [mvtFilterDateTo, setMvtFilterDateTo] = useState('')
   const [mvtLoading, setMvtLoading] = useState(false)
+  const [mvtProductQuery, setMvtProductQuery] = useState('')
+  const [mvtProductResults, setMvtProductResults] = useState<Product[]>([])
+  const [mvtFilterProduct, setMvtFilterProduct] = useState<{ id: number; name: string } | null>(null)
 
   // Inline-edit state (stock levels tab)
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -484,10 +487,11 @@ export default function StockPage() {
     }
   }
 
-  async function loadMovements(filters: { supplierId?: number | 'none'; dateFrom?: string; dateTo?: string } = {}) {
+  async function loadMovements(filters: { productId?: number; supplierId?: number | 'none'; dateFrom?: string; dateTo?: string } = {}) {
     setMvtLoading(true)
     try {
       const mvts = await stockApi.getMovements({
+        productId: filters.productId || undefined,
         supplierId: filters.supplierId || undefined,
         dateFrom: filters.dateFrom || undefined,
         dateTo: filters.dateTo || undefined,
@@ -503,6 +507,7 @@ export default function StockPage() {
 
   function handleMvtSearch() {
     void loadMovements({
+      productId: mvtFilterProduct?.id,
       supplierId: mvtFilterSupplierId !== '' ? mvtFilterSupplierId : undefined,
       dateFrom: mvtFilterDateFrom || undefined,
       dateTo: mvtFilterDateTo || undefined,
@@ -513,7 +518,40 @@ export default function StockPage() {
     setMvtFilterSupplierId('')
     setMvtFilterDateFrom('')
     setMvtFilterDateTo('')
+    clearMvtProductFilter()
     void loadMovements()
+  }
+
+  /** Busca productos para filtrar el historial de movimientos por un producto específico */
+  async function handleMvtProductSearch(query: string) {
+    setMvtProductQuery(query)
+    setMvtFilterProduct(null)
+    if (query.length < 2) { setMvtProductResults([]); return }
+    try {
+      const byBarcode = await catalog.getByBarcode(query)
+      if (byBarcode) { selectMvtProduct(byBarcode.id, byBarcode.name); return }
+      const results = await catalog.searchProducts(query)
+      setMvtProductResults(results)
+    } catch { /* non-critical */ }
+  }
+
+  function selectMvtProduct(id: number, name: string) {
+    setMvtFilterProduct({ id, name })
+    setMvtProductQuery(name)
+    setMvtProductResults([])
+  }
+
+  function clearMvtProductFilter() {
+    setMvtFilterProduct(null)
+    setMvtProductQuery('')
+    setMvtProductResults([])
+  }
+
+  /** Atajo desde "Niveles de Stock": ver el historial de movimientos de un producto puntual */
+  function viewProductMovements(item: StockItem) {
+    setActiveTab('movements')
+    selectMvtProduct(item.productId, item.productName)
+    void loadMovements({ productId: item.productId })
   }
 
   function startEdit(item: StockItem) {
@@ -800,13 +838,23 @@ export default function StockPage() {
                           </button>
                         </div>
                       ) : (
-                        <button
-                          className="btn btn-secondary btn-sm"
-                          onClick={() => startEdit(item)}
-                          disabled={editingId !== null}
-                        >
-                          ✏️ Editar
-                        </button>
+                        <div className="action-group">
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => startEdit(item)}
+                            disabled={editingId !== null}
+                          >
+                            ✏️ Editar
+                          </button>
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => viewProductMovements(item)}
+                            disabled={editingId !== null}
+                            title="Ver ingresos, egresos, ventas y ajustes de este producto"
+                          >
+                            📜 Movimientos
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -824,6 +872,40 @@ export default function StockPage() {
         <>
           {/* ── Barra de filtros ─────────────────────────────────────────── */}
           <div className="filter-bar">
+            <div className="filter-bar__group" style={{ position: 'relative' }}>
+              <label className="label">Producto</label>
+              <input
+                type="text"
+                className="input"
+                placeholder="Buscar por nombre, SKU o código de barras..."
+                value={mvtProductQuery}
+                onChange={e => { void handleMvtProductSearch(e.target.value) }}
+                autoComplete="off"
+              />
+              {mvtFilterProduct && (
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  style={{ position: 'absolute', right: 2, top: 26, fontSize: '0.8em', padding: '2px 6px' }}
+                  onClick={clearMvtProductFilter}
+                  title="Quitar filtro de producto"
+                >
+                  ✕
+                </button>
+              )}
+              {mvtProductResults.length > 0 && (
+                <ul className="product-results" style={{ position: 'absolute', top: '100%', zIndex: 100, width: '100%', marginTop: 2 }}>
+                  {mvtProductResults.map(p => (
+                    <li key={p.id}>
+                      <button type="button" className="product-result-item" onClick={() => selectMvtProduct(p.id, p.name)}>
+                        <span className="product-result-name">{p.name}</span>
+                        <span className="product-result-sku">{p.sku}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
             <div className="filter-bar__group">
               <label className="label">Proveedor</label>
               <select
