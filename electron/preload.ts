@@ -171,6 +171,13 @@ const electronAPI = {
     deleteMapping: (supplierCode: string) => invoke('remitoScanner:deleteMapping', supplierCode),
   },
 
+  // Actualización de precios por proveedor (planilla excel)
+  priceUpdate: {
+    selectExcel: () => invoke<string | null>('priceUpdate:selectExcel'),
+    parseExcel: (filePath: string) => invoke('priceUpdate:parseExcel', filePath),
+    applyUpdates: (updates: unknown) => invoke('priceUpdate:applyUpdates', updates),
+  },
+
   // Printer Config
   printerConfig: {
     get: () => invoke('printerConfig:get'),

@@ -39,6 +39,7 @@
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.30.4",
     "thermal-printer-encoder": "^2.0.0-alpha.15",
+    "xlsx": "^0.18.5",
     "xml2js": "^0.6.2"
   },
   "devDependencies": {

@@ -19,6 +19,7 @@ import SyncPage from './pages/sync/SyncPage'
 import SystemParamsPage from './pages/system-params/SystemParamsPage'
 import PedidoReposicionPage from './pages/stock/PedidoReposicionPage'
 import RemitoScannerPage from './pages/stock/RemitoScannerPage'
+import PriceUpdatePage from './pages/stock/PriceUpdatePage'
 import StockCountPage from './pages/stock/StockCountPage'
 import StockCountReconcilePage from './pages/stock/StockCountReconcilePage'
 import PrinterSettingsPage from './pages/printer/PrinterSettingsPage'
@@ -64,6 +65,7 @@ export default function App() {
             <Route path="system-params" element={<SystemParamsPage />} />
             <Route path="stock/pedido" element={<PedidoReposicionPage />} />
             <Route path="stock/remito-scanner" element={<RemitoScannerPage />} />
+            <Route path="stock/precios" element={<PriceUpdatePage />} />
             <Route path="stock/conteo" element={<StockCountPage />} />
             <Route path="stock/conteo/:sessionId" element={<StockCountReconcilePage />} />
             <Route path="printer-settings" element={<PrinterSettingsPage />} />

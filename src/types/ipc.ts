@@ -101,6 +101,28 @@ export interface Supplier {
   updatedAt: string
 }
 
+// Actualización de precios por proveedor (planilla excel)
+export interface ExcelPriceRow {
+  sku: string
+  barcode: string
+  description: string
+  price: number
+  rowNumber: number
+}
+
+export interface ParseExcelResult {
+  rows: ExcelPriceRow[]
+  warnings: string[]
+}
+
+export interface PriceUpdateItem {
+  productId: number
+  cost: number
+  price: number
+  gainPercent: number
+  supplierCode?: string
+}
+
 export interface StockItem {
   productId: number
   productName: string

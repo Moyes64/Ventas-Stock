@@ -35,6 +35,8 @@ import type {
   SyncResult,
   RemitoScanResult,
   RemitoMapping,
+  ParseExcelResult,
+  PriceUpdateItem,
   FinancePartner,
   FinanceAccount,
   FinanceCategory,
@@ -320,6 +322,14 @@ export const remitoScanner = {
     electron.remitoScanner.saveMappings(mappings) as Promise<void>,
   listMappings: () => electron.remitoScanner.listMappings() as Promise<RemitoMapping[]>,
   deleteMapping: (supplierCode: string) => electron.remitoScanner.deleteMapping(supplierCode) as Promise<void>,
+}
+
+// Actualización de precios por proveedor (planilla excel)
+export const priceUpdate = {
+  selectExcel: () => electron.priceUpdate.selectExcel() as Promise<string | null>,
+  parseExcel: (filePath: string) => electron.priceUpdate.parseExcel(filePath) as Promise<ParseExcelResult>,
+  applyUpdates: (updates: PriceUpdateItem[]) =>
+    electron.priceUpdate.applyUpdates(updates) as Promise<{ updated: number }>,
 }
 
 // Sync

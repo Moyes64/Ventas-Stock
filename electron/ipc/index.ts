@@ -15,6 +15,7 @@ import { registerCajaHandlers } from './caja.handlers'
 import { registerSyncHandlers } from './sync.handlers'
 import { registerSystemParamsHandlers } from './system-params.handlers'
 import { registerRemitoScannerHandlers } from './remito-scanner.handlers'
+import { registerPriceUpdateHandlers } from './price-update.handlers'
 import { registerPrinterConfigHandlers } from './printer-config.handlers'
 import { registerLabelConfigHandlers } from './label-config.handlers'
 import { registerCsrHandlers } from './csr.handlers'
@@ -48,6 +49,7 @@ export function registerAllIpcHandlers(
   registerSyncHandlers(db)
   registerSystemParamsHandlers(db)
   registerRemitoScannerHandlers(db)
+  registerPriceUpdateHandlers(db)
   registerPrinterConfigHandlers()
   registerLabelConfigHandlers()
   registerCsrHandlers()
