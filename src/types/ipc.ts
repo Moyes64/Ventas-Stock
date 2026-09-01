@@ -113,6 +113,12 @@ export interface ExcelPriceRow {
 export interface ParseExcelResult {
   rows: ExcelPriceRow[]
   warnings: string[]
+  detectedColumns: {
+    sku: string | null
+    barcode: string | null
+    description: string | null
+    price: string | null
+  }
 }
 
 export interface PriceUpdateItem {

@@ -16,6 +16,13 @@ export interface ExcelPriceRow {
 export interface ParseExcelResult {
   rows: ExcelPriceRow[]
   warnings: string[]
+  /** Encabezado original (tal cual está en el excel) detectado para cada columna, o null si no se encontró */
+  detectedColumns: {
+    sku: string | null
+    barcode: string | null
+    description: string | null
+    price: string | null
+  }
 }
 
 /** Quita acentos y pasa a minúsculas para comparar encabezados de columnas */
@@ -53,14 +60,16 @@ function parsePrice(raw: unknown): number | null {
 
 export function parsePriceExcel(filePath: string): ParseExcelResult {
   const warnings: string[] = []
+  const emptyColumns = { sku: null, barcode: null, description: null, price: null }
   const workbook = XLSX.readFile(filePath)
   const sheetName = workbook.SheetNames[0]
-  if (!sheetName) return { rows: [], warnings: ['El archivo no tiene hojas.'] }
+  if (!sheetName) return { rows: [], warnings: ['El archivo no tiene hojas.'], detectedColumns: emptyColumns }
 
   const sheet = workbook.Sheets[sheetName]
   const raw = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '' })
-  if (raw.length === 0) return { rows: [], warnings: ['La hoja está vacía.'] }
+  if (raw.length === 0) return { rows: [], warnings: ['La hoja está vacía.'], detectedColumns: emptyColumns }
 
+  const rawHeaders = raw[0].map(h => String(h ?? '').trim())
   const headers = raw[0].map(normalizeHeader)
   const skuCol = findColumn(headers, ['sku', 'codigo de proveedor', 'codigo prov', 'articulo', 'codigo'])
   const barcodeCol = findColumn(headers, ['codigo de barras', 'cod. barras', 'barras', 'ean'])
@@ -69,6 +78,13 @@ export function parsePriceExcel(filePath: string): ParseExcelResult {
 
   // Evitar que "codigo de barras" también matchee como columna de código genérico
   const finalSkuCol = skuCol === barcodeCol ? -1 : skuCol
+
+  const detectedColumns = {
+    sku: finalSkuCol >= 0 ? rawHeaders[finalSkuCol] : null,
+    barcode: barcodeCol >= 0 ? rawHeaders[barcodeCol] : null,
+    description: descCol >= 0 ? rawHeaders[descCol] : null,
+    price: priceCol >= 0 ? rawHeaders[priceCol] : null,
+  }
 
   if (finalSkuCol === -1 && barcodeCol === -1) {
     warnings.push('No se encontró columna de SKU ni de Código de barras. El archivo debe tener al menos una.')
@@ -98,5 +114,5 @@ export function parsePriceExcel(filePath: string): ParseExcelResult {
     rows.push({ sku, barcode, description, price, rowNumber: i + 1 })
   }
 
-  return { rows, warnings }
+  return { rows, warnings, detectedColumns }
 }

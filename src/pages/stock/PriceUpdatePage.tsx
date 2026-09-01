@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { priceUpdate, catalog, suppliers } from '../../lib/ipc'
 import { calcSalePrice, calcGainFromPrice } from '../../lib/pricing'
-import type { ExcelPriceRow, PriceUpdateItem, Product, TaxRate, Supplier } from '../../types/ipc'
+import type { ExcelPriceRow, ParseExcelResult, PriceUpdateItem, Product, TaxRate, Supplier } from '../../types/ipc'
 
 type MatchSource = 'barcode' | 'sku' | 'name' | 'manual' | null
 
@@ -38,9 +38,14 @@ function normalizeText(s: string): string {
   return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
 }
 
-/** Compara códigos (SKU/barras) tolerando mayúsculas y ceros a la izquierda perdidos por Excel */
+/**
+ * Compara códigos (SKU/barras) tolerando diferencias cosméticas típicas entre
+ * lo que guardó el usuario a mano y lo que trae la planilla: mayúsculas,
+ * espacios, guiones/puntos separadores, y ceros a la izquierda perdidos por Excel
+ * al tratar el código como número.
+ */
 function normalizeCode(s: string): string {
-  return s.trim().toLowerCase().replace(/^0+(?=.)/, '')
+  return s.trim().toLowerCase().replace(/[\s.\-_/]/g, '').replace(/^0+(?=.)/, '')
 }
 
 function fuzzyNameMatch(productName: string, description: string): boolean {
@@ -60,6 +65,7 @@ export default function PriceUpdatePage() {
   const [comparing, setComparing] = useState(false)
   const [setupError, setSetupError] = useState<string | null>(null)
   const [warnings, setWarnings] = useState<string[]>([])
+  const [detectedColumns, setDetectedColumns] = useState<ParseExcelResult['detectedColumns'] | null>(null)
 
   const [excelRows, setExcelRows] = useState<ExcelPriceRow[]>([])
   const [rows, setRows] = useState<Row[]>([])
@@ -86,6 +92,7 @@ export default function PriceUpdatePage() {
     setSetupError(null)
     try {
       const parsed = await priceUpdate.parseExcel(excelPath)
+      setDetectedColumns(parsed.detectedColumns)
       if (parsed.rows.length === 0) {
         setSetupError('No se pudo leer ninguna fila válida de la planilla. Revisá el formato (SKU, Código de barras, Descripción, Precio).')
         setWarnings(parsed.warnings)
@@ -235,7 +242,7 @@ export default function PriceUpdatePage() {
 
   function reset() {
     setStep('setup'); setSupplierId(null); setExcelPath(null)
-    setWarnings([]); setExcelRows([]); setRows([])
+    setWarnings([]); setExcelRows([]); setRows([]); setDetectedColumns(null)
     setSetupError(null); setApplyError(null); setAppliedCount(0)
   }
 
@@ -320,6 +327,15 @@ export default function PriceUpdatePage() {
                 <span className="badge badge--danger">❌ {unmatchedRows.length} sin coincidencia — buscá el producto a mano en la planilla</span>
               )}
             </div>
+            {detectedColumns && (
+              <p className="text-muted" style={{ fontSize: '0.8em', marginTop: 8 }}>
+                Columnas detectadas en la planilla — SKU: <strong>{detectedColumns.sku ?? '❌ no encontrada'}</strong>
+                {' · '}Código de barras: <strong>{detectedColumns.barcode ?? '❌ no encontrada'}</strong>
+                {' · '}Descripción: <strong>{detectedColumns.description ?? '❌ no encontrada'}</strong>
+                {' · '}Precio: <strong>{detectedColumns.price ?? '❌ no encontrada'}</strong>
+                . Si alguna dice "no encontrada" o apunta a la columna equivocada, revisá el encabezado de esa columna en el excel.
+              </p>
+            )}
           </div>
 
           {warnings.length > 0 && (
@@ -342,7 +358,8 @@ export default function PriceUpdatePage() {
               <thead>
                 <tr>
                   <th>✓</th>
-                  <th>SKU</th>
+                  <th>SKU interno</th>
+                  <th>Cód. proveedor</th>
                   <th>Cód. Barras</th>
                   <th>Producto</th>
                   <th>Precio actual</th>
@@ -371,6 +388,7 @@ export default function PriceUpdatePage() {
                         />
                       </td>
                       <td className="text-muted" style={{ fontSize: '0.85em' }}>{row.sku}</td>
+                      <td className={!excelRow ? '' : 'text-muted'} style={{ fontSize: '0.85em' }}>{row.supplierCode || '—'}</td>
                       <td className="text-muted" style={{ fontSize: '0.8em' }}>{row.barcode || '—'}</td>
                       <td style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.name}>
                         {row.name}
