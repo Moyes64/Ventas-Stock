@@ -9,6 +9,7 @@ import SuppliersPage from './pages/suppliers/SuppliersPage'
 import StockPage from './pages/stock/StockPage'
 import InvoicingPage from './pages/invoicing/InvoicingPage'
 import ReportingPage from './pages/reporting/ReportingPage'
+import PricingPage from './pages/pricing/PricingPage'
 import BackupPage from './pages/backup/BackupPage'
 import UsersPage from './pages/auth/UsersPage'
 import ParametersPage from './pages/parameters/ParametersPage'
@@ -53,6 +54,7 @@ export default function App() {
             <Route path="stock" element={<StockPage />} />
             <Route path="invoicing" element={<InvoicingPage />} />
             <Route path="reporting" element={<ReportingPage />} />
+            <Route path="pricing" element={<PricingPage />} />
             <Route path="backup" element={<BackupPage />} />
             <Route path="users" element={<UsersPage />} />
             <Route path="parameters" element={<ParametersPage />} />

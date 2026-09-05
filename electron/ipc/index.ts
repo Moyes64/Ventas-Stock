@@ -25,6 +25,7 @@ import { registerCambiosHandlers } from './cambios.handlers'
 import { registerFreeExchangeHandlers } from './free-exchange.handlers'
 import { registerCreditsHandlers } from './credits.handlers'
 import { registerFinanceHandlers } from './finance.handlers'
+import { registerPricingHandlers } from './pricing.handlers'
 import { registerStockCountHandlers } from './stock-count.handlers'
 import { registerWebCatalogServerHandlers } from './web-catalog-server.handlers'
 import type { StockCountService } from '../modules/stock-count/service'
@@ -59,6 +60,7 @@ export function registerAllIpcHandlers(
   registerFreeExchangeHandlers(db)
   registerCreditsHandlers(db)
   registerFinanceHandlers(db)
+  registerPricingHandlers(db)
   const stockCountService = registerStockCountHandlers(db)
   const webCatalogServerService = registerWebCatalogServerHandlers(webCatalogService)
 

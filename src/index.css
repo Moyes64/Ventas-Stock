@@ -282,6 +282,7 @@ html, body, #root {
 .badge--danger  { background: #fee2e2; color: #dc2626; }
 .badge--warning { background: #fef9c3; color: #b45309; }
 .badge--info    { background: #e0f2fe; color: #0369a1; }
+.badge--purple  { background: #ede9fe; color: #6d28d9; }
 
 /* Stats */
 .stats-grid {

@@ -64,6 +64,7 @@ const navEntries: NavEntry[] = [
     ],
   },
   { kind: 'item', to: '/reporting',        label: 'Reportes',                icon: '📈' },
+  { kind: 'item', to: '/pricing',          label: 'Precio ideal de venta',   icon: '🎯' },
   { kind: 'item', to: '/web-catalog',      label: 'Catálogo Web',            icon: '🛍️' },
   { kind: 'item', to: '/web-orders',       label: 'Órdenes Web',             icon: '📬' },
   { kind: 'item', to: '/sync',             label: 'Sync Web',                icon: '🌐' },

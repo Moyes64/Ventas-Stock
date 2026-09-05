@@ -489,6 +489,31 @@ export const finance = {
     }>,
 }
 
+// Pricing (precio ideal de venta)
+import type {
+  FixedCost,
+  CreateFixedCostInput as CreatePricingFixedCostInput,
+  UpdateFixedCostInput as UpdatePricingFixedCostInput,
+  PricingSettings,
+  PricingSimulationParams,
+  PricingSimulationResult,
+} from '../types/ipc'
+
+export const pricing = {
+  listFixedCosts: () => electron.pricing.listFixedCosts() as Promise<FixedCost[]>,
+  createFixedCost: (input: CreatePricingFixedCostInput) =>
+    electron.pricing.createFixedCost(input) as Promise<FixedCost>,
+  updateFixedCost: (id: number, input: UpdatePricingFixedCostInput) =>
+    electron.pricing.updateFixedCost(id, input) as Promise<FixedCost>,
+  deleteFixedCost: (id: number) => electron.pricing.deleteFixedCost(id) as Promise<void>,
+  getSettings: () => electron.pricing.getSettings() as Promise<PricingSettings>,
+  saveSettings: (input: PricingSettings) => electron.pricing.saveSettings(input) as Promise<PricingSettings>,
+  simulate: (params: PricingSimulationParams) =>
+    electron.pricing.simulate(params) as Promise<PricingSimulationResult>,
+  applyPrice: (productId: number, precio: number) =>
+    electron.pricing.applyPrice(productId, precio) as Promise<void>,
+}
+
 // Conteo de stock
 export const stockCount = {
   getServerStatus: () => electron.stockCount.getServerStatus() as Promise<StockCountServerStatus>,

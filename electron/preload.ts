@@ -294,6 +294,18 @@ const electronAPI = {
       invoke('finance:exportMovements', content, defaultName),
   },
 
+  // Pricing (precio ideal de venta)
+  pricing: {
+    listFixedCosts: () => invoke('pricing:listFixedCosts'),
+    createFixedCost: (input: unknown) => invoke('pricing:createFixedCost', input),
+    updateFixedCost: (id: number, input: unknown) => invoke('pricing:updateFixedCost', id, input),
+    deleteFixedCost: (id: number) => invoke('pricing:deleteFixedCost', id),
+    getSettings: () => invoke('pricing:getSettings'),
+    saveSettings: (input: unknown) => invoke('pricing:saveSettings', input),
+    simulate: (params: unknown) => invoke('pricing:simulate', params),
+    applyPrice: (productId: number, precio: number) => invoke('pricing:applyPrice', productId, precio),
+  },
+
   // Conteo de stock (servidor local + sesiones de conciliación)
   stockCount: {
     getServerStatus: () => invoke('stockCount:getServerStatus'),
