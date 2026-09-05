@@ -194,6 +194,13 @@ export class PricingService {
     const propioWithSales = allWithSales.filter(x => isPropioEffective(x.p))
     const resaleWithSales = allWithSales.filter(x => !isPropioEffective(x.p))
 
+    // Margen objetivo individual por producto — rompe la regla de "% unificado
+    // para todo el grupo", hoy solo habilitado para fabricación propia: cada
+    // producto propio puede tener su propio margen (ej. uno más elaborado
+    // justifica más margen que otro), en vez de que todos compartan el mismo %.
+    // Si un producto no tiene override, sigue usando el margen del grupo P.
+    const productMargins = this.repo.getProductMargins()
+
     const facturacionVentana = allWithSales.reduce((acc, x) => acc + x.mix.facturadoSinIva, 0)
     const facturacionResaleVentana = resaleWithSales.reduce((acc, x) => acc + x.mix.facturadoSinIva, 0)
     const costoFijoPct = facturacionVentana > 0 ? (costoFijoVentana / facturacionVentana) * 100 : 0
@@ -218,7 +225,8 @@ export class PricingService {
     }
 
     function buildRow(p: ProductForPricing, mix: ProductSalesMix, segmento: PricingSegment): ProductPricingRow {
-      const margenObjetivo = margenPorSegmento[segmento]
+      const margenIndividual = segmento === 'P' ? productMargins.get(p.productId) : undefined
+      const margenObjetivo = margenIndividual ?? margenPorSegmento[segmento]
 
       const priceSinIva = p.taxRatePct > 0 ? p.price / (1 + p.taxRatePct / 100) : p.price
       const markupActualPct = p.cost > 0 ? ((priceSinIva - p.cost) / p.cost) * 100 : 0
@@ -246,6 +254,7 @@ export class PricingService {
         precioSugerido,
         markupSugeridoPct: round2(markupSugeridoPct),
         deltaVsActualPct: round2(deltaVsActualPct),
+        margenObjetivoIndividual: margenIndividual ?? null,
       }
     }
 
@@ -282,7 +291,7 @@ export class PricingService {
 
       const precioSinIvaSugerido = row.precioSugerido / (1 + row.taxRatePct / 100)
       const facturadoProyectado = row.unidadesVentana * precioSinIvaSugerido
-      const margenObjetivo = margenPorSegmento[row.segmento]
+      const margenObjetivo = row.margenObjetivoIndividual ?? margenPorSegmento[row.segmento]
       projectedWeightedSum += margenObjetivo * facturadoProyectado
       projectedFacturadoTotal += facturadoProyectado
       gananciaNetaProyectada += (margenObjetivo / 100) * facturadoProyectado
@@ -301,6 +310,21 @@ export class PricingService {
     }
 
     return { totals, rows, deadStock, overheadMovements }
+  }
+
+  // ── Margen objetivo individual por producto (fabricación propia) ─────────
+
+  setProductMargin(productId: number, margenObjetivo: number): void {
+    const product = this.productRepo.findById(productId)
+    if (!product) throw new Error(`Producto no encontrado: ${productId}`)
+    if (typeof margenObjetivo !== 'number' || !Number.isFinite(margenObjetivo)) {
+      throw new Error('El margen objetivo debe ser un número')
+    }
+    this.repo.setProductMargin(productId, margenObjetivo)
+  }
+
+  clearProductMargin(productId: number): void {
+    this.repo.clearProductMargin(productId)
   }
 
   applyPrice(productId: number, precio: number): void {

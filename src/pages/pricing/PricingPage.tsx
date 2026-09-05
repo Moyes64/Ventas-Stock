@@ -172,7 +172,10 @@ export default function PricingPage() {
   }
 
   /** Al confirmar un precio sugerido editado a mano, infiere el margen
-   *  objetivo que lo explica y lo aplica a TODO el segmento de esa fila. */
+   *  objetivo que lo explica. En Fabricación propia (P) ese margen se guarda
+   *  SOLO para este producto — ahí el PVP no sigue un % unificado, cada
+   *  producto propio puede tener su propio margen. En A/B/C, en cambio, se
+   *  aplica a TODO el segmento (ahí el % sí es unificado por diseño). */
   async function handlePriceEditCommit(row: ProductPricingRow) {
     const text = priceEdits[row.productId]
     if (text === undefined || !result) return
@@ -194,9 +197,20 @@ export default function PricingPage() {
         row.taxRatePct
       )
     )
+    if (row.segmento === 'P') {
+      await pricing.setProductMargin(row.productId, impliedMargin)
+      await runSimulation()
+      return
+    }
     const field = SEGMENT_MARGIN_FIELD[row.segmento]
     const newSettings = { ...settings, [field]: impliedMargin }
     await runSimulation({ settingsOverride: newSettings })
+  }
+
+  /** Vuelve un producto propio a usar el margen objetivo del grupo P, descartando su margen individual. */
+  async function handleResetProductMargin(productId: number) {
+    await pricing.clearProductMargin(productId)
+    await runSimulation()
   }
 
   async function handleApply(row: ProductPricingRow) {
@@ -354,7 +368,7 @@ export default function PricingPage() {
               />
             </div>
             <div>
-              <label className="label">Fabricación propia — P (%)</label>
+              <label className="label">Fabricación propia — P, default (%)</label>
               <input
                 className="input"
                 type="number"
@@ -364,6 +378,11 @@ export default function PricingPage() {
               />
             </div>
           </div>
+          <p className="text-muted" style={{ fontSize: '0.8em', margin: '0.75rem 0 0' }}>
+            El margen de <strong>Fabricación propia</strong> es solo el default: cada producto propio puede tener su
+            propio margen editando su "Precio sugerido" en la tabla de abajo — a diferencia de A/B/C, ese cambio no
+            se aplica a todo el grupo, queda guardado individualmente para ese producto (badge 🔧).
+          </p>
         </div>
 
         {/* Clasificación A/B/C: no tiene nada que ver con el margen, es solo para agrupar productos por facturación */}
@@ -580,18 +599,34 @@ export default function PricingPage() {
                       <td>{row.unidadesVentana}</td>
                       <td>{row.diasCobertura ?? '—'}</td>
                       <td>
-                        <input
-                          type="number"
-                          step="1"
-                          className="input input--qty"
-                          style={{ width: 110, fontWeight: 600 }}
-                          value={priceEdits[row.productId] ?? String(row.precioSugerido)}
-                          disabled={simulating}
-                          title="Editable — al confirmar, recalcula el margen de todo el segmento a partir de este precio"
-                          onChange={e => setPriceEdits(prev => ({ ...prev, [row.productId]: e.target.value }))}
-                          onBlur={() => void handlePriceEditCommit(row)}
-                          onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                        />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <input
+                            type="number"
+                            step="1"
+                            className="input input--qty"
+                            style={{ width: 110, fontWeight: 600 }}
+                            value={priceEdits[row.productId] ?? String(row.precioSugerido)}
+                            disabled={simulating}
+                            title={
+                              row.segmento === 'P'
+                                ? 'Editable — al confirmar, guarda un margen individual para ESTE producto (no afecta al resto del grupo)'
+                                : 'Editable — al confirmar, recalcula el margen de todo el segmento a partir de este precio'
+                            }
+                            onChange={e => setPriceEdits(prev => ({ ...prev, [row.productId]: e.target.value }))}
+                            onBlur={() => void handlePriceEditCommit(row)}
+                            onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                          />
+                          {row.segmento === 'P' && row.margenObjetivoIndividual !== null && (
+                            <span
+                              className="badge badge--purple"
+                              style={{ cursor: 'pointer' }}
+                              title={`Margen individual: ${row.margenObjetivoIndividual}% — click para volver al default del grupo (${settings.margenObjetivoPropio}%)`}
+                              onClick={() => void handleResetProductMargin(row.productId)}
+                            >
+                              🔧 ↺
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td>
                         {extreme ? (

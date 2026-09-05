@@ -512,6 +512,10 @@ export const pricing = {
     electron.pricing.simulate(params) as Promise<PricingSimulationResult>,
   applyPrice: (productId: number, precio: number) =>
     electron.pricing.applyPrice(productId, precio) as Promise<void>,
+  setProductMargin: (productId: number, margenObjetivo: number) =>
+    electron.pricing.setProductMargin(productId, margenObjetivo) as Promise<void>,
+  clearProductMargin: (productId: number) =>
+    electron.pricing.clearProductMargin(productId) as Promise<void>,
 }
 
 // Conteo de stock

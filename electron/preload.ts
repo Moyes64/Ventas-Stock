@@ -304,6 +304,9 @@ const electronAPI = {
     saveSettings: (input: unknown) => invoke('pricing:saveSettings', input),
     simulate: (params: unknown) => invoke('pricing:simulate', params),
     applyPrice: (productId: number, precio: number) => invoke('pricing:applyPrice', productId, precio),
+    setProductMargin: (productId: number, margenObjetivo: number) =>
+      invoke('pricing:setProductMargin', productId, margenObjetivo),
+    clearProductMargin: (productId: number) => invoke('pricing:clearProductMargin', productId),
   },
 
   // Conteo de stock (servidor local + sesiones de conciliación)

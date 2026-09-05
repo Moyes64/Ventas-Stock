@@ -951,6 +951,9 @@ export interface ProductPricingRow {
   precioSugerido: number
   markupSugeridoPct: number
   deltaVsActualPct: number
+  /** Margen objetivo individual de este producto, si tiene uno propio (solo aplica
+   *  a fabricación propia). null = usa el margen objetivo del grupo. */
+  margenObjetivoIndividual: number | null
 }
 
 export interface DeadStockRow {

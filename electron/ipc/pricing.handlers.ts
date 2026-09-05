@@ -45,4 +45,13 @@ export function registerPricingHandlers(db: Database): void {
   ipcMain.handle('pricing:applyPrice', (_event, productId: number, precio: number) => {
     return pricingService.applyPrice(productId, precio)
   })
+
+  // Margen objetivo individual por producto (fabricación propia)
+  ipcMain.handle('pricing:setProductMargin', (_event, productId: number, margenObjetivo: number) => {
+    return pricingService.setProductMargin(productId, margenObjetivo)
+  })
+
+  ipcMain.handle('pricing:clearProductMargin', (_event, productId: number) => {
+    return pricingService.clearProductMargin(productId)
+  })
 }

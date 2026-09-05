@@ -177,6 +177,31 @@ export class PricingRepository {
     return rows
   }
 
+  // ── Margen objetivo individual por producto (rompe el % unificado del
+  // grupo — hoy solo lo usa fabricación propia, ver comentario en el servicio) ─
+
+  /** Mapa productId → margen objetivo individual, solo para los productos que tienen override. */
+  getProductMargins(): Map<number, number> {
+    const rows = this.db
+      .prepare('SELECT product_id AS productId, margen_objetivo AS margenObjetivo FROM pricing_product_margins')
+      .all() as Array<{ productId: number; margenObjetivo: number }>
+    return new Map(rows.map(r => [r.productId, r.margenObjetivo]))
+  }
+
+  setProductMargin(productId: number, margenObjetivo: number): void {
+    this.db
+      .prepare(
+        `INSERT INTO pricing_product_margins (product_id, margen_objetivo, updated_at)
+         VALUES (@productId, @margenObjetivo, @updatedAt)
+         ON CONFLICT (product_id) DO UPDATE SET margen_objetivo = @margenObjetivo, updated_at = @updatedAt`
+      )
+      .run({ productId, margenObjetivo, updatedAt: localNow() })
+  }
+
+  clearProductMargin(productId: number): void {
+    this.db.prepare('DELETE FROM pricing_product_margins WHERE product_id = ?').run(productId)
+  }
+
   private mapFixedCost(row: FixedCostRow): FixedCost {
     return {
       id: row.id,
