@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { finance, suppliers } from '../../lib/ipc'
-import { localFirstOfMonth, localToday } from '../../lib/date'
+import { localFirstOfMonth, localToday, formatDate } from '../../lib/date'
 import type {
   FinanceAccount,
   FinanceCategory,
@@ -356,7 +356,7 @@ export default function MovementsPage() {
   function buildMovementsCsv(): string {
     const headers = ['Fecha', 'Cuenta', 'Tipo', 'Categoría', 'Socio / Proveedor', 'Descripción', 'Monto', 'Acreditación']
     const rows = sortedMovements.map(m => [
-      m.fecha,
+      formatDate(m.fecha),
       accountName(m.accountId),
       m.tipo === 'ingreso' ? 'Ingreso' : 'Egreso',
       m.categoriaId === null ? '' : categoryName(m.categoriaId),
@@ -364,7 +364,7 @@ export default function MovementsPage() {
       m.descripcion,
       montoCsv(m.tipo === 'egreso' ? -m.monto : m.monto),
       m.fechaAcreditacion
-        ? `${m.fechaAcreditacion > today ? 'Pendiente' : 'Acreditado'} ${m.fechaAcreditacion}`
+        ? `${m.fechaAcreditacion > today ? 'Pendiente' : 'Acreditado'} ${formatDate(m.fechaAcreditacion)}`
         : '',
     ])
     const totals = [
@@ -613,7 +613,7 @@ export default function MovementsPage() {
       </div>
 
       {foundingDate && (
-        <p className="page-subtitle">📅 Contabilidad iniciada el {foundingDate} — no se pueden ver ni cargar movimientos anteriores.</p>
+        <p className="page-subtitle">📅 Contabilidad iniciada el {formatDate(foundingDate)} — no se pueden ver ni cargar movimientos anteriores.</p>
       )}
 
       {pending.length > 0 && (
@@ -634,7 +634,7 @@ export default function MovementsPage() {
                 <tr key={p.movementId}>
                   <td>{p.accountName}</td>
                   <td>{currency(p.monto)}</td>
-                  <td><span className="badge badge--warning">{p.fechaAcreditacion}</span></td>
+                  <td><span className="badge badge--warning">{formatDate(p.fechaAcreditacion)}</span></td>
                   <td>{p.descripcion}</td>
                   <td>
                     {accreditingId === p.movementId ? (
@@ -750,7 +750,7 @@ export default function MovementsPage() {
                 <tbody>
                   {sortedMovements.map(m => (
                     <tr key={m.id}>
-                      <td>{m.fecha}</td>
+                      <td>{formatDate(m.fecha)}</td>
                       <td>{accountName(m.accountId)}</td>
                       <td>
                         <span className={`badge badge--${m.tipo === 'ingreso' ? 'success' : 'danger'}`}>
@@ -766,7 +766,7 @@ export default function MovementsPage() {
                       <td>
                         {m.fechaAcreditacion ? (
                           <span className={`badge badge--${m.fechaAcreditacion > today ? 'warning' : 'success'}`}>
-                            {m.fechaAcreditacion > today ? `Pendiente · ${m.fechaAcreditacion}` : `Acreditado · ${m.fechaAcreditacion}`}
+                            {m.fechaAcreditacion > today ? `Pendiente · ${formatDate(m.fechaAcreditacion)}` : `Acreditado · ${formatDate(m.fechaAcreditacion)}`}
                           </span>
                         ) : '—'}
                       </td>
@@ -822,7 +822,7 @@ export default function MovementsPage() {
                   <tbody>
                     {transfers.map(t => (
                       <tr key={t.id}>
-                        <td>{t.fecha}</td>
+                        <td>{formatDate(t.fecha)}</td>
                         <td>{accountName(t.fromAccountId)}</td>
                         <td>{accountName(t.toAccountId)}</td>
                         <td>{t.descripcion ?? '—'}</td>

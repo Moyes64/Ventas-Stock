@@ -11,6 +11,7 @@ import type { TicketData } from './types'
 import { DOC_TYPE_AFIP_CODE } from '../customers/types'
 import type { SystemParams } from '../system-params/types'
 import { DEFAULT_SYSTEM_PARAMS } from '../system-params/types'
+import { formatDate } from '../../lib/date'
 
 const INVOICE_TYPE_LABELS: Record<number, string> = {
   1: 'FACTURA A',
@@ -167,7 +168,7 @@ export class PrintingService {
       puntoVenta: effectivePuntoVenta,
       invoiceType: invoiceLabel,
       invoiceNumber,
-      date: sale.saleDate,
+      date: formatDate(sale.saleDate),
       customerName,
       customerDocType,
       customerDoc,

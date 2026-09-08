@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { finance } from '../../lib/ipc'
-import { localToday } from '../../lib/date'
+import { localToday, formatDate } from '../../lib/date'
 import type { FinanceMpFeeRate, MpFeePaymentMethod } from '../../types/ipc'
 
 const METHOD_LABELS: Record<MpFeePaymentMethod, string> = {
@@ -115,7 +115,7 @@ export default function MpFeeRatesPage() {
                   <p>
                     Tasa vigente:{' '}
                     <strong>{current.pct}% + {current.ivaPct}% IVA</strong>{' '}
-                    <span className="text-muted">(desde {current.vigenteDesde})</span>
+                    <span className="text-muted">(desde {formatDate(current.vigenteDesde)})</span>
                   </p>
                 ) : (
                   <p className="text-muted">Sin tasa configurada — no se descuenta comisión en las ventas por {METHOD_LABELS[method]}.</p>
@@ -183,7 +183,7 @@ export default function MpFeeRatesPage() {
                       {history.map((r, idx) => (
                         <tr key={r.id}>
                           <td>
-                            {r.vigenteDesde}
+                            {formatDate(r.vigenteDesde)}
                             {r.vigenteDesde > today && <span className="badge badge--warning" style={{ marginLeft: 6 }}>Futura</span>}
                           </td>
                           <td>{r.pct}%</td>

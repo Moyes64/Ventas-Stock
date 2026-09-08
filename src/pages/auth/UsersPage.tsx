@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { auth as authApi } from '../../lib/ipc'
 import type { User, Role } from '../../types/ipc'
 import { useConfirm } from '../../hooks/useConfirm'
+import { formatDate } from '../../lib/date'
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([])
@@ -85,7 +86,7 @@ export default function UsersPage() {
                       {u.active ? 'Activo' : 'Inactivo'}
                     </span>
                   </td>
-                  <td>{new Date(u.createdAt).toLocaleDateString('es-AR')}</td>
+                  <td>{formatDate(u.createdAt)}</td>
                   <td>
                     <button
                       className="btn btn-secondary btn-sm"

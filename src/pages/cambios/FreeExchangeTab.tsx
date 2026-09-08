@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { catalog, customers, credits, freeExchange } from '../../lib/ipc'
 import type { Product, Customer, FreeExchangeItemInput, FreeExchangeRecord } from '../../types/ipc'
+import { formatDateTime } from '../../lib/date'
 
 interface CartLine {
   product: Product
@@ -402,7 +403,7 @@ export default function FreeExchangeTab() {
                   {rec.settlement_method && ` · ${rec.settlement_method}`}
                 </div>
                 <div style={{ color: '#9ca3af', marginTop: '2px' }}>
-                  {new Date(rec.created_at).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  {formatDateTime(rec.created_at)}
                 </div>
                 {rec.notes && <div style={{ color: '#6b7280', fontStyle: 'italic', marginTop: '2px' }}>{rec.notes}</div>}
               </div>

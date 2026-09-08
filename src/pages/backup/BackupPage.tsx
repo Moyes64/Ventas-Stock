@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { backup as backupApi } from '../../lib/ipc'
 import type { BackupInfo } from '../../types/ipc'
 import { useConfirm } from '../../hooks/useConfirm'
+import { formatDateTime } from '../../lib/date'
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -118,7 +119,7 @@ export default function BackupPage() {
                 <tr key={b.filename}>
                   <td><code>{b.filename}</code></td>
                   <td>{formatBytes(b.sizeBytes)}</td>
-                  <td>{new Date(b.createdAt).toLocaleString('es-AR')}</td>
+                  <td>{formatDateTime(b.createdAt)}</td>
                   <td>
                     <button
                       className="btn btn-danger btn-sm"

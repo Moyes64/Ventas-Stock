@@ -154,6 +154,14 @@ function fmt(float $n): string {
     return '$&nbsp;' . number_format($n, 2, ',', '.');
 }
 
+// Formatea una fecha "YYYY-MM-DD" (o cualquier string parseable por strtotime) como "dd/mm/aaaa".
+function fmtDate(?string $value): string {
+    if ($value === null || $value === '') return '';
+    $ts = strtotime($value);
+    if ($ts === false) return htmlspecialchars($value);
+    return date('d/m/Y', $ts);
+}
+
 $stock      = $payload['stock']      ?? [];
 $ventasHoy  = $payload['ventasHoy']  ?? [];
 $caja       = $payload['caja']       ?? [];
@@ -189,7 +197,7 @@ $lowStock   = array_filter($stock, fn($p) => $p['isLow'] ?? false);
 <div class="sync-badge">
   Actualizado <?= htmlspecialchars($ago) ?>
   &nbsp;·&nbsp;
-  <?= htmlspecialchars(substr($timestamp, 0, 10)) ?>
+  <?= fmtDate(substr($timestamp, 0, 10)) ?>
 </div>
 
 <!-- ═══════════════════ VENTAS HOY ═══════════════════ -->
@@ -292,7 +300,7 @@ $lowStock   = array_filter($stock, fn($p) => $p['isLow'] ?? false);
       <tbody>
         <?php foreach ($rangeSales as $s): ?>
         <tr>
-          <td><?= htmlspecialchars($s['sale_date']) ?></td>
+          <td><?= fmtDate($s['sale_date']) ?></td>
           <td><?= htmlspecialchars($s['sale_time']) ?></td>
           <td><?= htmlspecialchars($s['payment_method']) ?></td>
           <td><?= fmt((float)$s['total']) ?></td>
@@ -397,7 +405,7 @@ $lowStock   = array_filter($stock, fn($p) => $p['isLow'] ?? false);
         <tr>
           <td><?= htmlspecialchars($p['accountName'] ?? '') ?></td>
           <td><?= fmt((float)($p['monto'] ?? 0)) ?></td>
-          <td class="text-warn"><?= htmlspecialchars($p['fechaAcreditacion'] ?? '') ?></td>
+          <td class="text-warn"><?= fmtDate($p['fechaAcreditacion'] ?? '') ?></td>
           <td class="muted"><?= htmlspecialchars($p['descripcion'] ?? '') ?></td>
         </tr>
         <?php endforeach; ?>
@@ -415,7 +423,7 @@ $lowStock   = array_filter($stock, fn($p) => $p['isLow'] ?? false);
       <tbody>
         <?php foreach ($recentTransfers as $t): ?>
         <tr>
-          <td><?= htmlspecialchars($t['fecha'] ?? '') ?></td>
+          <td><?= fmtDate($t['fecha'] ?? '') ?></td>
           <td><?= htmlspecialchars($t['fromAccountName'] ?? '') ?></td>
           <td><?= htmlspecialchars($t['toAccountName'] ?? '') ?></td>
           <td><?= fmt((float)($t['monto'] ?? 0)) ?></td>

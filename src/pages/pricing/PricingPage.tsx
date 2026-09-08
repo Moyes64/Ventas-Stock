@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { pricing, suppliers } from '../../lib/ipc'
 import { calcImpliedMargin } from '../../lib/pricing'
+import { formatDate } from '../../lib/date'
 import type {
   FixedCost,
   PricingSettings,
@@ -523,7 +524,7 @@ export default function PricingPage() {
                             onChange={() => handleToggleMovement(m.movementId)}
                           />
                         </td>
-                        <td>{m.fecha}</td>
+                        <td>{formatDate(m.fecha)}</td>
                         <td>
                           <span className="badge badge--info">{m.categoriaName}</span>
                         </td>

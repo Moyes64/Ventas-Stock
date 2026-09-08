@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { stock as stockApi, suppliers as suppliersApi, catalog, printing as printingApi } from '../../lib/ipc'
 import type { StockItem, StockMovement, Supplier, Product } from '../../types/ipc'
+import { formatDate } from '../../lib/date'
 
 const MOVEMENT_TYPE_LABELS: Record<string, string> = {
   ENTRY: '📥 Entrada',
@@ -969,7 +970,7 @@ export default function StockPage() {
             <tbody>
               {movements.map(m => (
                 <tr key={m.id}>
-                  <td>{new Date(m.createdAt).toLocaleDateString('es-AR')}</td>
+                  <td>{formatDate(m.createdAt)}</td>
                   <td>{m.productName}</td>
                   <td>{MOVEMENT_TYPE_LABELS[m.type] ?? m.type}</td>
                   <td>
@@ -979,14 +980,7 @@ export default function StockPage() {
                         ? `${m.referenceType}${m.referenceId ? ` #${m.referenceId}` : ''}`
                         : '—'}
                   </td>
-                  <td>
-                    {m.voucherDate
-                      ? (() => {
-                          const [y, mo, d] = m.voucherDate.split('-').map(Number)
-                          return new Date(y, mo - 1, d).toLocaleDateString('es-AR')
-                        })()
-                      : '—'}
-                  </td>
+                  <td>{m.voucherDate ? formatDate(m.voucherDate) : '—'}</td>
                   <td>{m.supplierName ?? '—'}</td>
                   <td className={m.quantity < 0 ? 'qty-negative' : 'qty-positive'}>
                     {m.quantity > 0 ? `+${m.quantity}` : m.quantity}

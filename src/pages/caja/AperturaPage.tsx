@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { caja } from '../../lib/ipc'
-import { localToday, formatWeekdayDate } from '../../lib/date'
+import { localToday, formatWeekdayDate, formatDate } from '../../lib/date'
 import type { CashSession } from '../../types/ipc'
 
 export default function AperturaPage() {
@@ -51,7 +51,7 @@ export default function AperturaPage() {
     try {
       const session = await caja.openSession({ sessionDate, aperturaAmount: amount })
       setExistingSession(session)
-      setSuccess(`✅ Apertura de caja registrada para el ${session.sessionDate} con ${currency(session.aperturaAmount)}`)
+      setSuccess(`✅ Apertura de caja registrada para el ${formatDate(session.sessionDate)} con ${currency(session.aperturaAmount)}`)
       setAperturaAmount('')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al abrir la caja')
@@ -88,7 +88,7 @@ export default function AperturaPage() {
             <strong>
               {existingSession.status === 'open' ? '🔓 Caja abierta' : '🔒 Caja cerrada'}
             </strong>{' '}
-            para el {existingSession.sessionDate}
+            para el {formatDate(existingSession.sessionDate)}
           </p>
           <p>Monto apertura: <strong>{currency(existingSession.aperturaAmount)}</strong></p>
           {existingSession.cierreAmount !== null && (

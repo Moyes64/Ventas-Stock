@@ -35,3 +35,13 @@ export function utcToLocalDate(utcTimestamp: string): string {
   const d = new Date(iso)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
+
+/**
+ * Formatea una fecha (Date, o string YYYY-MM-DD / timestamp) como "dd/mm/aaaa" para
+ * mostrar en tickets y reportes impresos. Usar siempre en lugar de toLocaleDateString('es-AR')
+ * sin opciones, que en Node/Electron no rellena con ceros (ej: "5/1/2026" en vez de "05/01/2026").
+ */
+export function formatDate(value: string | Date): string {
+  const d = value instanceof Date ? value : new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00` : value)
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
+}

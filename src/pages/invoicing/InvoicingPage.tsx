@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { invoicing as invoicingApi, printing, sales as salesApi, mail } from '../../lib/ipc'
-import { localToday } from '../../lib/date'
+import { localToday, formatDate } from '../../lib/date'
 import type { PaymentMethod, Sale } from '../../types/ipc'
 import { useHiddenOptions } from '../../context/HiddenOptionsContext'
 
@@ -377,7 +377,7 @@ export default function InvoicingPage() {
                     {inv.id}
                     {inv.isBlackSale && <span className="badge badge--black" title="Venta N">N</span>}
                   </td>
-                  <td>{inv.saleDate}</td>
+                  <td>{formatDate(inv.saleDate)}</td>
                   <td>{inv.customerName ?? 'Consumidor Final'}</td>
                   <td>{inv.invoiceType ?? '—'}</td>
                   <td>

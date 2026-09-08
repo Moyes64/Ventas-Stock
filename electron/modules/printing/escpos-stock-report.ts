@@ -6,6 +6,7 @@
 
 import { cmdReset, cmdAlign, cmdBold, lf, cmdCut, txt } from '../printer-config/service'
 import type { StockItem } from '../stock/types'
+import { formatDate } from '../../lib/date'
 
 // Font B (ESC M 1): ~56 caracteres por línea
 const W = 56
@@ -21,7 +22,7 @@ export function buildStockReportBuffer(items: StockItem[]): Buffer {
   const p = (...bufs: Buffer[]) => parts.push(...bufs)
 
   const now = new Date()
-  const fecha = now.toLocaleDateString('es-AR')
+  const fecha = formatDate(now)
   const hora = now.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
 
   p(cmdReset(), fontB())

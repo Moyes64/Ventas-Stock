@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { caja, finance, printing } from '../../lib/ipc'
-import { localToday } from '../../lib/date'
+import { localToday, formatDate } from '../../lib/date'
 import type { CierreSummary, FinanceAccount } from '../../types/ipc'
 import { useConfirm } from '../../hooks/useConfirm'
 
@@ -73,7 +73,7 @@ export default function CierrePage() {
 
   async function handleReopen() {
     if (!summary) return
-    if (!(await confirm(`¿Confirmás reabrir la caja del ${selectedDate}? Esto deshace el cierre registrado.`))) {
+    if (!(await confirm(`¿Confirmás reabrir la caja del ${formatDate(selectedDate)}? Esto deshace el cierre registrado.`))) {
       return
     }
     setReopening(true)
@@ -125,7 +125,7 @@ export default function CierrePage() {
           </div>
 
           <div className="caja-summary">
-            <h3 className="caja-summary-title">Resumen del día {selectedDate}</h3>
+            <h3 className="caja-summary-title">Resumen del día {formatDate(selectedDate)}</h3>
 
             <div className="caja-summary-table">
               <div className="caja-summary-row">
@@ -222,7 +222,7 @@ export default function CierrePage() {
           {showPrintPrompt && (
             <div className="print-prompt-card">
               <p className="print-prompt-text">
-                🖨️ ¿Desea imprimir todos los comprobantes emitidos hoy ({selectedDate})?
+                🖨️ ¿Desea imprimir todos los comprobantes emitidos hoy ({formatDate(selectedDate)})?
               </p>
               <div className="print-prompt-actions">
                 <button

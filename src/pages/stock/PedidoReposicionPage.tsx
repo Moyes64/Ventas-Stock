@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { suppliers as suppliersApi, pedido as pedidoApi, systemParams as systemParamsApi } from '../../lib/ipc'
-import { localToday } from '../../lib/date'
+import { localToday, formatDate } from '../../lib/date'
 import type { Supplier, PedidoProduct, PedidoItem, SystemParams } from '../../types/ipc'
 
 type Step = 'selector' | 'pedido' | 'resumen'
@@ -74,7 +74,7 @@ export default function PedidoReposicionPage() {
   // ── Generar contenido del archivo de texto ────────────────────────────────
   function buildFileContent(): string {
     const now = new Date()
-    const fecha = now.toLocaleDateString('es-AR')
+    const fecha = formatDate(now)
     const hora  = now.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
     const sep   = '='.repeat(60)
     const sep2  = '-'.repeat(60)

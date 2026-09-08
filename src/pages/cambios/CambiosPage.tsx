@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { cambios } from '../../lib/ipc'
 import type { ExchangePreview, ExchangeRecord } from '../../types/ipc'
 import FreeExchangeTab from './FreeExchangeTab'
+import { formatDateTime, formatDate } from '../../lib/date'
 
 type Step = 'scan' | 'preview' | 'done'
 type Mode = 'ticket' | 'sinTicket'
@@ -74,13 +75,6 @@ export default function CambiosPage() {
 
   function fmt(n: number) {
     return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(n)
-  }
-
-  function fmtDate(iso: string) {
-    return new Date(iso).toLocaleString('es-AR', {
-      day: '2-digit', month: '2-digit', year: 'numeric',
-      hour: '2-digit', minute: '2-digit',
-    })
   }
 
   return (
@@ -185,13 +179,13 @@ export default function CambiosPage() {
                 backgroundColor: '#f9fafb', borderRadius: '8px', padding: '14px',
                 marginBottom: '16px', fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '6px',
               }}>
-                <Row label="Venta N°" value={`#${preview.saleId} — ${preview.saleDate}`} />
+                <Row label="Venta N°" value={`#${preview.saleId} — ${formatDate(preview.saleDate)}`} />
                 <Row label="Cliente" value={preview.customerName ?? '—'} />
                 <Row label="Producto" value={preview.productName ?? '—'} bold />
                 <Row label="Cantidad" value={String(preview.qty ?? 1)} />
                 <Row label="Importe" value={fmt(preview.amount ?? 0)} bold />
                 <div style={{ borderTop: '1px solid #e5e7eb', marginTop: '4px', paddingTop: '8px' }}>
-                  <Row label="Vto. cambio" value={preview.vencimiento ?? '—'} />
+                  <Row label="Vto. cambio" value={preview.vencimiento ? formatDate(preview.vencimiento) : '—'} />
                 </div>
               </div>
 
@@ -295,7 +289,7 @@ export default function CambiosPage() {
                   <div style={{ color: '#6b7280' }}>
                     {rec.customer_name ?? 'Sin cliente'} · Venta #{rec.sale_id} · {fmt(rec.amount)}
                   </div>
-                  <div style={{ color: '#9ca3af', marginTop: '2px' }}>{fmtDate(rec.created_at)}</div>
+                  <div style={{ color: '#9ca3af', marginTop: '2px' }}>{formatDateTime(rec.created_at)}</div>
                   {rec.notes && <div style={{ color: '#6b7280', fontStyle: 'italic', marginTop: '2px' }}>{rec.notes}</div>}
                 </div>
               ))}

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { reporting, catalog } from '../lib/ipc'
-import { localToday } from '../lib/date'
+import { localToday, formatWeekdayDate } from '../lib/date'
 import type { DailySummaryReport } from '../types/ipc'
 import { useHiddenOptions } from '../context/HiddenOptionsContext'
 
@@ -40,7 +40,7 @@ export default function Dashboard() {
   return (
     <div className="page">
       <h1 className="page-title">Dashboard</h1>
-      <p className="page-subtitle">{new Date().toLocaleDateString('es-AR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+      <p className="page-subtitle">{formatWeekdayDate(localToday())}</p>
 
       <div className="stats-dashboard-grid">
         {/* Fila 1: Ventas hoy, Total hoy, Productos bajo stock */}

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { customers as customersApi, credits } from '../../lib/ipc'
 import type { Customer, CreditRecord } from '../../types/ipc'
 import { useConfirm } from '../../hooks/useConfirm'
+import { formatDateTime } from '../../lib/date'
 
 export default function CustomersPage() {
   const [customerList, setCustomerList] = useState<Customer[]>([])
@@ -53,10 +54,6 @@ export default function CustomersPage() {
     setCreditBalance(bal)
     setCreditHistory(hist)
     setLoadingCredit(false)
-  }
-
-  function fmtDate(iso: string) {
-    return new Date(iso).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
   }
 
   const currency = (n: number) =>
@@ -195,7 +192,7 @@ export default function CustomersPage() {
                     <div>
                       <div style={{ fontWeight: 600 }}>{TYPE_LABELS[rec.type] ?? rec.type}</div>
                       {rec.notes && <div style={{ color: '#6b7280' }}>{rec.notes}</div>}
-                      <div style={{ color: '#9ca3af' }}>{fmtDate(rec.created_at)}</div>
+                      <div style={{ color: '#9ca3af' }}>{formatDateTime(rec.created_at)}</div>
                     </div>
                     <div style={{
                       fontWeight: 700, fontSize: '13px',

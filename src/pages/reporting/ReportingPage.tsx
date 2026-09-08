@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { reporting, searchAnalytics, suppliers, stock } from '../../lib/ipc'
-import { localToday, localFirstOfMonth, localCurrentMonth } from '../../lib/date'
+import { localToday, localFirstOfMonth, localCurrentMonth, formatDate } from '../../lib/date'
 import type { DailySummaryReport, RankingItem, PurchasesReport, IncompleteEntry, Supplier, SalesSummary, SearchAnalyticsReport } from '../../types/ipc'
 import { useHiddenOptions } from '../../context/HiddenOptionsContext'
 import { PieChart, PIE_COLORS as COLORS } from '../../components/charts/PieChart'
@@ -429,7 +429,7 @@ export default function ReportingPage() {
                   <tbody>
                     {summary.map(row => (
                       <tr key={row.date}>
-                        <td>{row.date}</td>
+                        <td>{formatDate(row.date)}</td>
                         <td>{row.salesCount}</td>
                         <td>{row.authorizedInvoices}</td>
                         <td>{row.internalReceipts}</td>
@@ -673,7 +673,7 @@ export default function ReportingPage() {
                   {sg.vouchers.map((vg, vidx) => (
                     <div key={vidx} className="purchases-voucher-block">
                       <div className="purchases-voucher-header">
-                        <span>{vg.voucherType || 'Comprobante'} {vg.voucherNumber || '(sin número)'} {vg.voucherDate ? `— ${vg.voucherDate}` : ''}</span>
+                        <span>{vg.voucherType || 'Comprobante'} {vg.voucherNumber || '(sin número)'} {vg.voucherDate ? `— ${formatDate(vg.voucherDate)}` : ''}</span>
                         <span className="purchases-voucher-totals">
                           Costo: {currency(vg.totalCost)} · Precio: {currency(vg.totalPrice)}
                         </span>

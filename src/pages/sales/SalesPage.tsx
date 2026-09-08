@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { sales, printing, systemParams, mail } from '../../lib/ipc'
-import { localToday } from '../../lib/date'
+import { localToday, formatDate } from '../../lib/date'
 import type { Sale } from '../../types/ipc'
 import { useConfirm } from '../../hooks/useConfirm'
 
@@ -174,7 +174,7 @@ export default function SalesPage() {
                 {saleList.map(sale => (
                   <tr key={sale.id}>
                     <td>{sale.id}</td>
-                    <td>{sale.saleDate}</td>
+                    <td>{formatDate(sale.saleDate)}</td>
                     <td>{sale.customerName ?? 'Consumidor Final'}</td>
                     <td>{currency(sale.total)}</td>
                     <td>

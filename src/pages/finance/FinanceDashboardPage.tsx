@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { finance } from '../../lib/ipc'
-import { localFirstOfMonth, localToday } from '../../lib/date'
+import { localFirstOfMonth, localToday, formatDate } from '../../lib/date'
 import type {
   FinanceAccountBalance,
   FinanceCashFlowPoint,
@@ -80,7 +80,7 @@ export default function FinanceDashboardPage() {
             {b.pendingAmount > 0 && (
               <div className="stat-sub">
                 🕓 {currency(b.pendingAmount)} pendiente
-                {b.nextAccreditationDate && <> · acredita {b.nextAccreditationDate}</>}
+                {b.nextAccreditationDate && <> · acredita {formatDate(b.nextAccreditationDate)}</>}
               </div>
             )}
           </div>
@@ -93,7 +93,7 @@ export default function FinanceDashboardPage() {
       </div>
 
       {foundingDate && (
-        <p className="page-subtitle">📅 Contabilidad iniciada el {foundingDate} — no se pueden ver ni cargar datos anteriores.</p>
+        <p className="page-subtitle">📅 Contabilidad iniciada el {formatDate(foundingDate)} — no se pueden ver ni cargar datos anteriores.</p>
       )}
 
       {pending.length > 0 && (
@@ -113,7 +113,7 @@ export default function FinanceDashboardPage() {
                 <tr key={p.movementId}>
                   <td>{p.accountName}</td>
                   <td>{currency(p.monto)}</td>
-                  <td><span className="badge badge--warning">{p.fechaAcreditacion}</span></td>
+                  <td><span className="badge badge--warning">{formatDate(p.fechaAcreditacion)}</span></td>
                   <td>{p.descripcion}</td>
                 </tr>
               ))}

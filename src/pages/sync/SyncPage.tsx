@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { sync as syncApi } from '../../lib/ipc'
 import type { SyncConfig, SyncResult } from '../../types/ipc'
+import { formatDateTime } from '../../lib/date'
 
 const DEFAULT_CONFIG: SyncConfig = {
   enabled: false,
@@ -92,7 +93,7 @@ export default function SyncPage() {
                   {lastResult.success ? 'Última sincronización exitosa' : 'Error en última sincronización'}
                 </div>
                 <div className="sync-result-time">
-                  {new Date(lastResult.timestamp).toLocaleString('es-AR')}
+                  {formatDateTime(lastResult.timestamp)}
                 </div>
                 {lastResult.error && (
                   <div className="sync-result-error">{lastResult.error}</div>

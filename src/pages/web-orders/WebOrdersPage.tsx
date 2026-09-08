@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { sync, invoicing } from '../../lib/ipc'
 import type { PullResult } from '../../types/ipc'
+import { formatDateTime } from '../../lib/date'
 
 interface WebOrder {
   id: number
@@ -128,13 +129,6 @@ export default function WebOrdersPage() {
 
   function fmt(n: number) {
     return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(n)
-  }
-
-  function fmtDate(iso: string) {
-    return new Date(iso).toLocaleString('es-AR', {
-      day: '2-digit', month: '2-digit', year: 'numeric',
-      hour: '2-digit', minute: '2-digit',
-    })
   }
 
   return (
@@ -278,7 +272,7 @@ export default function WebOrdersPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontWeight: 700, fontSize: '15px' }}>{fmt(order.total)}</div>
-                    <div style={{ fontSize: '11px', color: '#9ca3af' }}>{fmtDate(order.createdAt)}</div>
+                    <div style={{ fontSize: '11px', color: '#9ca3af' }}>{formatDateTime(order.createdAt)}</div>
                   </div>
                   <span style={{
                     fontSize: '10px',
