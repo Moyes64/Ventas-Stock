@@ -34,6 +34,14 @@ export class SaleService {
   }
 
   updatePaymentMethod(id: number, paymentMethod: Sale['paymentMethod']): Sale {
+    const current = this.saleRepo.findById(id)
+    if (!current) throw new Error(`Venta no encontrada: ${id}`)
+    if (current.paymentMethod === 'mixto') {
+      throw new Error(
+        'Esta venta tiene pago combinado (más de un medio de pago) y no se puede reclasificar a un único medio desde acá.'
+      )
+    }
+
     this.saleRepo.updatePaymentMethod(id, paymentMethod)
     const sale = this.saleRepo.findById(id)
     if (!sale) throw new Error(`Venta no encontrada: ${id}`)
@@ -50,6 +58,7 @@ export class SaleService {
       this.financeService.reverseSaleIncome(sale.id)
       this.financeService.registerSaleIncome({
         saleId: sale.id,
+        salePaymentId: sale.payments?.[0]?.id,
         paymentMethod: sale.paymentMethod,
         monto: sale.total,
         fecha: sale.saleDate,
@@ -178,14 +187,20 @@ export class SaleService {
     const finalSale = this.saleRepo.findById(saleId)
     if (!finalSale) throw new Error(`Venta no encontrada: ${saleId}`)
 
-    // Step 8: Auto-registrar el ingreso a MP-Anabella si corresponde (no bloquea la venta si falla)
+    // Step 8: Auto-registrar el ingreso a MP-Anabella si corresponde (no bloquea la venta si falla).
+    // Una pierna por medio de pago -- para una venta simple es una sola (el
+    // total completo); para una combinada, una por cada medio usado.
     try {
-      this.financeService.registerSaleIncome({
-        saleId: finalSale.id,
-        paymentMethod: finalSale.paymentMethod,
-        monto: finalSale.total,
-        fecha: finalSale.saleDate,
-      })
+      const payments = this.saleRepo.getPayments(finalSale.id)
+      for (const leg of payments) {
+        this.financeService.registerSaleIncome({
+          saleId: finalSale.id,
+          salePaymentId: leg.id,
+          paymentMethod: leg.paymentMethod,
+          monto: leg.amount,
+          fecha: finalSale.saleDate,
+        })
+      }
     } catch (err) {
       console.error('[sales] Error registrando ingreso financiero automático:', err)
     }

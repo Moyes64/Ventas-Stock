@@ -57,6 +57,7 @@ interface MovementRow {
   partner_id: number | null
   supplier_id: number | null
   sale_id: number | null
+  sale_payment_id: number | null
   created_at: string
 }
 
@@ -82,6 +83,7 @@ interface FeeRateRow {
 interface ReconciliationRow {
   id: number
   sale_id: number
+  sale_payment_id: number
   fecha: string
   payment_method: string
   bruto_sistema: number
@@ -98,6 +100,7 @@ interface ReconciliationRow {
 
 interface MpReconciliationSaleRow {
   saleId: number
+  salePaymentId: number
   paymentMethod: MpFeePaymentMethod
   fecha: string
   customerName: string | null
@@ -304,9 +307,9 @@ export class FinanceRepository {
     const result = this.db
       .prepare(
         `INSERT INTO finance_movements
-           (account_id, tipo, categoria_id, monto, descripcion, fecha, fecha_acreditacion, partner_id, supplier_id, sale_id)
+           (account_id, tipo, categoria_id, monto, descripcion, fecha, fecha_acreditacion, partner_id, supplier_id, sale_id, sale_payment_id)
          VALUES
-           (@accountId, @tipo, @categoriaId, @monto, @descripcion, @fecha, @fechaAcreditacion, @partnerId, @supplierId, @saleId)`
+           (@accountId, @tipo, @categoriaId, @monto, @descripcion, @fecha, @fechaAcreditacion, @partnerId, @supplierId, @saleId, @salePaymentId)`
       )
       .run({
         accountId: input.accountId,
@@ -319,6 +322,7 @@ export class FinanceRepository {
         partnerId: input.partnerId ?? null,
         supplierId: input.supplierId ?? null,
         saleId: input.saleId ?? null,
+        salePaymentId: input.salePaymentId ?? null,
       })
     return result.lastInsertRowid as number
   }
@@ -617,64 +621,68 @@ export class FinanceRepository {
   }
 
   /**
-   * Ventas de un día (opcionalmente filtradas por medio de pago) con comisión de
-   * Mercado Pago, junto con el bruto/comisión que Ventas-Stock ya asentó por cada
-   * una (según lo posteado en finance_movements). Una fila por venta, no un total.
+   * Piernas de pago de un día (opcionalmente filtradas por medio de pago) con
+   * comisión de Mercado Pago, junto con el bruto/comisión que Ventas-Stock ya
+   * asentó por cada una (según lo posteado en finance_movements, atribuido por
+   * `sale_payment_id`). Una fila por pierna de pago -- una venta combinada con
+   * dos medios con comisión (ej: QR + Débito) aporta dos filas.
    */
   listSalesForMpReconciliation(fecha: string, paymentMethod?: MpFeePaymentMethod): MpReconciliationSaleRow[] {
     const conditions = [
       's.sale_date = @fecha',
       "s.status != 'CANCELLED'",
-      "s.payment_method IN ('qr', 'debito', 'credito', 'mercadopago')",
+      "sp.payment_method IN ('qr', 'debito', 'credito', 'mercadopago')",
     ]
     const params: Record<string, unknown> = { fecha }
     if (paymentMethod !== undefined) {
-      conditions.push('s.payment_method = @paymentMethod')
+      conditions.push('sp.payment_method = @paymentMethod')
       params.paymentMethod = paymentMethod
     }
     const rows = this.db
       .prepare(
-        `SELECT s.id AS saleId, s.payment_method AS paymentMethod, s.sale_date AS fecha,
-                c.name AS customerName, s.invoice_number AS invoiceNumber, s.total AS total,
+        `SELECT sp.id AS salePaymentId, s.id AS saleId, sp.payment_method AS paymentMethod, s.sale_date AS fecha,
+                c.name AS customerName, s.invoice_number AS invoiceNumber, sp.amount AS total,
                 COALESCE(SUM(CASE WHEN fc.name = 'Venta' THEN fm.monto ELSE 0 END), 0) AS brutoSistema,
                 COALESCE(SUM(CASE WHEN fc.name = 'Comisión Mercado Pago' THEN fm.monto ELSE 0 END), 0) AS comisionSistema
-         FROM sales s
+         FROM sale_payments sp
+         JOIN sales s ON s.id = sp.sale_id
          LEFT JOIN customers c ON c.id = s.customer_id
-         LEFT JOIN finance_movements fm ON fm.sale_id = s.id
+         LEFT JOIN finance_movements fm ON fm.sale_payment_id = sp.id
          LEFT JOIN finance_categories fc ON fc.id = fm.categoria_id
          WHERE ${conditions.join(' AND ')}
-         GROUP BY s.id
-         ORDER BY s.id ASC`
+         GROUP BY sp.id
+         ORDER BY sp.id ASC`
       )
       .all(params) as MpReconciliationSaleRow[]
     return rows
   }
 
-  /** Bruto/comisión que Ventas-Stock ya asentó para una venta puntual, más su medio de pago y fecha. */
-  getMpSystemSummaryForSale(saleId: number): MpReconciliationSaleRow | undefined {
+  /** Bruto/comisión que Ventas-Stock ya asentó para una pierna de pago puntual, más su medio y fecha. */
+  getMpSystemSummaryForPayment(salePaymentId: number): MpReconciliationSaleRow | undefined {
     const row = this.db
       .prepare(
-        `SELECT s.id AS saleId, s.payment_method AS paymentMethod, s.sale_date AS fecha,
-                c.name AS customerName, s.invoice_number AS invoiceNumber, s.total AS total,
+        `SELECT sp.id AS salePaymentId, s.id AS saleId, sp.payment_method AS paymentMethod, s.sale_date AS fecha,
+                c.name AS customerName, s.invoice_number AS invoiceNumber, sp.amount AS total,
                 COALESCE(SUM(CASE WHEN fc.name = 'Venta' THEN fm.monto ELSE 0 END), 0) AS brutoSistema,
                 COALESCE(SUM(CASE WHEN fc.name = 'Comisión Mercado Pago' THEN fm.monto ELSE 0 END), 0) AS comisionSistema
-         FROM sales s
+         FROM sale_payments sp
+         JOIN sales s ON s.id = sp.sale_id
          LEFT JOIN customers c ON c.id = s.customer_id
-         LEFT JOIN finance_movements fm ON fm.sale_id = s.id
+         LEFT JOIN finance_movements fm ON fm.sale_payment_id = sp.id
          LEFT JOIN finance_categories fc ON fc.id = fm.categoria_id
-         WHERE s.id = @saleId
-         GROUP BY s.id`
+         WHERE sp.id = @salePaymentId
+         GROUP BY sp.id`
       )
-      .get({ saleId }) as MpReconciliationSaleRow | undefined
+      .get({ salePaymentId }) as MpReconciliationSaleRow | undefined
     return row
   }
 
-  // ── Conciliación venta por venta con el resumen de Mercado Pago ─────────────
+  // ── Conciliación pierna por pierna con el resumen de Mercado Pago ───────────
 
-  findMpReconciliationBySaleId(saleId: number): FinanceMpReconciliation | undefined {
+  findMpReconciliationBySalePaymentId(salePaymentId: number): FinanceMpReconciliation | undefined {
     const row = this.db
-      .prepare('SELECT * FROM finance_mp_reconciliations WHERE sale_id = ?')
-      .get(saleId) as ReconciliationRow | undefined
+      .prepare('SELECT * FROM finance_mp_reconciliations WHERE sale_payment_id = ?')
+      .get(salePaymentId) as ReconciliationRow | undefined
     return row ? this.mapReconciliation(row) : undefined
   }
 
@@ -703,9 +711,10 @@ export class FinanceRepository {
     return rows.map(r => this.mapReconciliation(r))
   }
 
-  /** Crea o reemplaza (por sale_id) el snapshot pendiente de conciliación de una venta. */
+  /** Crea o reemplaza (por sale_payment_id) el snapshot pendiente de conciliación de una pierna de pago. */
   upsertMpReconciliationForSale(input: {
     saleId: number
+    salePaymentId: number
     fecha: string
     paymentMethod: MpFeePaymentMethod
     brutoSistema: number
@@ -715,12 +724,12 @@ export class FinanceRepository {
     netoReal: number
     diferencia: number
   }): number {
-    const existing = this.findMpReconciliationBySaleId(input.saleId)
+    const existing = this.findMpReconciliationBySalePaymentId(input.salePaymentId)
     if (existing) {
       this.db
         .prepare(
           `UPDATE finance_mp_reconciliations SET
-             fecha = @fecha, payment_method = @paymentMethod,
+             sale_id = @saleId, fecha = @fecha, payment_method = @paymentMethod,
              bruto_sistema = @brutoSistema, comision_sistema = @comisionSistema,
              bruto_real = @brutoReal, comision_real = @comisionReal, neto_real = @netoReal,
              diferencia = @diferencia, status = 'pending', ajuste_movement_id = NULL,
@@ -733,9 +742,9 @@ export class FinanceRepository {
     const result = this.db
       .prepare(
         `INSERT INTO finance_mp_reconciliations
-           (sale_id, fecha, payment_method, bruto_sistema, comision_sistema, bruto_real, comision_real, neto_real, diferencia)
+           (sale_id, sale_payment_id, fecha, payment_method, bruto_sistema, comision_sistema, bruto_real, comision_real, neto_real, diferencia)
          VALUES
-           (@saleId, @fecha, @paymentMethod, @brutoSistema, @comisionSistema, @brutoReal, @comisionReal, @netoReal, @diferencia)`
+           (@saleId, @salePaymentId, @fecha, @paymentMethod, @brutoSistema, @comisionSistema, @brutoReal, @comisionReal, @netoReal, @diferencia)`
       )
       .run(input)
     return result.lastInsertRowid as number
@@ -818,6 +827,7 @@ export class FinanceRepository {
       partnerId: row.partner_id,
       supplierId: row.supplier_id,
       saleId: row.sale_id,
+      salePaymentId: row.sale_payment_id,
       createdAt: row.created_at,
     }
   }
@@ -849,6 +859,7 @@ export class FinanceRepository {
     return {
       id: row.id,
       saleId: row.sale_id,
+      salePaymentId: row.sale_payment_id,
       fecha: row.fecha,
       paymentMethod: row.payment_method as MpFeePaymentMethod,
       brutoSistema: row.bruto_sistema,

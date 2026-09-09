@@ -15,6 +15,15 @@ export type PaymentMethod =
   | 'WEB_ORDER'
   | 'mercadopago'
   | 'qr'
+  | 'mixto'
+
+export interface SalePayment {
+  id: number
+  saleId: number
+  paymentMethod: PaymentMethod
+  amount: number
+  createdAt: string
+}
 
 export interface SaleItem {
   id?: number
@@ -60,6 +69,7 @@ export interface Sale {
   updatedAt: string
   items?: SaleItem[]
   appliedParameters?: AppliedParameter[]
+  payments?: SalePayment[]
 }
 
 export interface CreateSaleInput {
@@ -68,6 +78,13 @@ export interface CreateSaleInput {
   invoiceType?: number
   isBlackSale?: boolean
   paymentMethod?: PaymentMethod
+  /** Pago combinado: 2 piernas (medio + monto) cuyo total debe sumar el total
+   *  de la venta. Cuando viene presente, tiene prioridad sobre `paymentMethod`
+   *  -- `sales.payment_method` queda en 'mixto' y el detalle real vive acá. */
+  payments?: Array<{
+    paymentMethod: PaymentMethod
+    amount: number
+  }>
   parameterIds?: number[]
   items: Array<{
     productId: number

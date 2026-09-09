@@ -174,6 +174,7 @@ export const sales = {
     invoiceType?: number
     isBlackSale?: boolean
     paymentMethod?: PaymentMethod
+    payments?: Array<{ paymentMethod: PaymentMethod; amount: number }>
     parameterIds?: number[]
     items: Array<{
       productId: number

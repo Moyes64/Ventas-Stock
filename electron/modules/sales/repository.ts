@@ -1,6 +1,6 @@
 import type { Database } from 'better-sqlite3'
 import { localToday, localNow } from '../../lib/date'
-import type { Sale, SaleItem, AppliedParameter, CreateSaleInput } from './types'
+import type { Sale, SaleItem, AppliedParameter, CreateSaleInput, SalePayment } from './types'
 
 interface SaleRow {
   id: number
@@ -48,6 +48,14 @@ interface SaleParameterRow {
   tipo: string
 }
 
+interface SalePaymentRow {
+  id: number
+  sale_id: number
+  payment_method: string
+  amount: number
+  created_at: string
+}
+
 export class SaleRepository {
   constructor(private readonly db: Database) {}
 
@@ -64,7 +72,8 @@ export class SaleRepository {
 
     const items = this.getItems(id)
     const appliedParameters = this.getAppliedParameters(id)
-    return { ...this.mapRow(row), items, appliedParameters }
+    const payments = this.getPayments(id)
+    return { ...this.mapRow(row), items, appliedParameters, payments }
   }
 
   list(filters: {
@@ -134,6 +143,24 @@ export class SaleRepository {
       appliedParameters: AppliedParameter[]
     }
   ): number {
+    // Piernas de pago: si viene `payments` (pago combinado) se usan tal cual
+    // -- deben sumar el total, con una tolerancia de redondeo de un centavo.
+    // Si no, se arma una única pierna espejo con `paymentMethod` (o el
+    // default de siempre) por el total completo.
+    let legs: Array<{ paymentMethod: string; amount: number }>
+    if (data.payments && data.payments.length > 0) {
+      const sum = data.payments.reduce((acc, p) => acc + p.amount, 0)
+      if (Math.abs(sum - data.total) > 0.01) {
+        throw new Error(
+          `La suma de los medios de pago (${sum.toFixed(2)}) no coincide con el total de la venta (${data.total.toFixed(2)})`
+        )
+      }
+      legs = data.payments
+    } else {
+      legs = [{ paymentMethod: data.paymentMethod ?? 'contado_efectivo', amount: data.total }]
+    }
+    const paymentMethod = legs.length > 1 ? 'mixto' : legs[0].paymentMethod
+
     const insertSale = this.db.prepare(
       `INSERT INTO sales (customer_id, user_id, invoice_type, subtotal, tax_amount, total, discount_amount, is_black_sale, payment_method, sale_date, created_at, updated_at)
        VALUES (@customerId, @userId, @invoiceType, @subtotal, @taxAmount, @total, @discountAmount, @isBlackSale, @paymentMethod, @saleDate, @createdAt, @createdAt)`
@@ -149,6 +176,11 @@ export class SaleRepository {
        VALUES (@saleId, @parameterId, @descripcion, @porcentaje, @tipo)`
     )
 
+    const insertPayment = this.db.prepare(
+      `INSERT INTO sale_payments (sale_id, payment_method, amount)
+       VALUES (@saleId, @paymentMethod, @amount)`
+    )
+
     const saleId = this.db.transaction(() => {
       const r = insertSale.run({
         customerId: data.customerId ?? null,
@@ -159,7 +191,7 @@ export class SaleRepository {
         total: data.total,
         discountAmount: data.discountAmount,
         isBlackSale: data.isBlackSale ? 1 : 0,
-        paymentMethod: data.paymentMethod ?? 'contado_efectivo',
+        paymentMethod,
         saleDate: localToday(),   // fecha local ART, no UTC
         createdAt: localNow(),    // hora local ART, no UTC (el DEFAULT de la tabla usa UTC)
       })
@@ -184,6 +216,10 @@ export class SaleRepository {
           porcentaje: param.porcentaje,
           tipo: param.tipo,
         })
+      }
+
+      for (const leg of legs) {
+        insertPayment.run({ saleId: id, paymentMethod: leg.paymentMethod, amount: leg.amount })
       }
 
       return id
@@ -217,11 +253,20 @@ export class SaleRepository {
   }
 
   updatePaymentMethod(id: number, paymentMethod: Sale['paymentMethod']): void {
-    this.db
-      .prepare(
-        `UPDATE sales SET payment_method = @paymentMethod, updated_at = datetime('now') WHERE id = @id`
-      )
-      .run({ id, paymentMethod })
+    // El caller (SaleService) garantiza que la venta no es 'mixto' -- tiene
+    // una sola pierna en sale_payments, así que se actualiza junto con
+    // sales.payment_method para que caja/conciliación (que leen de
+    // sale_payments) vean el medio nuevo.
+    this.db.transaction(() => {
+      this.db
+        .prepare(
+          `UPDATE sales SET payment_method = @paymentMethod, updated_at = datetime('now') WHERE id = @id`
+        )
+        .run({ id, paymentMethod })
+      this.db
+        .prepare(`UPDATE sale_payments SET payment_method = @paymentMethod WHERE sale_id = @id`)
+        .run({ id, paymentMethod })
+    })()
   }
 
   updateAfipError(id: number, error: string): void {
@@ -278,6 +323,20 @@ export class SaleRepository {
       descripcion: r.descripcion,
       porcentaje: r.porcentaje,
       tipo: r.tipo as '+' | '-',
+    }))
+  }
+
+  getPayments(saleId: number): SalePayment[] {
+    const rows = this.db
+      .prepare('SELECT * FROM sale_payments WHERE sale_id = ? ORDER BY id ASC')
+      .all(saleId) as SalePaymentRow[]
+
+    return rows.map(r => ({
+      id: r.id,
+      saleId: r.sale_id,
+      paymentMethod: r.payment_method as SalePayment['paymentMethod'],
+      amount: r.amount,
+      createdAt: r.created_at,
     }))
   }
 

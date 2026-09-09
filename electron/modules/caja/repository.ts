@@ -96,12 +96,18 @@ export class CajaRepository {
   // ── Sales summary by payment method ───────────────────────────────────────
 
   getSalesSummaryByPaymentMethod(date: string): Record<string, number> {
+    // Se suma por pierna de pago (sale_payments), no por sales.payment_method:
+    // una venta combinada (payment_method = 'mixto') reparte su total entre
+    // sus piernas, y cada una tiene que contar en el medio que le corresponde
+    // -- ej: la pierna en efectivo de una venta mixta sí cuenta como efectivo
+    // en Caja, aunque la venta en sí no sea 'contado_efectivo'.
     const rows = this.db
       .prepare(
-        `SELECT payment_method, COALESCE(SUM(total), 0) AS total_amount
-         FROM sales
-         WHERE sale_date = ? AND status != 'CANCELLED'
-         GROUP BY payment_method`
+        `SELECT sp.payment_method, COALESCE(SUM(sp.amount), 0) AS total_amount
+         FROM sale_payments sp
+         JOIN sales s ON s.id = sp.sale_id
+         WHERE s.sale_date = ? AND s.status != 'CANCELLED'
+         GROUP BY sp.payment_method`
       )
       .all(date) as Array<{ payment_method: string; total_amount: number }>
 

@@ -174,6 +174,15 @@ export type PaymentMethod =
   | 'WEB_ORDER'
   | 'mercadopago'
   | 'qr'
+  | 'mixto'
+
+export interface SalePayment {
+  id: number
+  saleId: number
+  paymentMethod: PaymentMethod
+  amount: number
+  createdAt: string
+}
 
 export interface SaleItem {
   id?: number
@@ -220,6 +229,7 @@ export interface Sale {
   updatedAt: string
   items?: SaleItem[]
   appliedParameters?: AppliedParameter[]
+  payments?: SalePayment[]
 }
 
 export interface BackupInfo {
@@ -684,6 +694,7 @@ export interface FinanceMovement {
   partnerId: number | null
   supplierId: number | null
   saleId: number | null
+  salePaymentId: number | null
   createdAt: string
 }
 
@@ -698,6 +709,7 @@ export interface CreateFinanceMovementInput {
   partnerId?: number | null
   supplierId?: number | null
   saleId?: number | null
+  salePaymentId?: number | null
 }
 
 export interface FinancePendingAccreditation {
@@ -804,6 +816,7 @@ export type MpReconciliationStatus = 'pending' | 'adjusted' | 'ignored'
 export interface FinanceMpReconciliation {
   id: number
   saleId: number
+  salePaymentId: number
   fecha: string
   paymentMethod: MpFeePaymentMethod
   brutoSistema: number
@@ -819,7 +832,7 @@ export interface FinanceMpReconciliation {
 }
 
 export interface SaveMpReconciliationInput {
-  saleId: number
+  salePaymentId: number
   brutoReal: number
   comisionReal: number
   netoReal: number
@@ -827,6 +840,7 @@ export interface SaveMpReconciliationInput {
 
 export interface MpReconciliationRow {
   saleId: number
+  salePaymentId: number
   paymentMethod: MpFeePaymentMethod
   fecha: string
   customerName: string | null

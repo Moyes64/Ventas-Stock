@@ -38,6 +38,10 @@ export interface FinanceMovement {
   partnerId: number | null
   supplierId: number | null
   saleId: number | null
+  /** Pierna de pago (sale_payments.id) que originó este movimiento, cuando la
+   *  venta se cobró con más de un medio. null en ventas de un solo medio y en
+   *  movimientos que no vienen de una venta. */
+  salePaymentId: number | null
   createdAt: string
 }
 
@@ -52,6 +56,7 @@ export interface CreateMovementInput {
   partnerId?: number | null
   supplierId?: number | null
   saleId?: number | null
+  salePaymentId?: number | null
 }
 
 export interface MovementFilters {
@@ -168,6 +173,9 @@ export type MpReconciliationStatus = 'pending' | 'adjusted' | 'ignored'
 export interface FinanceMpReconciliation {
   id: number
   saleId: number
+  /** Pierna de pago conciliada (sale_payments.id) -- una venta combinada con
+   *  dos medios con comisión MP tiene una fila de conciliación por pierna. */
+  salePaymentId: number
   fecha: string
   paymentMethod: MpFeePaymentMethod
   brutoSistema: number
@@ -184,20 +192,23 @@ export interface FinanceMpReconciliation {
 }
 
 export interface SaveMpReconciliationInput {
-  saleId: number
+  salePaymentId: number
   brutoReal: number
   comisionReal: number
   netoReal: number
 }
 
-/** Una venta puntual (QR/Débito/Crédito/MP-Web) del día filtrado, con el
- *  cálculo automático de Ventas-Stock y la conciliación guardada, si existe. */
+/** Una pierna de pago (QR/Débito/Crédito/MP-Web) del día filtrado, con el
+ *  cálculo automático de Ventas-Stock y la conciliación guardada, si existe.
+ *  Una venta combinada con dos medios con comisión aporta dos filas acá. */
 export interface MpReconciliationRow {
   saleId: number
+  salePaymentId: number
   paymentMethod: MpFeePaymentMethod
   fecha: string
   customerName: string | null
   invoiceNumber: number | null
+  /** Monto de esta pierna (no el total de la venta, si la venta es combinada). */
   total: number
   brutoSistema: number
   comisionSistema: number

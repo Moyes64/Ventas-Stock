@@ -446,6 +446,15 @@ export class SyncService {
       `).run(customerId, saleDate, localPaymentMethod, order.total, otherChargesAmount, otherChargesLabel)
       const saleId = saleRes.lastInsertRowid as number
 
+      // Fila espejo en sale_payments -- toda venta tiene al menos una pierna de
+      // pago; los pedidos web siempre son de un solo medio (ver split de pago
+      // combinado en NewSalePage, que no aplica acá).
+      const salePaymentRes = this.db.prepare(`
+        INSERT INTO sale_payments (sale_id, payment_method, amount)
+        VALUES (?,?,?)
+      `).run(saleId, localPaymentMethod, order.total)
+      const salePaymentId = salePaymentRes.lastInsertRowid as number
+
       // Insertar items y descontar stock
       for (const item of order.items) {
         this.db.prepare(`
@@ -472,7 +481,7 @@ export class SyncService {
       // Auto-registrar el ingreso a MP-Anabella si corresponde (no bloquea la importación si falla)
       try {
         this.financeService.registerSaleIncome({
-          saleId, paymentMethod: localPaymentMethod, monto: order.total, fecha: saleDate,
+          saleId, salePaymentId, paymentMethod: localPaymentMethod, monto: order.total, fecha: saleDate,
         })
       } catch (err) {
         console.error('[sync] Error registrando ingreso financiero automático:', err)

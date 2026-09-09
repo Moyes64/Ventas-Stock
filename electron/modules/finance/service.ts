@@ -261,6 +261,9 @@ export class FinanceService {
 
   registerSaleIncome(input: {
     saleId: number
+    /** Pierna de pago (sale_payments.id) que origina este ingreso -- permite
+     *  reconciliar/atribuir por separado cada medio de una venta combinada. */
+    salePaymentId?: number
     paymentMethod: string
     monto: number
     fecha: string
@@ -277,11 +280,13 @@ export class FinanceService {
       descripcion: `Venta #${input.saleId}`,
       fecha: input.fecha,
       saleId: input.saleId,
+      salePaymentId: input.salePaymentId ?? null,
     })
 
     if (MP_FEE_PAYMENT_METHODS.has(input.paymentMethod as MpFeePaymentMethod)) {
       this.registerMpFeeForSale(
         input.saleId,
+        input.salePaymentId ?? null,
         input.paymentMethod as MpFeePaymentMethod,
         input.monto,
         input.fecha,
@@ -350,6 +355,7 @@ export class FinanceService {
 
   private registerMpFeeForSale(
     saleId: number,
+    salePaymentId: number | null,
     paymentMethod: MpFeePaymentMethod,
     monto: number,
     fecha: string,
@@ -367,6 +373,7 @@ export class FinanceService {
       descripcion: `Comisión MP (${paymentMethod.toUpperCase()}) - Venta #${saleId}`,
       fecha,
       saleId,
+      salePaymentId,
     })
   }
 
@@ -497,13 +504,14 @@ export class FinanceService {
 
   /**
    * Para una fecha dada (opcionalmente filtrada por medio de pago), una fila por
-   * cada venta con comisión de Mercado Pago: el cálculo automático de Ventas-Stock
-   * + la conciliación guardada, si existe. Reemplaza el total agregado por día que
-   * escondía qué venta puntual tenía la diferencia.
+   * cada pierna de pago con comisión de Mercado Pago: el cálculo automático de
+   * Ventas-Stock + la conciliación guardada, si existe. Una venta combinada con
+   * dos medios con comisión (ej: QR + Débito) aporta dos filas independientes.
    */
   getMpReconciliationRows(fecha: string, paymentMethod?: MpFeePaymentMethod): MpReconciliationRow[] {
     return this.repo.listSalesForMpReconciliation(fecha, paymentMethod).map(sale => ({
       saleId: sale.saleId,
+      salePaymentId: sale.salePaymentId,
       paymentMethod: sale.paymentMethod,
       fecha: sale.fecha,
       customerName: sale.customerName,
@@ -512,7 +520,7 @@ export class FinanceService {
       brutoSistema: sale.brutoSistema,
       comisionSistema: sale.comisionSistema,
       netoSistema: round2(sale.brutoSistema - sale.comisionSistema),
-      reconciliation: this.repo.findMpReconciliationBySaleId(sale.saleId) ?? null,
+      reconciliation: this.repo.findMpReconciliationBySalePaymentId(sale.salePaymentId) ?? null,
     }))
   }
 
@@ -520,19 +528,19 @@ export class FinanceService {
     return this.repo.listMpReconciliations(dateFrom, dateTo)
   }
 
-  /** Guarda los datos reales de una venta puntual del resumen de MP, y calcula la diferencia contra lo estimado. */
+  /** Guarda los datos reales de una pierna de pago puntual del resumen de MP, y calcula la diferencia contra lo estimado. */
   saveMpReconciliation(input: SaveMpReconciliationInput): FinanceMpReconciliation {
     if ([input.brutoReal, input.comisionReal, input.netoReal].some(n => typeof n !== 'number' || Number.isNaN(n) || n < 0)) {
       throw new Error('Los montos deben ser números mayores o iguales a cero')
     }
 
-    const sale = this.repo.getMpSystemSummaryForSale(input.saleId)
-    if (!sale) throw new Error(`Venta no encontrada: ${input.saleId}`)
+    const sale = this.repo.getMpSystemSummaryForPayment(input.salePaymentId)
+    if (!sale) throw new Error(`Pierna de pago no encontrada: ${input.salePaymentId}`)
     if (!MP_FEE_METHODS.includes(sale.paymentMethod)) {
-      throw new Error('Esta venta no corresponde a un medio de pago con comisión de Mercado Pago')
+      throw new Error('Este medio de pago no corresponde a uno con comisión de Mercado Pago')
     }
 
-    const existing = this.repo.findMpReconciliationBySaleId(input.saleId)
+    const existing = this.repo.findMpReconciliationBySalePaymentId(input.salePaymentId)
     if (existing && existing.status === 'adjusted') {
       throw new Error(
         'Esta conciliación ya tiene un ajuste asentado. Reabrila (lo que revierte el ajuste) antes de volver a cargarla.'
@@ -543,7 +551,8 @@ export class FinanceService {
     const diferencia = round2(netoSistema - input.netoReal)
 
     const id = this.repo.upsertMpReconciliationForSale({
-      saleId: input.saleId,
+      saleId: sale.saleId,
+      salePaymentId: input.salePaymentId,
       fecha: sale.fecha,
       paymentMethod: sale.paymentMethod,
       brutoSistema: sale.brutoSistema,

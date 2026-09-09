@@ -40,7 +40,7 @@ export default function MpReconciliationPage() {
       const data = await finance.getMpReconciliationRows(f, method || undefined)
       setRows(data)
       const nextDrafts: Record<number, DraftValues> = {}
-      for (const row of data) nextDrafts[row.saleId] = draftFrom(row)
+      for (const row of data) nextDrafts[row.salePaymentId] = draftFrom(row)
       setDrafts(nextDrafts)
       setRowError({})
     } catch (err) {
@@ -64,63 +64,63 @@ export default function MpReconciliationPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fecha, paymentMethod])
 
-  async function handleSave(saleId: number) {
-    const draft = drafts[saleId]
+  async function handleSave(salePaymentId: number) {
+    const draft = drafts[salePaymentId]
     const brutoReal = parseFloat(draft.brutoReal)
     const comisionReal = parseFloat(draft.comisionReal)
     const netoReal = parseFloat(draft.netoReal)
     if ([brutoReal, comisionReal, netoReal].some(n => isNaN(n) || n < 0)) {
-      setRowError(prev => ({ ...prev, [saleId]: 'Completá bruto, comisión y neto con números válidos' }))
+      setRowError(prev => ({ ...prev, [salePaymentId]: 'Completá bruto, comisión y neto con números válidos' }))
       return
     }
 
-    setBusy(saleId)
-    setRowError(prev => ({ ...prev, [saleId]: null }))
+    setBusy(salePaymentId)
+    setRowError(prev => ({ ...prev, [salePaymentId]: null }))
     try {
-      await finance.saveMpReconciliation({ saleId, brutoReal, comisionReal, netoReal })
+      await finance.saveMpReconciliation({ salePaymentId, brutoReal, comisionReal, netoReal })
       await loadRows(fecha, paymentMethod)
     } catch (err) {
-      setRowError(prev => ({ ...prev, [saleId]: err instanceof Error ? err.message : 'Error al guardar' }))
+      setRowError(prev => ({ ...prev, [salePaymentId]: err instanceof Error ? err.message : 'Error al guardar' }))
     } finally {
       setBusy(null)
     }
   }
 
-  async function handleConfirmAdjustment(saleId: number, id: number) {
-    setBusy(saleId)
-    setRowError(prev => ({ ...prev, [saleId]: null }))
+  async function handleConfirmAdjustment(salePaymentId: number, id: number) {
+    setBusy(salePaymentId)
+    setRowError(prev => ({ ...prev, [salePaymentId]: null }))
     try {
       await finance.confirmMpReconciliationAdjustment(id)
       await loadRows(fecha, paymentMethod)
     } catch (err) {
-      setRowError(prev => ({ ...prev, [saleId]: err instanceof Error ? err.message : 'Error al ajustar' }))
+      setRowError(prev => ({ ...prev, [salePaymentId]: err instanceof Error ? err.message : 'Error al ajustar' }))
     } finally {
       setBusy(null)
     }
   }
 
-  async function handleIgnore(saleId: number, id: number) {
-    setBusy(saleId)
-    setRowError(prev => ({ ...prev, [saleId]: null }))
+  async function handleIgnore(salePaymentId: number, id: number) {
+    setBusy(salePaymentId)
+    setRowError(prev => ({ ...prev, [salePaymentId]: null }))
     try {
       await finance.ignoreMpReconciliation(id)
       await loadRows(fecha, paymentMethod)
     } catch (err) {
-      setRowError(prev => ({ ...prev, [saleId]: err instanceof Error ? err.message : 'Error al ignorar' }))
+      setRowError(prev => ({ ...prev, [salePaymentId]: err instanceof Error ? err.message : 'Error al ignorar' }))
     } finally {
       setBusy(null)
     }
   }
 
-  async function handleReopen(saleId: number, id: number) {
+  async function handleReopen(salePaymentId: number, id: number) {
     if (!(await confirm('¿Reabrir esta conciliación? Esto revierte el ajuste ya asentado en la cuenta MP-Anabella.'))) return
-    setBusy(saleId)
-    setRowError(prev => ({ ...prev, [saleId]: null }))
+    setBusy(salePaymentId)
+    setRowError(prev => ({ ...prev, [salePaymentId]: null }))
     try {
       await finance.reopenMpReconciliation(id)
       await loadRows(fecha, paymentMethod)
     } catch (err) {
-      setRowError(prev => ({ ...prev, [saleId]: err instanceof Error ? err.message : 'Error al reabrir' }))
+      setRowError(prev => ({ ...prev, [salePaymentId]: err instanceof Error ? err.message : 'Error al reabrir' }))
     } finally {
       setBusy(null)
     }
@@ -143,8 +143,9 @@ export default function MpReconciliationPage() {
     <div className="caja-section caja-section--wide">
       <h2 className="section-title">🔍 Conciliación Mercado Pago</h2>
       <p className="page-subtitle">
-        Comparás, venta por venta, lo que Ventas-Stock calculó automáticamente contra el resumen
-        real del posnet/tienda de Mercado Pago del día. Si hay diferencia en una venta puntual,
+        Comparás, pierna de pago por pierna de pago, lo que Ventas-Stock calculó automáticamente
+        contra el resumen real del posnet/tienda de Mercado Pago del día (una venta combinada con
+        dos medios con comisión aporta una fila por cada uno). Si hay diferencia en una puntual,
         podés asentar un ajuste en la Cuenta MP-Anabella — nunca se asienta solo, siempre lo
         confirmás vos.
       </p>
@@ -200,11 +201,11 @@ export default function MpReconciliationPage() {
             <tbody>
               {rows.map(row => {
                 const rec = row.reconciliation
-                const draft = drafts[row.saleId] ?? { brutoReal: '', comisionReal: '', netoReal: '' }
-                const isBusy = busy === row.saleId
+                const draft = drafts[row.salePaymentId] ?? { brutoReal: '', comisionReal: '', netoReal: '' }
+                const isBusy = busy === row.salePaymentId
                 const diffAbs = rec ? Math.abs(rec.diferencia) : 0
                 return (
-                  <tr key={row.saleId}>
+                  <tr key={row.salePaymentId}>
                     <td>
                       <strong>#{row.saleId}</strong>
                       {row.invoiceNumber && <div className="text-muted">Fact. {row.invoiceNumber}</div>}
@@ -226,7 +227,7 @@ export default function MpReconciliationPage() {
                         type="number" min="0" step="0.01" className="input" style={{ width: 100 }}
                         value={draft.brutoReal}
                         disabled={rec?.status === 'adjusted'}
-                        onChange={e => setDrafts(prev => ({ ...prev, [row.saleId]: { ...prev[row.saleId], brutoReal: e.target.value } }))}
+                        onChange={e => setDrafts(prev => ({ ...prev, [row.salePaymentId]: { ...prev[row.salePaymentId], brutoReal: e.target.value } }))}
                       />
                     </td>
                     <td>
@@ -234,7 +235,7 @@ export default function MpReconciliationPage() {
                         type="number" min="0" step="0.01" className="input" style={{ width: 100 }}
                         value={draft.comisionReal}
                         disabled={rec?.status === 'adjusted'}
-                        onChange={e => setDrafts(prev => ({ ...prev, [row.saleId]: { ...prev[row.saleId], comisionReal: e.target.value } }))}
+                        onChange={e => setDrafts(prev => ({ ...prev, [row.salePaymentId]: { ...prev[row.salePaymentId], comisionReal: e.target.value } }))}
                       />
                     </td>
                     <td>
@@ -242,7 +243,7 @@ export default function MpReconciliationPage() {
                         type="number" min="0" step="0.01" className="input" style={{ width: 100 }}
                         value={draft.netoReal}
                         disabled={rec?.status === 'adjusted'}
-                        onChange={e => setDrafts(prev => ({ ...prev, [row.saleId]: { ...prev[row.saleId], netoReal: e.target.value } }))}
+                        onChange={e => setDrafts(prev => ({ ...prev, [row.salePaymentId]: { ...prev[row.salePaymentId], netoReal: e.target.value } }))}
                       />
                     </td>
                     <td className={rec && rec.diferencia !== 0 ? 'text-danger' : ''}>
@@ -251,28 +252,28 @@ export default function MpReconciliationPage() {
                     <td>
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                         {rec?.status === 'adjusted' ? (
-                          <button className="btn btn-secondary btn-sm" disabled={isBusy} onClick={() => { void handleReopen(row.saleId, rec.id) }}>
+                          <button className="btn btn-secondary btn-sm" disabled={isBusy} onClick={() => { void handleReopen(row.salePaymentId, rec.id) }}>
                             {isBusy ? '⏳' : '🔓 Reabrir'}
                           </button>
                         ) : (
                           <>
-                            <button className="btn btn-primary btn-sm" disabled={isBusy} onClick={() => { void handleSave(row.saleId) }}>
+                            <button className="btn btn-primary btn-sm" disabled={isBusy} onClick={() => { void handleSave(row.salePaymentId) }}>
                               {isBusy ? '⏳' : '💾 Guardar'}
                             </button>
                             {rec && rec.status === 'pending' && diffAbs >= 0.01 && (
-                              <button className="btn btn-danger btn-sm" disabled={isBusy} onClick={() => { void handleConfirmAdjustment(row.saleId, rec.id) }}>
+                              <button className="btn btn-danger btn-sm" disabled={isBusy} onClick={() => { void handleConfirmAdjustment(row.salePaymentId, rec.id) }}>
                                 ⚖️ Ajustar
                               </button>
                             )}
                             {rec && rec.status === 'pending' && (
-                              <button className="btn btn-secondary btn-sm" disabled={isBusy} onClick={() => { void handleIgnore(row.saleId, rec.id) }}>
+                              <button className="btn btn-secondary btn-sm" disabled={isBusy} onClick={() => { void handleIgnore(row.salePaymentId, rec.id) }}>
                                 Ignorar
                               </button>
                             )}
                           </>
                         )}
                       </div>
-                      {rowError[row.saleId] && <p className="error" style={{ margin: '4px 0 0' }}>{rowError[row.saleId]}</p>}
+                      {rowError[row.salePaymentId] && <p className="error" style={{ margin: '4px 0 0' }}>{rowError[row.salePaymentId]}</p>}
                     </td>
                   </tr>
                 )

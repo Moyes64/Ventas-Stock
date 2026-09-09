@@ -12,6 +12,21 @@ interface CartItem {
   subtotal: number
 }
 
+// Formatea un input de monto: solo dígitos y una coma decimal, con puntos de
+// miles en la parte entera. Ej: "1500,5" -> "1.500,5"
+function formatMontoInput(raw: string): string {
+  const digits = raw.replace(/[^\d,]/g, '')
+  const parts = digits.split(',')
+  const intPart = parts[0].replace(/\./g, '')
+  const decPart = parts.length > 1 ? ',' + parts[1].slice(0, 2) : ''
+  return intPart ? intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + decPart : decPart
+}
+
+// Inversa de formatMontoInput: "1.500,5" -> 1500.5
+function parseMonto(formatted: string): number {
+  return parseFloat(formatted.replace(/\./g, '').replace(',', '.')) || 0
+}
+
 export default function NewSalePage() {
   const navigate = useNavigate()
   const [searchQuery, setSearchQuery] = useState('')
@@ -26,6 +41,14 @@ export default function NewSalePage() {
   const [isBlackSale, setIsBlackSale] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('contado_efectivo')
   const [montoEntregado, setMontoEntregado] = useState('')
+  // Pago combinado: dos medios de pago, cada uno con su propio monto (deben
+  // sumar el total de la venta).
+  const [isSplitPayment, setIsSplitPayment] = useState(false)
+  const [splitMethod1, setSplitMethod1] = useState<PaymentMethod>('contado_efectivo')
+  const [splitMethod2, setSplitMethod2] = useState<PaymentMethod>('debito')
+  const [splitAmount1, setSplitAmount1] = useState('')
+  const [splitAmount2, setSplitAmount2] = useState('')
+  const [splitAmount2Touched, setSplitAmount2Touched] = useState(false)
   const [creditBalance, setCreditBalance] = useState<number | null>(null)
   const [result, setResult] = useState<Sale | null>(null)
   const [vueltoResult, setVueltoResult] = useState<number | null>(null)
@@ -62,10 +85,13 @@ export default function NewSalePage() {
     if (!isHiddenOptionsVisible) setIsBlackSale(false)
   }, [isHiddenOptionsVisible])
 
-  // Reset monto entregado when payment method changes away from efectivo
+  // Reset monto entregado when no leg (simple o combinada) es efectivo
   useEffect(() => {
-    if (paymentMethod !== 'contado_efectivo') setMontoEntregado('')
-  }, [paymentMethod])
+    const hasCash = isSplitPayment
+      ? splitMethod1 === 'contado_efectivo' || splitMethod2 === 'contado_efectivo'
+      : paymentMethod === 'contado_efectivo'
+    if (!hasCash) setMontoEntregado('')
+  }, [paymentMethod, isSplitPayment, splitMethod1, splitMethod2])
 
   // Cargar saldo de crédito cuando cambia el cliente
   useEffect(() => {
@@ -76,6 +102,8 @@ export default function NewSalePage() {
     } else {
       setCreditBalance(null)
       if (paymentMethod === 'credito_cliente') setPaymentMethod('contado_efectivo')
+      if (splitMethod1 === 'credito_cliente') setSplitMethod1('contado_efectivo')
+      if (splitMethod2 === 'credito_cliente') setSplitMethod2('debito')
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCustomerId])
@@ -203,11 +231,38 @@ export default function NewSalePage() {
   const adjustedTaxAmount = baseTaxAmount * adjustmentFactor
   const cartTotal = adjustedSubtotal + adjustedTaxAmount
 
+  // Pago combinado: monto 1 lo carga el cajero, monto 2 se autocompleta con
+  // el resto del total mientras no se lo edite a mano (splitAmount2Touched).
+  const splitAmount1Num = parseMonto(splitAmount1)
+  const splitRemaining = cartTotal - splitAmount1Num
+  const splitAmount2Display = splitAmount2Touched
+    ? splitAmount2
+    : (splitRemaining > 0 ? formatMontoInput(splitRemaining.toFixed(2).replace('.', ',')) : '')
+  const splitAmount2Num = parseMonto(splitAmount2Display)
+  const splitSum = splitAmount1Num + splitAmount2Num
+  const splitSameMethod = isSplitPayment && splitMethod1 === splitMethod2
+  const splitSumMismatch = isSplitPayment && !splitSameMethod && Math.abs(splitSum - cartTotal) > 0.01
+
+  // Pierna en efectivo (si hay una, simple o combinada) -- el panel de "monto
+  // entregado / vuelto" se calcula sobre ESE monto, no sobre el total.
+  const cashLegAmount = isSplitPayment
+    ? (splitMethod1 === 'contado_efectivo' ? splitAmount1Num
+      : splitMethod2 === 'contado_efectivo' ? splitAmount2Num
+      : null)
+    : (paymentMethod === 'contado_efectivo' ? cartTotal : null)
+
+  // Pierna en crédito del cliente (si hay una) -- valida contra ESE monto, no el total.
+  const creditoClienteAmount = isSplitPayment
+    ? (splitMethod1 === 'credito_cliente' ? splitAmount1Num
+      : splitMethod2 === 'credito_cliente' ? splitAmount2Num
+      : null)
+    : (paymentMethod === 'credito_cliente' ? cartTotal : null)
+
   // Calcular vuelto en tiempo real (debe ir DESPUÉS de cartTotal)
   // Parsear monto formateado con puntos de miles y coma decimal: "1.500,50" → 1500.50
   const montoEntregadoNum = parseFloat(montoEntregado.replace(/\./g, '').replace(',', '.')) || 0
-  const vuelto = paymentMethod === 'contado_efectivo' && montoEntregadoNum > 0
-    ? montoEntregadoNum - cartTotal
+  const vuelto = cashLegAmount !== null && montoEntregadoNum > 0
+    ? montoEntregadoNum - cashLegAmount
     : null
 
   // ── Checkout ──────────────────────────────────────────────────────────────
@@ -218,16 +273,30 @@ export default function NewSalePage() {
       setError('El carrito está vacío')
       return
     }
-    if (paymentMethod === 'contado_efectivo' && montoEntregadoNum > 0 && montoEntregadoNum < cartTotal) {
-      setError('El monto entregado es menor al total de la venta')
+    if (isSplitPayment) {
+      if (splitSameMethod) {
+        setError('Elegí dos medios de pago distintos para combinar')
+        return
+      }
+      if (splitAmount1Num <= 0 || splitAmount2Num <= 0) {
+        setError('Cargá un monto mayor a cero para cada medio de pago')
+        return
+      }
+      if (splitSumMismatch) {
+        setError(`La suma de los dos montos (${currency(splitSum)}) no coincide con el total (${currency(cartTotal)})`)
+        return
+      }
+    }
+    if (cashLegAmount !== null && montoEntregadoNum > 0 && montoEntregadoNum < cashLegAmount) {
+      setError('El monto entregado es menor a lo que corresponde cobrar en efectivo')
       return
     }
-    if (paymentMethod === 'credito_cliente') {
+    if (creditoClienteAmount !== null) {
       if (!selectedCustomerId) {
         setError('Seleccioná un cliente para usar crédito')
         return
       }
-      if (creditBalance !== null && creditBalance < cartTotal - 0.01) {
+      if (creditBalance !== null && creditBalance < creditoClienteAmount - 0.01) {
         setError(`Saldo de crédito insuficiente. Disponible: ${currency(creditBalance)}`)
         return
       }
@@ -249,7 +318,12 @@ export default function NewSalePage() {
         customerId: selectedCustomerId ?? undefined,
         invoiceType: 11, // Factura C por defecto
         isBlackSale,
-        paymentMethod,
+        ...(isSplitPayment
+          ? { payments: [
+              { paymentMethod: splitMethod1, amount: Math.round(splitAmount1Num * 100) / 100 },
+              { paymentMethod: splitMethod2, amount: Math.round(splitAmount2Num * 100) / 100 },
+            ] }
+          : { paymentMethod }),
         parameterIds: selectedParameters.map(p => p.id),
         items: itemsForCheckout.map(item => ({
           productId: item.product.id,
@@ -258,9 +332,9 @@ export default function NewSalePage() {
           taxRate: item.taxRate,
         })),
       })
-      // Descontar crédito si el método de pago es crédito_cliente
-      if (paymentMethod === 'credito_cliente' && selectedCustomerId) {
-        await credits.use(selectedCustomerId, cartTotal, saleResult.id)
+      // Descontar crédito si alguno de los medios usados fue crédito del cliente
+      if (creditoClienteAmount !== null && selectedCustomerId) {
+        await credits.use(selectedCustomerId, creditoClienteAmount, saleResult.id)
         const newBalance = await credits.getBalance(selectedCustomerId)
         setCreditBalance(newBalance)
       }
@@ -268,6 +342,9 @@ export default function NewSalePage() {
       setVueltoResult(vuelto !== null && vuelto > 0 ? vuelto : null)
       setCart([])
       setMontoEntregado('')
+      setSplitAmount1('')
+      setSplitAmount2('')
+      setSplitAmount2Touched(false)
       setSelectedParameters([])
       setEmailMsg(null)
       // Pre-llenar email del cliente si tiene uno registrado
@@ -456,6 +533,17 @@ export default function NewSalePage() {
     p => !selectedParameters.some(s => s.id === p.id)
   )
 
+  const paymentMethodOptions: Array<{ value: PaymentMethod; label: string }> = [
+    { value: 'contado_efectivo', label: '💵 Contado Efectivo' },
+    { value: 'transferencia', label: '🏦 Transferencia' },
+    { value: 'qr', label: '📱 QR' },
+    { value: 'debito', label: '💳 Débito' },
+    { value: 'credito', label: '💳 Crédito' },
+    ...(selectedCustomerId && creditBalance !== null && creditBalance > 0
+      ? [{ value: 'credito_cliente' as PaymentMethod, label: `🎁 Crédito del cliente (${currency(creditBalance)})` }]
+      : []),
+  ]
+
   return (
     <div className="page">
       <div className="page-header">
@@ -508,56 +596,111 @@ export default function NewSalePage() {
 
           <div className="customer-select">
             <label className="label">Tipo de pago</label>
-            <select
-              value={paymentMethod}
-              onChange={e => setPaymentMethod(e.target.value as PaymentMethod)}
-              className="select"
-            >
-              <option value="contado_efectivo">💵 Contado Efectivo</option>
-              <option value="transferencia">🏦 Transferencia</option>
-              <option value="qr">📱 QR</option>
-              <option value="debito">💳 Débito</option>
-              <option value="credito">💳 Crédito</option>
-              {selectedCustomerId && creditBalance !== null && creditBalance > 0 && (
-                <option value="credito_cliente">🎁 Crédito del cliente ({currency(creditBalance)})</option>
-              )}
-            </select>
+            <label className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 400, marginBottom: 6, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={isSplitPayment}
+                onChange={e => {
+                  setIsSplitPayment(e.target.checked)
+                  setSplitAmount1('')
+                  setSplitAmount2('')
+                  setSplitAmount2Touched(false)
+                }}
+              />
+              Pago combinado (dos medios)
+            </label>
+
+            {!isSplitPayment ? (
+              <select
+                value={paymentMethod}
+                onChange={e => setPaymentMethod(e.target.value as PaymentMethod)}
+                className="select"
+              >
+                {paymentMethodOptions.map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            ) : (
+              <div className="split-payment-panel">
+                <div className="split-payment-row" style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                  <select
+                    value={splitMethod1}
+                    onChange={e => setSplitMethod1(e.target.value as PaymentMethod)}
+                    className="select"
+                  >
+                    {paymentMethodOptions.filter(o => o.value !== splitMethod2).map(o => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={splitAmount1}
+                    onChange={e => setSplitAmount1(formatMontoInput(e.target.value))}
+                    onFocus={e => e.target.select()}
+                    placeholder="Monto"
+                    className="input input--monto"
+                  />
+                </div>
+                <div className="split-payment-row" style={{ display: 'flex', gap: 8 }}>
+                  <select
+                    value={splitMethod2}
+                    onChange={e => setSplitMethod2(e.target.value as PaymentMethod)}
+                    className="select"
+                  >
+                    {paymentMethodOptions.filter(o => o.value !== splitMethod1).map(o => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={splitAmount2Display}
+                    onChange={e => {
+                      setSplitAmount2Touched(true)
+                      setSplitAmount2(formatMontoInput(e.target.value))
+                    }}
+                    onFocus={e => e.target.select()}
+                    placeholder="Monto"
+                    className="input input--monto"
+                  />
+                </div>
+                {splitSameMethod && (
+                  <div className="vuelto-display vuelto-display--err">
+                    <span>⚠️ Elegí dos medios de pago distintos</span>
+                  </div>
+                )}
+                {!splitSameMethod && splitSumMismatch && (
+                  <div className="vuelto-display vuelto-display--err">
+                    <span>⚠️ La suma ({currency(splitSum)}) no coincide con el total ({currency(cartTotal)})</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
-          {paymentMethod === 'credito_cliente' && creditBalance !== null && (
+          {creditoClienteAmount !== null && creditBalance !== null && (
             <div style={{
               padding: '10px 14px', borderRadius: '8px', fontSize: '13px',
-              backgroundColor: creditBalance >= cartTotal ? '#f0fdf4' : '#fef2f2',
-              border: `1px solid ${creditBalance >= cartTotal ? '#86efac' : '#fecaca'}`,
-              color: creditBalance >= cartTotal ? '#166534' : '#dc2626',
+              backgroundColor: creditBalance >= creditoClienteAmount ? '#f0fdf4' : '#fef2f2',
+              border: `1px solid ${creditBalance >= creditoClienteAmount ? '#86efac' : '#fecaca'}`,
+              color: creditBalance >= creditoClienteAmount ? '#166534' : '#dc2626',
             }}>
-              {creditBalance >= cartTotal
-                ? `✅ Saldo disponible: ${currency(creditBalance)} — cubre el total de la venta`
-                : `⚠️ Saldo insuficiente: ${currency(creditBalance)} — faltan ${currency(cartTotal - creditBalance)}`}
+              {creditBalance >= creditoClienteAmount
+                ? `✅ Saldo disponible: ${currency(creditBalance)} — cubre ${isSplitPayment ? 'esta pierna de pago' : 'el total de la venta'}`
+                : `⚠️ Saldo insuficiente: ${currency(creditBalance)} — faltan ${currency(creditoClienteAmount - creditBalance)}`}
             </div>
           )}
 
-          {paymentMethod === 'contado_efectivo' && (
+          {cashLegAmount !== null && (
             <div className="efectivo-panel">
               <div className="efectivo-row">
-                <label className="label">Monto entregado por el cliente</label>
+                <label className="label">Monto entregado por el cliente{isSplitPayment ? ' (pierna en efectivo)' : ''}</label>
                 <input
                   type="text"
                   inputMode="numeric"
                   value={montoEntregado}
-                  onChange={e => {
-                    // Solo dígitos y una coma/punto decimal
-                    const raw = e.target.value.replace(/[^\d,]/g, '')
-                    // Separar parte entera y decimal
-                    const parts = raw.split(',')
-                    const intPart = parts[0].replace(/\./g, '')
-                    const decPart = parts.length > 1 ? ',' + parts[1].slice(0, 2) : ''
-                    // Formatear parte entera con puntos de miles
-                    const formatted = intPart
-                      ? intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + decPart
-                      : decPart
-                    setMontoEntregado(formatted)
-                  }}
+                  onChange={e => setMontoEntregado(formatMontoInput(e.target.value))}
                   onFocus={e => e.target.select()}
                   placeholder="0"
                   className="input input--monto"
