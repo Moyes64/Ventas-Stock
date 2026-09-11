@@ -20,6 +20,7 @@ import type {
   StockItem,
   StockMovement,
   Sale,
+  SaleEmailLogEntry,
   BackupInfo,
   DailySummaryReport,
   SalesSummary,
@@ -383,6 +384,8 @@ export const webCatalogServer = {
 export const mail = {
   sendInvoice: (saleId: number, toEmail: string) =>
     electron.mail.sendInvoice(saleId, toEmail) as Promise<{ success: boolean; error?: string }>,
+  getLog: (saleId: number) =>
+    electron.mail.getLog(saleId) as Promise<SaleEmailLogEntry[]>,
 }
 
 // Crédito de clientes

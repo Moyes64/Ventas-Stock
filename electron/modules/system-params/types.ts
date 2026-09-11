@@ -21,6 +21,7 @@ export interface SystemParams {
   smtpUser: string
   smtpPass: string
   smtpFromName: string
+  smtpBcc: string                    // Copia oculta de cada factura enviada (registro propio, ver sale_email_log)
   // Tienda web
   costoEnvioWeb: number
   recargoTarjetaCreditoWeb: number   // % de recargo sobre pagos con tarjeta de crédito en la tienda web
@@ -48,6 +49,7 @@ export const DEFAULT_SYSTEM_PARAMS: SystemParams = {
   smtpUser: '',
   smtpPass: '',
   smtpFromName: '',
+  smtpBcc: '',
   costoEnvioWeb: 0,
   recargoTarjetaCreditoWeb: 10,
   diasCambio: 30,

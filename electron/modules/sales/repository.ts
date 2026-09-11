@@ -26,6 +26,9 @@ interface SaleRow {
   updated_at: string
   customer_name?: string
   customer_email?: string
+  last_email_to?: string | null
+  last_email_status?: string | null
+  last_email_sent_at?: string | null
 }
 
 interface SaleItemRow {
@@ -62,9 +65,13 @@ export class SaleRepository {
   findById(id: number): Sale | undefined {
     const row = this.db
       .prepare(
-        `SELECT s.*, c.name AS customer_name, c.email AS customer_email
+        `SELECT s.*, c.name AS customer_name, c.email AS customer_email,
+                el.to_email AS last_email_to, el.status AS last_email_status, el.sent_at AS last_email_sent_at
          FROM sales s
          LEFT JOIN customers c ON c.id = s.customer_id
+         LEFT JOIN sale_email_log el ON el.id = (
+           SELECT id FROM sale_email_log WHERE sale_id = s.id ORDER BY sent_at DESC, id DESC LIMIT 1
+         )
          WHERE s.id = ?`
       )
       .get(id) as SaleRow | undefined
@@ -118,9 +125,13 @@ export class SaleRepository {
 
     const rows = this.db
       .prepare(
-        `SELECT s.*, c.name AS customer_name, c.email AS customer_email
+        `SELECT s.*, c.name AS customer_name, c.email AS customer_email,
+                el.to_email AS last_email_to, el.status AS last_email_status, el.sent_at AS last_email_sent_at
          FROM sales s
          LEFT JOIN customers c ON c.id = s.customer_id
+         LEFT JOIN sale_email_log el ON el.id = (
+           SELECT id FROM sale_email_log WHERE sale_id = s.id ORDER BY sent_at DESC, id DESC LIMIT 1
+         )
          ${where}
          ORDER BY s.created_at DESC
          LIMIT ${limit}`
@@ -365,6 +376,9 @@ export class SaleRepository {
       isBlackSale: Boolean(row.is_black_sale),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
+      lastEmailTo: row.last_email_to ?? null,
+      lastEmailStatus: (row.last_email_status as Sale['lastEmailStatus']) ?? null,
+      lastEmailSentAt: row.last_email_sent_at ?? null,
     }
   }
 }

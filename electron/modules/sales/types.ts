@@ -70,6 +70,10 @@ export interface Sale {
   items?: SaleItem[]
   appliedParameters?: AppliedParameter[]
   payments?: SalePayment[]
+  // Último envío de la factura por email (ver sale_email_log / mail.handlers.ts) — null si nunca se envió
+  lastEmailTo: string | null
+  lastEmailStatus: 'sent' | 'error' | null
+  lastEmailSentAt: string | null
 }
 
 export interface CreateSaleInput {

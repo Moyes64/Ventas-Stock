@@ -30,6 +30,7 @@ const EMPTY: SystemParams = {
   smtpUser: '',
   smtpPass: '',
   smtpFromName: '',
+  smtpBcc: '',
   costoEnvioWeb: 0,
   recargoTarjetaCreditoWeb: 10,
   diasCambio: 30,
@@ -470,7 +471,7 @@ export default function SystemParamsPage() {
                 placeholder="••••••••"
               />
             </div>
-            <div className="form-group sysparam-full">
+            <div className="form-group sysparam-col2">
               <label className="label">Nombre del remitente</label>
               <input
                 type="text"
@@ -479,6 +480,21 @@ export default function SystemParamsPage() {
                 className="input"
                 placeholder="Nombre que verá el cliente en 'De:'"
               />
+            </div>
+            <div className="form-group sysparam-col2">
+              <label className="label">Copia oculta (BCC)</label>
+              <input
+                type="email"
+                value={form.smtpBcc}
+                onChange={e => set('smtpBcc', e.target.value)}
+                className="input"
+                placeholder="tu-email@ejemplo.com (opcional)"
+              />
+              <p className="field-hint">
+                Cada factura enviada te llega también acá. Como el envío es SMTP directo, nunca queda copia
+                en la carpeta "Enviados" de tu correo — con esto te aseguras un registro. También queda
+                un historial dentro de Facturación (ícono junto a 📧).
+              </p>
             </div>
           </div>
         </div>

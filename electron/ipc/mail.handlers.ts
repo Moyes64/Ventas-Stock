@@ -20,10 +20,52 @@ export interface SendInvoiceResult {
   error?: string
 }
 
+export interface SaleEmailLogEntry {
+  id: number
+  saleId: number
+  toEmail: string
+  bccEmail: string | null
+  subject: string
+  status: 'sent' | 'error'
+  error: string | null
+  sentAt: string
+}
+
+interface SaleEmailLogRow {
+  id: number
+  sale_id: number
+  to_email: string
+  bcc_email: string | null
+  subject: string
+  status: string
+  error: string | null
+  sent_at: string
+}
+
 export function registerMailHandlers(db: Database): void {
   const sysParamsSvc = new SystemParamsService()
   const printingSvc  = new PrintingService(db)
   const saleRepo     = new SaleRepository(db)
+
+  // El envío es SMTP directo (nodemailer), no pasa por el cliente de correo
+  // del usuario -- por eso no queda copia en ninguna carpeta "Enviados" (eso
+  // lo hace el cliente de correo vía IMAP APPEND, no el protocolo SMTP). Este
+  // log es el único registro de qué se mandó, a quién y si falló.
+  const insertLog = db.prepare(`
+    INSERT INTO sale_email_log (sale_id, to_email, bcc_email, subject, status, error)
+    VALUES (@saleId, @toEmail, @bccEmail, @subject, @status, @error)
+  `)
+
+  function logSend(entry: {
+    saleId: number; toEmail: string; bccEmail: string | null; subject: string
+    status: 'sent' | 'error'; error: string | null
+  }): void {
+    try {
+      insertLog.run(entry)
+    } catch (err) {
+      console.error('[mail] Error registrando el log de envío:', err)
+    }
+  }
 
   ipcMain.handle('mail:sendInvoice', async (_e, saleId: number, toEmail: string): Promise<SendInvoiceResult> => {
     try {
@@ -53,17 +95,48 @@ export function registerMailHandlers(db: Database): void {
       const docLabel = ticket.isAuthorized
         ? `${ticket.invoiceType} N° ${ticket.invoiceNumber}`
         : `Comprobante Interno N° ${saleId}`
+      const subject = `${docLabel} — ${sys.denominacion || 'Ventas-Stock'}`
+      const bccEmail = sys.smtpBcc?.trim() || null
 
-      await transport.sendMail({
-        from: `"${sys.smtpFromName || sys.denominacion || 'Ventas-Stock'}" <${sys.smtpUser}>`,
-        to: toEmail,
-        subject: `${docLabel} — ${sys.denominacion || 'Ventas-Stock'}`,
-        html: buildInvoiceHtml(ticket),
-      })
+      try {
+        await transport.sendMail({
+          from: `"${sys.smtpFromName || sys.denominacion || 'Ventas-Stock'}" <${sys.smtpUser}>`,
+          to: toEmail,
+          bcc: bccEmail ?? undefined,
+          subject,
+          html: buildInvoiceHtml(ticket),
+        })
+      } catch (sendErr) {
+        const errorMsg = sendErr instanceof Error ? sendErr.message : String(sendErr)
+        logSend({ saleId, toEmail, bccEmail, subject, status: 'error', error: errorMsg })
+        return { success: false, error: errorMsg }
+      }
 
+      logSend({ saleId, toEmail, bccEmail, subject, status: 'sent', error: null })
       return { success: true }
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : String(err) }
     }
+  })
+
+  // Historial de envíos de un comprobante (todos los intentos, no solo el último)
+  ipcMain.handle('mail:getLog', (_e, saleId: number): SaleEmailLogEntry[] => {
+    const rows = db.prepare(`
+      SELECT id, sale_id, to_email, bcc_email, subject, status, error, sent_at
+      FROM sale_email_log
+      WHERE sale_id = ?
+      ORDER BY sent_at DESC, id DESC
+    `).all(saleId) as SaleEmailLogRow[]
+
+    return rows.map(r => ({
+      id: r.id,
+      saleId: r.sale_id,
+      toEmail: r.to_email,
+      bccEmail: r.bcc_email,
+      subject: r.subject,
+      status: r.status as 'sent' | 'error',
+      error: r.error,
+      sentAt: r.sent_at,
+    }))
   })
 }

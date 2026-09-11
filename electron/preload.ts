@@ -222,6 +222,7 @@ const electronAPI = {
   // Mail
   mail: {
     sendInvoice: (saleId: number, toEmail: string) => invoke('mail:sendInvoice', saleId, toEmail),
+    getLog:      (saleId: number) => invoke('mail:getLog', saleId),
   },
 
   // Caja

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { invoicing as invoicingApi, printing, sales as salesApi, mail } from '../../lib/ipc'
-import { localToday, formatDate } from '../../lib/date'
-import type { PaymentMethod, Sale } from '../../types/ipc'
+import { localToday, formatDate, formatDateTime } from '../../lib/date'
+import type { PaymentMethod, Sale, SaleEmailLogEntry } from '../../types/ipc'
 import { useHiddenOptions } from '../../context/HiddenOptionsContext'
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
@@ -66,6 +66,12 @@ export default function InvoicingPage() {
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [editingPaymentId, setEditingPaymentId] = useState<number | null>(null)
   const [savingPaymentId, setSavingPaymentId] = useState<number | null>(null)
+
+  // Historial de envíos de email (el envío es SMTP directo: no queda copia en
+  // "Enviados" de ningún cliente de correo, así que este es el único registro)
+  const [emailHistoryFor, setEmailHistoryFor] = useState<Sale | null>(null)
+  const [emailHistoryEntries, setEmailHistoryEntries] = useState<SaleEmailLogEntry[]>([])
+  const [emailHistoryLoading, setEmailHistoryLoading] = useState(false)
 
   const { isHiddenOptionsVisible } = useHiddenOptions()
 
@@ -168,9 +174,23 @@ export default function InvoicingPage() {
     try {
       const res = await mail.sendInvoice(inv.id, inv.customerEmail)
       if (!res.success) setPrintError(res.error ?? 'Error al enviar email')
+      await loadInvoices()  // refresca el estado de último envío (ver columna 📧 / historial)
     } catch (err) {
       setPrintError(err instanceof Error ? err.message : 'Error al enviar email')
     } finally { setMailingId(null) }
+  }
+
+  async function handleShowEmailHistory(inv: Sale) {
+    setEmailHistoryFor(inv)
+    setEmailHistoryLoading(true)
+    try {
+      const entries = await mail.getLog(inv.id)
+      setEmailHistoryEntries(entries)
+    } catch {
+      setEmailHistoryEntries([])
+    } finally {
+      setEmailHistoryLoading(false)
+    }
   }
 
   async function handleSendMailFromPrompt() {
@@ -188,6 +208,7 @@ export default function InvoicingPage() {
       } else {
         setEmailPromptError(res.error ?? 'Error al enviar email')
       }
+      await loadInvoices()  // refresca el estado de último envío (ver columna 📧 / historial)
     } catch (err) {
       setEmailPromptError(err instanceof Error ? err.message : 'Error al enviar email')
     } finally { setEmailSending(false) }
@@ -467,6 +488,19 @@ export default function InvoicingPage() {
                     >
                       {mailingId === inv.id ? '⏳' : '📧'}
                     </button>
+                    {inv.lastEmailStatus && (
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => void handleShowEmailHistory(inv)}
+                        title={
+                          inv.lastEmailStatus === 'sent'
+                            ? `Enviado a ${inv.lastEmailTo} el ${formatDateTime(inv.lastEmailSentAt)}. Ver historial.`
+                            : `Error al enviar a ${inv.lastEmailTo} el ${formatDateTime(inv.lastEmailSentAt)}. Ver historial.`
+                        }
+                      >
+                        {inv.lastEmailStatus === 'sent' ? '✅' : '⚠️'}
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -506,6 +540,60 @@ export default function InvoicingPage() {
                 <button className="btn btn-primary" onClick={() => void handleSendMailFromPrompt()} disabled={emailSending}>
                   {emailSending ? 'Enviando...' : 'Enviar'}
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {emailHistoryFor !== null && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <div className="modal-header">
+              <h2>Historial de envíos — Comprobante N° {emailHistoryFor.id}</h2>
+              <button className="btn btn-ghost" onClick={() => setEmailHistoryFor(null)}>✕</button>
+            </div>
+            <div style={{ padding: '1rem' }}>
+              <p className="field-hint" style={{ marginBottom: 12 }}>
+                El envío es SMTP directo: no queda copia en la carpeta "Enviados" de ningún correo.
+                Este es el único registro de los intentos de envío de esta factura.
+              </p>
+              {emailHistoryLoading && <p>Cargando...</p>}
+              {!emailHistoryLoading && emailHistoryEntries.length === 0 && (
+                <p className="text-muted">Todavía no se intentó enviar esta factura por email.</p>
+              )}
+              {!emailHistoryLoading && emailHistoryEntries.length > 0 && (
+                <div className="table-container">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Fecha</th>
+                        <th>Para</th>
+                        <th>Copia oculta</th>
+                        <th>Estado</th>
+                        <th>Detalle</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {emailHistoryEntries.map(entry => (
+                        <tr key={entry.id}>
+                          <td>{formatDateTime(entry.sentAt)}</td>
+                          <td>{entry.toEmail}</td>
+                          <td>{entry.bccEmail ?? '—'}</td>
+                          <td>
+                            <span className={entry.status === 'sent' ? 'badge badge--success' : 'badge badge--danger'}>
+                              {entry.status === 'sent' ? '✅ Enviado' : '❌ Error'}
+                            </span>
+                          </td>
+                          <td>{entry.error ?? entry.subject}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <div className="form-actions">
+                <button className="btn btn-secondary" onClick={() => setEmailHistoryFor(null)}>Cerrar</button>
               </div>
             </div>
           </div>
