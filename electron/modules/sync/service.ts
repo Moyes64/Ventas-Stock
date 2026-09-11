@@ -266,7 +266,14 @@ export class SyncService {
     // (pestaña "Procesadas") en vez de desaparecer por completo -- su origen sigue
     // siendo un pedido web independientemente de si ya se le generó la factura AFIP
     // o no, así que buscarlo acá tiene que funcionar en los dos casos.
-    const where = status ? `WHERE s.status = ?` : `WHERE s.status IN ('WEB_ORDER', 'PROCESSED', 'AUTHORIZED')`
+    // OJO: 'AUTHORIZED' por sí solo NO alcanza para identificar un pedido web --
+    // es el mismo estado final de CUALQUIER venta facturada, incluidas las de
+    // mostrador. El filtro real de "esto vino de la tienda web" es tener una fila
+    // en web_orders_processed (se inserta ahí para TODO pedido importado, apenas
+    // se procesa -- ver processWebOrder), no el status por sí solo.
+    const where = status
+      ? `WHERE s.status = ? AND w.sale_id IS NOT NULL`
+      : `WHERE w.sale_id IS NOT NULL AND s.status IN ('WEB_ORDER', 'PROCESSED', 'AUTHORIZED')`
     const rows = this.db.prepare(`
       SELECT s.id, s.sale_date, s.total, s.payment_method, s.status, s.created_at,
              s.invoice_number, s.punto_venta,
