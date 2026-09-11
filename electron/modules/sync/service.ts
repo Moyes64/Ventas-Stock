@@ -262,9 +262,14 @@ export class SyncService {
   // ── Listar órdenes web locales ────────────────────────────────────────────
 
   listWebOrders(status?: string): unknown[] {
-    const where = status ? `WHERE s.status = ?` : `WHERE s.status IN ('WEB_ORDER', 'PROCESSED')`
+    // Se incluye 'AUTHORIZED' para que un pedido ya facturado siga apareciendo acá
+    // (pestaña "Procesadas") en vez de desaparecer por completo -- su origen sigue
+    // siendo un pedido web independientemente de si ya se le generó la factura AFIP
+    // o no, así que buscarlo acá tiene que funcionar en los dos casos.
+    const where = status ? `WHERE s.status = ?` : `WHERE s.status IN ('WEB_ORDER', 'PROCESSED', 'AUTHORIZED')`
     const rows = this.db.prepare(`
       SELECT s.id, s.sale_date, s.total, s.payment_method, s.status, s.created_at,
+             s.invoice_number, s.punto_venta,
              c.name AS customer_name, c.email AS customer_email, c.phone AS customer_phone,
              c.doc_type AS customer_doc_type, c.cuit_dni AS customer_doc_number,
              c.address AS delivery_address,
@@ -298,6 +303,8 @@ export class SyncService {
         total: r['total'],
         paymentMethod: r['payment_method'],
         status: r['status'],
+        invoiceNumber: r['invoice_number'] ?? null,
+        puntoVenta: r['punto_venta'] ?? null,
         processedAt: r['processed_at'],
         createdAt: r['created_at'],
         items: items.map(i => ({

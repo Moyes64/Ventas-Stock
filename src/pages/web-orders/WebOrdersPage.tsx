@@ -16,6 +16,8 @@ interface WebOrder {
   total: number
   paymentMethod: string
   status: string
+  invoiceNumber: number | null
+  puntoVenta: number | null
   items: Array<{
     productId: number
     productName: string
@@ -279,10 +281,10 @@ export default function WebOrdersPage() {
                     fontWeight: 700,
                     padding: '3px 8px',
                     borderRadius: '9999px',
-                    backgroundColor: tab === 'pending' ? '#fef3c7' : '#dcfce7',
-                    color: tab === 'pending' ? '#92400e' : '#166534',
+                    backgroundColor: order.status === 'WEB_ORDER' ? '#fef3c7' : order.status === 'AUTHORIZED' ? '#dbeafe' : '#dcfce7',
+                    color: order.status === 'WEB_ORDER' ? '#92400e' : order.status === 'AUTHORIZED' ? '#1e40af' : '#166534',
                   }}>
-                    {tab === 'pending' ? 'PENDIENTE' : 'PROCESADA'}
+                    {order.status === 'WEB_ORDER' ? 'PENDIENTE' : order.status === 'AUTHORIZED' ? '✅ FACTURADA' : 'PROCESADA'}
                   </span>
                   <span style={{ color: '#9ca3af' }}>{expandedId === order.externalId ? '▾' : '▸'}</span>
                 </div>
@@ -374,7 +376,7 @@ export default function WebOrdersPage() {
                           {printingId === order.externalId ? '⏳ Imprimiendo...' : '🏷️ Imprimir etiqueta'}
                         </button>
                       )}
-                      {tab === 'pending' && (
+                      {order.status === 'WEB_ORDER' && (
                         <button
                           onClick={() => { void handleMarkProcessed(order.externalId) }}
                           disabled={markingId === order.externalId}
@@ -392,7 +394,7 @@ export default function WebOrdersPage() {
                           {markingId === order.externalId ? '⏳ Procesando...' : '✅ Marcar como procesada'}
                         </button>
                       )}
-                      {tab === 'processed' && (
+                      {order.status === 'PROCESSED' && (
                         <button
                           onClick={() => { void handleGenerateInvoice(order) }}
                           disabled={invoicingId === order.externalId}
@@ -409,6 +411,13 @@ export default function WebOrdersPage() {
                         >
                           {invoicingId === order.externalId ? '⏳ Facturando...' : '🧾 Generar factura'}
                         </button>
+                      )}
+                      {order.status === 'AUTHORIZED' && (
+                        <span style={{ fontSize: '13px', fontWeight: 600, color: '#166534' }}>
+                          ✅ Facturada — {order.puntoVenta && order.invoiceNumber
+                            ? `${String(order.puntoVenta).padStart(5, '0')}-${String(order.invoiceNumber).padStart(8, '0')}`
+                            : `Venta #${order.id}`} (buscala en Facturación)
+                        </span>
                       )}
                     </div>
                   </div>
