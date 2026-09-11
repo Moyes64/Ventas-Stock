@@ -413,22 +413,22 @@ export class SyncService {
         }
       }
 
-      // Crear venta (mapear métodos de pago web a los valores locales aceptados).
-      // 'mercadopago' se mapea a sí mismo (no a 'transferencia'): la comisión de
-      // Mercado Pago Checkout Pro (tienda online) es muy distinta a la del posnet
-      // físico y a una transferencia sin comisión — necesita su propia tasa, ver
-      // FinanceService.registerSaleIncome / migración 024.
+      // Crear venta. Todo pedido web pagado por Checkout Pro se clasifica como
+      // 'mercadopago' (nunca 'transferencia' ni 'credito'/'debito'): MP le cobra
+      // al vendedor la misma comisión sin importar cómo pagó el comprador dentro
+      // del checkout (tarjeta / saldo en cuenta / transferencia propia de MP) —
+      // confirmado con el dueño del negocio; el recargo del 10% por tarjeta es un
+      // mecanismo de precio aparte, ya incluido en order.total vía otherChargesAmount
+      // más abajo, no una comisión distinta. Necesita su propia tasa en Comisiones
+      // MP, ver FinanceService.registerSaleIncome / migración 024.
+      // Hostinger graba 'mercadopago' en payment_method al crear la orden y ya no
+      // lo pisa después con el payment_type_id interno de MP (ver hostinger/api/
+      // webhook.php) — pero se ignora `order.paymentMethod` en vez de asumirlo por
+      // si queda algún pedido sin procesar de antes de ese fix.
       // order.createdAt viene del servidor de Hostinger en UTC — convertir a fecha
       // local (ART) en vez de tomar el día calendario UTC (ver utcToLocalDate).
       const saleDate = utcToLocalDate(order.createdAt)
-      const paymentMethodMap: Record<string, string> = {
-        mercadopago: 'mercadopago',
-        credit_card: 'credito',
-        debit_card: 'debito',
-        cash: 'contado_efectivo',
-        transferencia: 'transferencia',
-      }
-      const localPaymentMethod = paymentMethodMap[order.paymentMethod] ?? 'transferencia'
+      const localPaymentMethod = 'mercadopago'
 
       // El total del pedido ya incluye envío y/o recargo por tarjeta de crédito,
       // pero sale_items solo tiene los productos — sin esto, el comprobante

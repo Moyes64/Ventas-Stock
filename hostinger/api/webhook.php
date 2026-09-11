@@ -56,7 +56,16 @@ try {
     $mpStatus        = $payment['status']             ?? '';          // approved / pending / rejected
     $externalRef     = $payment['external_reference'] ?? '';
     $mpPaymentId     = (string)$payment['id'];
-    $mpPaymentMethod = $payment['payment_type_id']    ?? 'mercadopago';
+    // payment_type_id es el detalle interno de MP sobre CÓMO pagó el comprador
+    // dentro del checkout (credit_card / debit_card / account_money / bank_transfer
+    // / etc.) -- Checkout Pro le cobra al vendedor la misma comisión sin importar
+    // eso (confirmado con el dueño del negocio; el recargo del 10% por tarjeta es
+    // un mecanismo de precio aparte, decidido ANTES de pagar -- ver paymentChannel
+    // más abajo en orders.php). Por eso NO se usa para clasificar el pago
+    // localmente: solo queda en el log para diagnóstico, no se guarda en
+    // web_orders.payment_method (que sigue siendo 'mercadopago', tal como se
+    // grabó al crear la orden -- ver orders.php).
+    $mpPaymentTypeId = $payment['payment_type_id']    ?? '';
 
     if (empty($externalRef)) {
         http_response_code(200);
@@ -99,12 +108,13 @@ try {
         default       => $row['status'],
     };
 
-    // Actualizar solo si cambia el estado o se agrega el payment_id
+    // Actualizar solo si cambia el estado o se agrega el payment_id.
+    // payment_method NO se toca acá -- ver el comentario sobre $mpPaymentTypeId arriba.
     $pdo->prepare("
         UPDATE web_orders
-        SET status=?, mp_payment_id=?, payment_method=?
+        SET status=?, mp_payment_id=?
         WHERE external_id=?
-    ")->execute([$newStatus, $mpPaymentId, $mpPaymentMethod, $externalRef]);
+    ")->execute([$newStatus, $mpPaymentId, $externalRef]);
 
     // Notificación Telegram cuando se aprueba el pago
     if ($newStatus === 'paid' && $row['status'] !== 'paid') {
@@ -140,7 +150,7 @@ try {
         }
     }
 
-    error_log("[webhook] order={$externalRef} mp_status={$mpStatus} new_status={$newStatus}");
+    error_log("[webhook] order={$externalRef} mp_status={$mpStatus} new_status={$newStatus} mp_payment_type={$mpPaymentTypeId}");
 
     http_response_code(200);
     echo json_encode(['ok' => true, 'status' => $newStatus]);
