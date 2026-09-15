@@ -32,10 +32,22 @@ export class ProductRepository {
   }
 
   findByBarcode(barcode: string): Product | undefined {
-    const row = this.db
-      .prepare('SELECT * FROM products WHERE barcode = ? AND active = 1')
-      .get(barcode) as ProductRow | undefined
-    return row ? this.mapRow(row) : undefined
+    const stmt = this.db.prepare('SELECT * FROM products WHERE barcode = ? AND active = 1')
+    const row = stmt.get(barcode) as ProductRow | undefined
+    if (row) return this.mapRow(row)
+
+    // Algunos lectores/proveedores entregan el código UPC-A de 12 dígitos, mientras
+    // que otros lo cargan como EAN-13 con un cero agregado adelante (o viceversa).
+    // Probamos la forma alternativa antes de dar el producto por no encontrado.
+    const altBarcode = /^\d{12}$/.test(barcode)
+      ? `0${barcode}`
+      : /^0\d{12}$/.test(barcode)
+        ? barcode.slice(1)
+        : null
+    if (!altBarcode) return undefined
+
+    const altRow = stmt.get(altBarcode) as ProductRow | undefined
+    return altRow ? this.mapRow(altRow) : undefined
   }
 
   findBySku(sku: string): Product | undefined {

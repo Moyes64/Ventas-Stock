@@ -28,18 +28,43 @@ export interface ExchangePreview {
   vencimiento?: string
 }
 
+/**
+ * Algunos lectores de código de barras/QR emulan un teclado con layout "US" mientras
+ * Windows tiene activo el layout "Español (Latinoamérica)". Windows traduce cada
+ * pulsación según su propio layout, así que los símbolos de puntuación del JSON
+ * (que no son letras ni dígitos) llegan cambiados por otro carácter, siempre el mismo
+ * para cada tecla física. Si el parseo directo falla, se intenta revertir esa
+ * sustitución conocida antes de descartar el QR como inválido.
+ */
+const QR_LAYOUT_MISMATCH_MAP: Record<string, string> = {
+  '¨': '{',
+  '[': '"',
+  'Ñ': ':',
+  "'": '-',
+  '*': '}',
+}
+
+function parseQrPayload(rawQr: string): QrPayload | null {
+  try {
+    return JSON.parse(rawQr) as QrPayload
+  } catch {
+    // sigue abajo con el intento de corrección
+  }
+  const fixed = rawQr.replace(/[¨[Ñ'*]/g, ch => QR_LAYOUT_MISMATCH_MAP[ch] ?? ch)
+  try {
+    return JSON.parse(fixed) as QrPayload
+  } catch {
+    return null
+  }
+}
+
 export function registerCambiosHandlers(db: Database): void {
 
   // ── Parsear QR y devolver preview sin confirmar ────────────────────────────
   ipcMain.handle('cambios:preview', (_event, rawQr: string): ExchangePreview => {
-    let payload: QrPayload
-    try {
-      payload = JSON.parse(rawQr) as QrPayload
-      if (!payload.v || !payload.saleId || !payload.productId) {
-        return { ok: false, error: 'QR inválido: datos incompletos' }
-      }
-    } catch {
-      return { ok: false, error: 'QR no reconocido. Escaneá un ticket de cambio válido.' }
+    const payload = parseQrPayload(rawQr)
+    if (!payload || !payload.v || !payload.saleId || !payload.productId) {
+      return { ok: false, error: payload ? 'QR inválido: datos incompletos' : 'QR no reconocido. Escaneá un ticket de cambio válido.' }
     }
 
     // Verificar que la venta existe
@@ -103,10 +128,8 @@ export function registerCambiosHandlers(db: Database): void {
 
   // ── Confirmar cambio/devolución ────────────────────────────────────────────
   ipcMain.handle('cambios:confirm', (_event, rawQr: string, notes?: string): { ok: boolean; error?: string; creditId?: number } => {
-    let payload: QrPayload
-    try {
-      payload = JSON.parse(rawQr) as QrPayload
-    } catch {
+    const payload = parseQrPayload(rawQr)
+    if (!payload) {
       return { ok: false, error: 'QR inválido' }
     }
 
