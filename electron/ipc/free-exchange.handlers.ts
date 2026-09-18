@@ -154,7 +154,8 @@ export function registerFreeExchangeHandlers(db: Database): void {
               creditId = crRes.lastInsertRowid as number
             } else {
               const movement = financeService.registerExchangeDifferenceIncome({
-                freeExchangeId,
+                exchangeId: freeExchangeId,
+                sourceLabel: 'sin ticket',
                 paymentMethod: input.settlementMethod!,
                 monto: difference,
                 fecha,

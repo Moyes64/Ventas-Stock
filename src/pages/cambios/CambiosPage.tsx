@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
-import { cambios } from '../../lib/ipc'
-import type { ExchangePreview, ExchangeRecord } from '../../types/ipc'
+import { cambios, credits } from '../../lib/ipc'
+import type { ExchangePreview, ExchangeRecord, Product } from '../../types/ipc'
 import FreeExchangeTab from './FreeExchangeTab'
+import ProductSearchBox from './ProductSearchBox'
+import { MONEY_METHODS } from './paymentMethods'
 import { formatDateTime, formatDate } from '../../lib/date'
 
 type Step = 'scan' | 'preview' | 'done'
@@ -19,10 +21,25 @@ export default function CambiosPage() {
   const [loadingHistory, setLoadingHistory] = useState(true)
   const inputRef = useRef<HTMLInputElement>(null)
 
+  // Producto de reemplazo opcional (igual que en "Sin ticket")
+  const [newProduct, setNewProduct] = useState<Product | null>(null)
+  const [newQty, setNewQty] = useState(1)
+  const [newUnitPrice, setNewUnitPrice] = useState(0)
+  const [settlementMethod, setSettlementMethod] = useState('contado_efectivo')
+  const [creditBalance, setCreditBalance] = useState<number | null>(null)
+
   useEffect(() => {
     void loadHistory()
     inputRef.current?.focus()
   }, [])
+
+  useEffect(() => {
+    if (preview?.ok && preview.customerId) {
+      credits.getBalance(preview.customerId).then(setCreditBalance).catch(() => setCreditBalance(null))
+    } else {
+      setCreditBalance(null)
+    }
+  }, [preview])
 
   async function loadHistory() {
     setLoadingHistory(true)
@@ -42,16 +59,37 @@ export default function CambiosPage() {
     }
   }
 
+  const newTotal = newProduct ? Math.round(newQty * newUnitPrice * 100) / 100 : 0
+  const difference = Math.round((newTotal - (preview?.amount ?? 0)) * 100) / 100
+  const favorsCustomer = !!newProduct && difference < -0.009
+  const favorsStore = !!newProduct && difference > 0.009
+
   async function handleConfirm() {
     if (!rawQr || confirming) return
+    if (favorsStore && settlementMethod === 'credito_cliente' && !preview?.customerId) {
+      setPreview(p => p ? { ...p, ok: false, error: 'Para pagar con crédito de cliente hay que identificar al cliente en la venta original' } : null)
+      return
+    }
     setConfirming(true)
     try {
-      const res = await cambios.confirm(rawQr.trim(), notes.trim() || undefined)
+      const res = await cambios.confirm({
+        rawQr: rawQr.trim(),
+        notes: notes.trim() || undefined,
+        newItem: newProduct ? { productId: newProduct.id, quantity: newQty, unitPrice: newUnitPrice } : null,
+        settlementMethod: favorsStore ? settlementMethod : undefined,
+      })
       if (res.ok) {
+        const diff = res.difference ?? 0
         setDoneMsg(
-          res.creditId
-            ? `✅ Cambio registrado. Se generó crédito a favor del cliente.`
-            : `✅ Cambio registrado. Stock repuesto.`
+          newProduct
+            ? diff > 0.009
+              ? `✅ Cambio registrado. El cliente pagó ${fmt(diff)} de diferencia.`
+              : diff < -0.009
+                ? `✅ Cambio registrado. Se devolvieron ${fmt(Math.abs(diff))} en efectivo desde Caja.`
+                : `✅ Cambio registrado. Sin diferencia a saldar.`
+            : res.creditId
+              ? `✅ Cambio registrado. Se generó crédito a favor del cliente.`
+              : `✅ Cambio registrado. Stock repuesto.`
         )
         setStep('done')
         await loadHistory()
@@ -70,6 +108,10 @@ export default function CambiosPage() {
     setNotes('')
     setStep('scan')
     setDoneMsg('')
+    setNewProduct(null)
+    setNewQty(1)
+    setNewUnitPrice(0)
+    setSettlementMethod('contado_efectivo')
     setTimeout(() => inputRef.current?.focus(), 50)
   }
 
@@ -201,6 +243,94 @@ export default function CambiosPage() {
                 </div>
               )}
 
+              {/* Producto de reemplazo opcional */}
+              <div style={{
+                border: '1px solid #2563eb33', borderRadius: '10px', padding: '14px',
+                backgroundColor: '#2563eb0d', marginBottom: '16px',
+              }}>
+                <h3 style={{ fontSize: '13px', fontWeight: 700, marginBottom: '4px', color: '#2563eb' }}>
+                  🛍️ Producto de reemplazo
+                </h3>
+                <p style={{ fontSize: '11px', color: '#6b7280', marginBottom: '10px' }}>
+                  Lo que el cliente se lleva a cambio (opcional)
+                </p>
+                {!newProduct ? (
+                  <ProductSearchBox
+                    onPick={p => { setNewProduct(p); setNewQty(1); setNewUnitPrice(p.price) }}
+                    placeholder="Código de barras o nombre del producto..."
+                  />
+                ) : (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'white',
+                    padding: '6px 8px', borderRadius: '6px', border: '1px solid #e5e7eb',
+                  }}>
+                    <span style={{ flex: 1, fontSize: '12px', fontWeight: 600 }}>{newProduct.name}</span>
+                    <input
+                      type="number" min={1} value={newQty}
+                      onChange={e => setNewQty(Math.max(1, Number(e.target.value) || 1))}
+                      style={{ width: '44px', fontSize: '12px', padding: '3px', border: '1px solid #d1d5db', borderRadius: '4px' }}
+                    />
+                    <span style={{ fontSize: '11px', color: '#9ca3af' }}>×</span>
+                    <input
+                      type="number" min={0} step="0.01" value={newUnitPrice}
+                      onChange={e => setNewUnitPrice(Math.max(0, Number(e.target.value) || 0))}
+                      style={{ width: '72px', fontSize: '12px', padding: '3px', border: '1px solid #d1d5db', borderRadius: '4px' }}
+                    />
+                    <span style={{ fontSize: '12px', fontWeight: 700, minWidth: '64px', textAlign: 'right' }}>
+                      {fmt(newTotal)}
+                    </span>
+                    <button
+                      onClick={() => { setNewProduct(null); setNewQty(1); setNewUnitPrice(0) }}
+                      style={{ border: 'none', background: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '13px' }}
+                    >✕</button>
+                  </div>
+                )}
+              </div>
+
+              {/* Diferencia, si hay producto de reemplazo */}
+              {newProduct && (
+                <div style={{
+                  backgroundColor: favorsCustomer ? '#f0fdf4' : favorsStore ? '#eff6ff' : '#f9fafb',
+                  border: `1px solid ${favorsCustomer ? '#bbf7d0' : favorsStore ? '#bfdbfe' : '#e5e7eb'}`,
+                  borderRadius: '8px', padding: '12px 14px', marginBottom: '16px',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '4px' }}>
+                    <span>Devuelto</span><span>{fmt(preview.amount ?? 0)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '8px' }}>
+                    <span>Nuevo</span><span>{fmt(newTotal)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '15px', fontWeight: 700, borderTop: '1px solid #d1d5db', paddingTop: '8px' }}>
+                    <span>{favorsCustomer ? 'A favor del cliente' : favorsStore ? 'Paga el cliente' : 'Diferencia'}</span>
+                    <span>{fmt(Math.abs(difference))}</span>
+                  </div>
+                </div>
+              )}
+
+              {favorsCustomer && (
+                <p style={{ fontSize: '12px', color: '#166534', marginBottom: '16px' }}>
+                  💵 Se devuelve en efectivo desde Caja al confirmar.
+                </p>
+              )}
+
+              {favorsStore && (
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: 600, color: '#6b7280', display: 'block', marginBottom: '4px' }}>
+                    ¿Cómo paga el cliente la diferencia?
+                  </label>
+                  <select
+                    value={settlementMethod}
+                    onChange={e => setSettlementMethod(e.target.value)}
+                    style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #d1d5db', fontSize: '13px' }}
+                  >
+                    {MONEY_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                    {preview.customerId && creditBalance !== null && creditBalance > 0 && (
+                      <option value="credito_cliente">Crédito de cliente (saldo: {fmt(creditBalance)})</option>
+                    )}
+                  </select>
+                </div>
+              )}
+
               {/* Nota opcional */}
               <div style={{ marginBottom: '16px' }}>
                 <label style={{ fontSize: '12px', fontWeight: 600, color: '#6b7280', display: 'block', marginBottom: '4px' }}>
@@ -285,9 +415,14 @@ export default function CambiosPage() {
                   backgroundColor: '#f9fafb', border: '1px solid #f3f4f6',
                   fontSize: '12px',
                 }}>
-                  <div style={{ fontWeight: 700, marginBottom: '2px' }}>{rec.product_name}</div>
+                  <div style={{ fontWeight: 700, marginBottom: '2px' }}>
+                    ↩️ {rec.product_name}
+                    {rec.new_product_name && <> → 🛍️ {rec.new_product_name}</>}
+                  </div>
                   <div style={{ color: '#6b7280' }}>
                     {rec.customer_name ?? 'Sin cliente'} · Venta #{rec.sale_id} · {fmt(rec.amount)}
+                    {rec.new_product_name && rec.new_total != null && ` · Nuevo: ${fmt(rec.new_total)}`}
+                    {rec.new_product_name && rec.difference !== 0 && ` · Diferencia: ${fmt(Math.abs(rec.difference))} ${rec.difference > 0 ? '(pagó cliente)' : '(a favor cliente)'}`}
                   </div>
                   <div style={{ color: '#9ca3af', marginTop: '2px' }}>{formatDateTime(rec.created_at)}</div>
                   {rec.notes && <div style={{ color: '#6b7280', fontStyle: 'italic', marginTop: '2px' }}>{rec.notes}</div>}

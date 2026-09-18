@@ -1,6 +1,17 @@
 import { ipcMain } from 'electron'
 import type { Database } from 'better-sqlite3'
 import { SystemParamsService } from '../modules/system-params/service'
+import { StockService } from '../modules/stock/service'
+import { FinanceService } from '../modules/finance/service'
+import { localToday } from '../lib/date'
+
+const REFUND_CATEGORIA = 'Devolución a Cliente'
+
+/** Medios que efectivamente mueven dinero cuando el cliente paga una diferencia
+ *  a favor del comercio. 'credito_cliente' se resuelve aparte (consume saldo). */
+const MONEY_PAYMENT_METHODS = new Set([
+  'contado_efectivo', 'transferencia', 'debito', 'credito', 'qr', 'mercadopago',
+])
 
 export interface QrPayload {
   v: number
@@ -19,6 +30,7 @@ export interface ExchangePreview {
   saleDate?: string
   productId?: number
   productName?: string
+  customerId?: number | null
   customerName?: string
   qty?: number
   amount?: number
@@ -26,6 +38,26 @@ export interface ExchangePreview {
   expired?: boolean
   diasCambio?: number
   vencimiento?: string
+}
+
+export interface ConfirmExchangeInput {
+  rawQr: string
+  notes?: string
+  /** Producto que el cliente se lleva a cambio (opcional, igual que en "sin ticket"). */
+  newItem?: { productId: number; quantity: number; unitPrice: number } | null
+  /** Requerido solo si hay newItem y la diferencia favorece al comercio. */
+  settlementMethod?: string
+}
+
+export interface ConfirmExchangeResult {
+  ok: boolean
+  error?: string
+  creditId?: number
+  difference?: number
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100
 }
 
 /**
@@ -59,6 +91,8 @@ function parseQrPayload(rawQr: string): QrPayload | null {
 }
 
 export function registerCambiosHandlers(db: Database): void {
+  const stockService = new StockService(db)
+  const financeService = new FinanceService(db)
 
   // ── Parsear QR y devolver preview sin confirmar ────────────────────────────
   ipcMain.handle('cambios:preview', (_event, rawQr: string): ExchangePreview => {
@@ -69,11 +103,11 @@ export function registerCambiosHandlers(db: Database): void {
 
     // Verificar que la venta existe
     const sale = db.prepare(
-      `SELECT s.id, s.sale_date, c.name AS customer_name
+      `SELECT s.id, s.sale_date, s.customer_id, c.name AS customer_name
        FROM sales s
        LEFT JOIN customers c ON c.id = s.customer_id
        WHERE s.id = ?`
-    ).get(payload.saleId) as { id: number; sale_date: string; customer_name: string | null } | undefined
+    ).get(payload.saleId) as { id: number; sale_date: string; customer_id: number | null; customer_name: string | null } | undefined
 
     if (!sale) return { ok: false, error: `Venta #${payload.saleId} no encontrada` }
 
@@ -116,6 +150,7 @@ export function registerCambiosHandlers(db: Database): void {
       saleDate: sale.sale_date,
       productId: payload.productId,
       productName: item.product_name,
+      customerId: sale.customer_id,
       customerName: sale.customer_name ?? 'Consumidor Final',
       qty: payload.qty,
       amount: payload.amount,
@@ -127,31 +162,76 @@ export function registerCambiosHandlers(db: Database): void {
   })
 
   // ── Confirmar cambio/devolución ────────────────────────────────────────────
-  ipcMain.handle('cambios:confirm', (_event, rawQr: string, notes?: string): { ok: boolean; error?: string; creditId?: number } => {
-    const payload = parseQrPayload(rawQr)
+  ipcMain.handle('cambios:confirm', (_event, input: ConfirmExchangeInput): ConfirmExchangeResult => {
+    const payload = parseQrPayload(input.rawQr)
     if (!payload) {
       return { ok: false, error: 'QR inválido' }
     }
 
+    const newItem = input.newItem ?? null
+
     try {
+      if (newItem) {
+        if (!newItem.productId || newItem.quantity <= 0) {
+          return { ok: false, error: 'Cantidad inválida en el producto de reemplazo' }
+        }
+        stockService.validateAvailability([{ productId: newItem.productId, quantity: newItem.quantity }])
+      }
+
+      const newTotal = newItem ? round2(newItem.quantity * newItem.unitPrice) : 0
+      const difference = round2(newTotal - payload.amount)
+
+      if (newItem && difference > 0.009) {
+        if (!input.settlementMethod) {
+          return { ok: false, error: 'Indicá cómo paga el cliente la diferencia a favor del comercio' }
+        }
+        if (input.settlementMethod === 'credito_cliente') {
+          if (!payload.customerId) {
+            return { ok: false, error: 'Para pagar con crédito de cliente hay que identificar al cliente' }
+          }
+          const balanceRow = db.prepare(
+            `SELECT COALESCE(SUM(amount), 0) AS balance FROM customer_credits WHERE customer_id = ?`
+          ).get(payload.customerId) as { balance: number }
+          if (difference > balanceRow.balance + 0.01) {
+            return {
+              ok: false,
+              error: `Saldo de crédito insuficiente. Disponible: $${balanceRow.balance.toFixed(2)}, necesario: $${difference.toFixed(2)}`,
+            }
+          }
+        } else if (!MONEY_PAYMENT_METHODS.has(input.settlementMethod)) {
+          return { ok: false, error: `Medio de pago no reconocido: ${input.settlementMethod}` }
+        }
+      }
+
+      const fecha = localToday()
       let creditId: number | undefined
+      let financeMovementId: number | null = null
 
       db.transaction(() => {
         // Registrar el cambio
         const exRes = db.prepare(`
-          INSERT INTO exchanges (sale_id, product_id, customer_id, quantity, amount, notes)
-          VALUES (?,?,?,?,?,?)
+          INSERT INTO exchanges (
+            sale_id, product_id, customer_id, quantity, amount, notes,
+            new_product_id, new_quantity, new_unit_price, new_total, difference, settlement_method
+          )
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
         `).run(
           payload.saleId,
           payload.productId,
           payload.customerId || null,
           payload.qty,
           payload.amount,
-          notes ?? null,
+          input.notes ?? null,
+          newItem?.productId ?? null,
+          newItem?.quantity ?? null,
+          newItem?.unitPrice ?? null,
+          newItem ? newTotal : null,
+          newItem ? difference : 0,
+          newItem && Math.abs(difference) > 0.009 ? input.settlementMethod ?? null : null,
         )
         const exchangeId = exRes.lastInsertRowid as number
 
-        // Reponer stock
+        // Reponer stock del producto devuelto
         db.prepare(`
           UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?
         `).run(payload.qty, payload.productId)
@@ -166,22 +246,73 @@ export function registerCambiosHandlers(db: Database): void {
           `Cambio/devolución de venta #${payload.saleId}`,
         )
 
-        // Generar crédito si hay cliente identificado
-        if (payload.customerId) {
-          const crRes = db.prepare(`
-            INSERT INTO customer_credits (customer_id, amount, type, reference_id, notes)
-            VALUES (?,?,'CAMBIO',?,?)
-          `).run(
-            payload.customerId,
-            payload.amount,
-            exchangeId,
-            `Crédito por cambio venta #${payload.saleId}`,
-          )
-          creditId = crRes.lastInsertRowid as number
+        // Entregar el producto de reemplazo, si lo hay
+        if (newItem) {
+          stockService.addManualMovement({
+            productId: newItem.productId,
+            type: 'EXIT',
+            quantity: newItem.quantity,
+            referenceType: 'CAMBIO',
+            referenceId: exchangeId,
+            notes: `Entrega por cambio con ticket de venta #${payload.saleId}`,
+          })
+        }
+
+        if (!newItem) {
+          // Sin reemplazo: comportamiento histórico — crédito al cliente si está identificado.
+          if (payload.customerId) {
+            const crRes = db.prepare(`
+              INSERT INTO customer_credits (customer_id, amount, type, reference_id, notes)
+              VALUES (?,?,'CAMBIO',?,?)
+            `).run(
+              payload.customerId,
+              payload.amount,
+              exchangeId,
+              `Crédito por cambio venta #${payload.saleId}`,
+            )
+            creditId = crRes.lastInsertRowid as number
+          }
+        } else if (difference < -0.009) {
+          // Con reemplazo, diferencia a favor del cliente: se devuelve en efectivo desde Caja.
+          const cashAccount = financeService.getCashAccount()
+          if (!cashAccount) throw new Error('No se encontró la cuenta Caja para devolver la diferencia')
+          const categorias = financeService.listCategories('egreso')
+          const categoria = categorias.find(c => c.name === REFUND_CATEGORIA)
+          const movement = financeService.createMovement({
+            accountId: cashAccount.id,
+            tipo: 'egreso',
+            categoriaId: categoria?.id ?? null,
+            monto: Math.abs(difference),
+            descripcion: `Devolución diferencia - Cambio con ticket #${exchangeId}`,
+            fecha,
+          })
+          financeMovementId = movement.id
+        } else if (difference > 0.009) {
+          // Con reemplazo, diferencia a favor del comercio.
+          if (input.settlementMethod === 'credito_cliente') {
+            const crRes = db.prepare(`
+              INSERT INTO customer_credits (customer_id, amount, type, reference_id, notes)
+              VALUES (?, ?, 'USO', ?, ?)
+            `).run(payload.customerId, -difference, exchangeId, `Uso de crédito - cambio con ticket #${exchangeId}`)
+            creditId = crRes.lastInsertRowid as number
+          } else {
+            const movement = financeService.registerExchangeDifferenceIncome({
+              exchangeId,
+              sourceLabel: 'con ticket',
+              paymentMethod: input.settlementMethod!,
+              monto: difference,
+              fecha,
+            })
+            financeMovementId = movement?.id ?? null
+          }
+        }
+
+        if (financeMovementId) {
+          db.prepare(`UPDATE exchanges SET finance_movement_id = ? WHERE id = ?`).run(financeMovementId, exchangeId)
         }
       })()
 
-      return { ok: true, creditId }
+      return { ok: true, creditId, difference: newItem ? difference : undefined }
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
@@ -191,10 +322,13 @@ export function registerCambiosHandlers(db: Database): void {
   ipcMain.handle('cambios:list', (_event, limit = 50): unknown[] => {
     return db.prepare(`
       SELECT e.id, e.sale_id, e.quantity, e.amount, e.notes, e.created_at,
+             e.new_quantity, e.new_unit_price, e.new_total, e.difference, e.settlement_method,
              p.name AS product_name,
+             np.name AS new_product_name,
              c.name AS customer_name
       FROM exchanges e
       JOIN products p ON p.id = e.product_id
+      LEFT JOIN products np ON np.id = e.new_product_id
       LEFT JOIN customers c ON c.id = e.customer_id
       ORDER BY e.created_at DESC
       LIMIT ?

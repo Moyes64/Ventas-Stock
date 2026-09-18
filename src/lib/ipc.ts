@@ -404,8 +404,8 @@ export const credits = {
 export const cambios = {
   preview: (rawQr: string) =>
     electron.cambios.preview(rawQr) as Promise<import('../types/ipc').ExchangePreview>,
-  confirm: (rawQr: string, notes?: string) =>
-    electron.cambios.confirm(rawQr, notes) as Promise<{ ok: boolean; error?: string; creditId?: number }>,
+  confirm: (input: import('../types/ipc').ConfirmExchangeInput) =>
+    electron.cambios.confirm(input) as Promise<import('../types/ipc').ConfirmExchangeResult>,
   list: (limit?: number) =>
     electron.cambios.list(limit) as Promise<import('../types/ipc').ExchangeRecord[]>,
 }

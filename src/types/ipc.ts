@@ -415,6 +415,7 @@ export interface ExchangePreview {
   saleDate?: string
   productId?: number
   productName?: string
+  customerId?: number | null
   customerName?: string
   qty?: number
   amount?: number
@@ -422,6 +423,26 @@ export interface ExchangePreview {
   expired?: boolean
   diasCambio?: number
   vencimiento?: string
+}
+
+export interface ExchangeNewItemInput {
+  productId: number
+  quantity: number
+  unitPrice: number
+}
+
+export interface ConfirmExchangeInput {
+  rawQr: string
+  notes?: string
+  newItem?: ExchangeNewItemInput | null
+  settlementMethod?: string
+}
+
+export interface ConfirmExchangeResult {
+  ok: boolean
+  error?: string
+  creditId?: number
+  difference?: number
 }
 
 export interface ExchangeRecord {
@@ -433,6 +454,12 @@ export interface ExchangeRecord {
   created_at: string
   product_name: string
   customer_name: string | null
+  new_quantity: number | null
+  new_unit_price: number | null
+  new_total: number | null
+  difference: number
+  settlement_method: string | null
+  new_product_name: string | null
 }
 
 // ── Devolución sin ticket de cambio ────────────────────────────────────────

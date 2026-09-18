@@ -1,7 +1,9 @@
-import { useState, useEffect, useRef } from 'react'
-import { catalog, customers, credits, freeExchange } from '../../lib/ipc'
+import { useState, useEffect } from 'react'
+import { customers, credits, freeExchange } from '../../lib/ipc'
 import type { Product, Customer, FreeExchangeItemInput, FreeExchangeRecord } from '../../types/ipc'
 import { formatDateTime } from '../../lib/date'
+import ProductSearchBox from './ProductSearchBox'
+import { MONEY_METHODS } from './paymentMethods'
 
 interface CartLine {
   product: Product
@@ -9,14 +11,15 @@ interface CartLine {
   unitPrice: number
 }
 
-const MONEY_METHODS: Array<{ value: string; label: string }> = [
-  { value: 'contado_efectivo', label: 'Efectivo' },
-  { value: 'transferencia', label: 'Transferencia' },
-  { value: 'debito', label: 'Débito' },
-  { value: 'credito', label: 'Crédito' },
-  { value: 'qr', label: 'QR' },
-  { value: 'mercadopago', label: 'Mercado Pago' },
-]
+function addProductLine(product: Product, setLines: React.Dispatch<React.SetStateAction<CartLine[]>>) {
+  setLines(prev => {
+    const existing = prev.find(l => l.product.id === product.id)
+    if (existing) {
+      return prev.map(l => l.product.id === product.id ? { ...l, quantity: l.quantity + 1 } : l)
+    }
+    return [...prev, { product, quantity: 1, unitPrice: product.price }]
+  })
+}
 
 function fmt(n: number) {
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(n)
@@ -34,23 +37,19 @@ function CartSection({
   title,
   hint,
   lines,
-  onScan,
+  onAdd,
   onQtyChange,
   onPriceChange,
   onRemove,
-  scanQuery,
-  setScanQuery,
   color,
 }: {
   title: string
   hint: string
   lines: CartLine[]
-  onScan: (query: string, opts?: { silent?: boolean }) => void
+  onAdd: (product: Product) => void
   onQtyChange: (productId: number, qty: number) => void
   onPriceChange: (productId: number, price: number) => void
   onRemove: (productId: number) => void
-  scanQuery: string
-  setScanQuery: (v: string) => void
   color: string
 }) {
   const total = lines.reduce((acc, l) => acc + l.quantity * l.unitPrice, 0)
@@ -58,17 +57,9 @@ function CartSection({
     <div style={{ border: `1px solid ${color}33`, borderRadius: '10px', padding: '14px', backgroundColor: `${color}0d` }}>
       <h3 style={{ fontSize: '13px', fontWeight: 700, marginBottom: '4px', color }}>{title}</h3>
       <p style={{ fontSize: '11px', color: '#6b7280', marginBottom: '10px' }}>{hint}</p>
-      <input
-        type="text"
-        value={scanQuery}
-        onChange={e => { setScanQuery(e.target.value); onScan(e.target.value, { silent: true }) }}
-        onKeyDown={e => { if (e.key === 'Enter') onScan(scanQuery) }}
-        placeholder="Escanear código de barras..."
-        style={{
-          width: '100%', padding: '8px 10px', borderRadius: '6px',
-          border: '1px solid #d1d5db', fontSize: '13px', outline: 'none', marginBottom: '10px',
-        }}
-      />
+      <div style={{ marginBottom: '10px' }}>
+        <ProductSearchBox onPick={onAdd} placeholder="Código de barras o nombre del producto..." />
+      </div>
       {lines.length === 0 ? (
         <p style={{ fontSize: '12px', color: '#9ca3af', textAlign: 'center', padding: '12px 0' }}>Sin productos</p>
       ) : (
@@ -116,8 +107,6 @@ export default function FreeExchangeTab() {
 
   const [returnedLines, setReturnedLines] = useState<CartLine[]>([])
   const [newLines, setNewLines] = useState<CartLine[]>([])
-  const [returnScan, setReturnScan] = useState('')
-  const [newScan, setNewScan] = useState('')
 
   const [settlementMethod, setSettlementMethod] = useState('contado_efectivo')
   const [notes, setNotes] = useState('')
@@ -127,7 +116,6 @@ export default function FreeExchangeTab() {
 
   const [history, setHistory] = useState<FreeExchangeRecord[]>([])
   const [loadingHistory, setLoadingHistory] = useState(true)
-  const returnInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     void customers.list().then(setCustomerList).catch(() => {})
@@ -149,39 +137,6 @@ export default function FreeExchangeTab() {
       setHistory(await freeExchange.list(30))
     } finally {
       setLoadingHistory(false)
-    }
-  }
-
-  async function scanInto(
-    query: string,
-    setLines: React.Dispatch<React.SetStateAction<CartLine[]>>,
-    clear: () => void,
-    opts?: { silent?: boolean }
-  ) {
-    const q = query.trim()
-    if (!q) return
-    try {
-      const product = await catalog.getByBarcode(q)
-      if (!product) {
-        // En modo silencioso (se dispara en cada tecla mientras se escanea) un código
-        // incompleto es normal y no debe mostrarse como error — solo se avisa cuando
-        // el usuario confirma explícitamente con Enter y el código completo no existe.
-        if (!opts?.silent) {
-          setError(`No se encontró ningún producto con el código "${q}"`)
-        }
-        return
-      }
-      setLines(prev => {
-        const existing = prev.find(l => l.product.id === product.id)
-        if (existing) {
-          return prev.map(l => l.product.id === product.id ? { ...l, quantity: l.quantity + 1 } : l)
-        }
-        return [...prev, { product, quantity: 1, unitPrice: product.price }]
-      })
-      setError(null)
-      clear()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
     }
   }
 
@@ -235,7 +190,6 @@ export default function FreeExchangeTab() {
   function reset() {
     setDoneMsg(null)
     setError(null)
-    setTimeout(() => returnInputRef.current?.focus(), 50)
   }
 
   if (doneMsg) {
@@ -291,24 +245,20 @@ export default function FreeExchangeTab() {
             title="↩️ Producto(s) devuelto(s)"
             hint="Precio de lista, editable si corresponde"
             lines={returnedLines}
-            onScan={(q, opts) => void scanInto(q, setReturnedLines, () => setReturnScan(''), opts)}
+            onAdd={p => { addProductLine(p, setReturnedLines); setError(null) }}
             onQtyChange={(id, qty) => setReturnedLines(prev => prev.map(l => l.product.id === id ? { ...l, quantity: qty } : l))}
             onPriceChange={(id, price) => setReturnedLines(prev => prev.map(l => l.product.id === id ? { ...l, unitPrice: price } : l))}
             onRemove={id => setReturnedLines(prev => prev.filter(l => l.product.id !== id))}
-            scanQuery={returnScan}
-            setScanQuery={setReturnScan}
             color="#dc2626"
           />
           <CartSection
             title="🛍️ Producto(s) nuevo(s)"
             hint="Lo que el cliente se lleva a cambio (opcional)"
             lines={newLines}
-            onScan={(q, opts) => void scanInto(q, setNewLines, () => setNewScan(''), opts)}
+            onAdd={p => { addProductLine(p, setNewLines); setError(null) }}
             onQtyChange={(id, qty) => setNewLines(prev => prev.map(l => l.product.id === id ? { ...l, quantity: qty } : l))}
             onPriceChange={(id, price) => setNewLines(prev => prev.map(l => l.product.id === id ? { ...l, unitPrice: price } : l))}
             onRemove={id => setNewLines(prev => prev.filter(l => l.product.id !== id))}
-            scanQuery={newScan}
-            setScanQuery={setNewScan}
             color="#2563eb"
           />
         </div>

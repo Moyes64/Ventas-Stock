@@ -249,7 +249,7 @@ const electronAPI = {
   // Cambios y Devoluciones
   cambios: {
     preview: (rawQr: string) => invoke('cambios:preview', rawQr),
-    confirm: (rawQr: string, notes?: string) => invoke('cambios:confirm', rawQr, notes),
+    confirm: (input: unknown) => invoke('cambios:confirm', input),
     list: (limit?: number) => invoke('cambios:list', limit),
   },
 

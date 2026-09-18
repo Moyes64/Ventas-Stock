@@ -298,15 +298,16 @@ export class FinanceService {
   }
 
   /**
-   * Igual que `registerSaleIncome` pero para operaciones que no son una Sale — por
-   * ahora, la diferencia a favor del comercio en una devolución sin ticket de cambio
-   * (el cliente entrega un producto más caro que el que devuelve). No queda ligado a
-   * ninguna venta (`saleId` null en el movimiento); la descripción identifica el
-   * origen. Igual que en una venta, si el medio de pago es posnet/web, descuenta
-   * además la comisión de Mercado Pago vigente.
+   * Igual que `registerSaleIncome` pero para operaciones que no son una Sale — la
+   * diferencia a favor del comercio en un cambio/devolución con producto de
+   * reemplazo, sea "con ticket" o "sin ticket" (el cliente entrega un producto más
+   * caro que el que devuelve). No queda ligado a ninguna venta (`saleId` null en el
+   * movimiento); la descripción identifica el origen. Igual que en una venta, si el
+   * medio de pago es posnet/web, descuenta además la comisión de Mercado Pago vigente.
    */
   registerExchangeDifferenceIncome(input: {
-    freeExchangeId: number
+    exchangeId: number
+    sourceLabel: string
     paymentMethod: string
     monto: number
     fecha: string
@@ -314,7 +315,7 @@ export class FinanceService {
     const account = this.resolveIncomeAccount(input.paymentMethod)
     if (!account) return null
     const categoria = this.repo.findCategoryByName(VENTA_CATEGORIA)
-    const descripcion = `Diferencia cambio sin ticket #${input.freeExchangeId}`
+    const descripcion = `Diferencia cambio ${input.sourceLabel} #${input.exchangeId}`
 
     const id = this.repo.createMovement({
       accountId: account.id,
