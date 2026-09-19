@@ -75,6 +75,9 @@ export default function PriceUpdatePage() {
   const [applyError, setApplyError] = useState<string | null>(null)
   const [appliedCount, setAppliedCount] = useState(0)
 
+  const [exporting, setExporting] = useState(false)
+  const [exportMsg, setExportMsg] = useState<string | null>(null)
+
   useEffect(() => {
     void suppliers.list(true).then(setSuppliersList)
   }, [])
@@ -235,6 +238,61 @@ export default function PriceUpdatePage() {
   const bySourceCount = (src: Exclude<MatchSource, null>) =>
     rows.filter(r => r.matchSource === src).length
 
+  // ── Exportar a Excel ──────────────────────────────────────────────────────
+  // CSV separado por ';' (formato que Excel es-AR abre directo). El BOM UTF-8
+  // lo agrega el proceso principal al guardar. Exporta lo mismo que se ve en
+  // pantalla, en el mismo orden de columnas de la tabla.
+  function csvCell(value: string | number): string {
+    const s = String(value)
+    return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+  }
+
+  function montoCsv(n: number): string {
+    return n.toFixed(2).replace('.', ',')
+  }
+
+  function buildComparisonCsv(): string {
+    const headers = ['Producto', 'Costo actual', 'Costo Excel', 'Dif. %', '% Ganancia', 'PVP Actual', 'Nuevo PVP']
+    const dataRows = rows.map(row => {
+      const excelRow = row.excelRowIndex !== null ? excelRows[row.excelRowIndex] : null
+      const diffPct = excelRow && row.currentCost > 0
+        ? ((excelRow.price - row.currentCost) / row.currentCost) * 100
+        : null
+      return [
+        row.name,
+        montoCsv(row.currentCost),
+        excelRow ? montoCsv(excelRow.price) : '',
+        diffPct !== null ? `${diffPct > 0 ? '+' : ''}${diffPct.toFixed(1)}%` : '',
+        excelRow ? row.gainPercent : '',
+        montoCsv(row.currentPrice),
+        excelRow && row.finalPrice !== '' ? montoCsv(parseFloat(row.finalPrice) || 0) : '',
+      ]
+    })
+    return [headers, ...dataRows].map(r => r.map(csvCell).join(';')).join('\r\n')
+  }
+
+  async function handleExport() {
+    if (rows.length === 0) return
+    setExporting(true)
+    setExportMsg(null)
+    try {
+      const supplierName = suppliersList.find(s => s.id === supplierId)?.name ?? 'proveedor'
+      const defaultName = `Actualizacion_precios_${supplierName}.csv`.replace(/[\\/:*?"<>|]/g, '')
+      const result = await priceUpdate.exportCsv(buildComparisonCsv(), defaultName)
+      if (result.canceled) {
+        // el usuario canceló el diálogo — no hacer nada
+      } else if (result.success) {
+        setExportMsg(`✅ Exportado a: ${result.filePath ?? ''}`)
+      } else {
+        setExportMsg(`❌ ${result.error ?? 'No se pudo exportar el archivo'}`)
+      }
+    } catch (err) {
+      setExportMsg(`❌ ${err instanceof Error ? err.message : 'No se pudo exportar el archivo'}`)
+    } finally {
+      setExporting(false)
+    }
+  }
+
   async function handleApply() {
     const toApply = rows.filter(r => r.include && r.excelRowIndex !== null && r.finalPrice.trim() !== '')
     if (toApply.length === 0) return
@@ -370,13 +428,22 @@ export default function PriceUpdatePage() {
             </ul>
           )}
 
-          <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
             <button className="btn btn-secondary" style={{ fontSize: '0.8em' }} onClick={() => toggleAllMatched(true)}>
               ✓ Incluir todos los coincidentes
             </button>
             <button className="btn btn-secondary" style={{ fontSize: '0.8em' }} onClick={() => toggleAllMatched(false)}>
               ✗ Excluir todos
             </button>
+            <button
+              className="btn btn-secondary"
+              style={{ fontSize: '0.8em' }}
+              onClick={() => void handleExport()}
+              disabled={exporting}
+            >
+              {exporting ? '⏳ Exportando...' : '📊 Exportar a Excel'}
+            </button>
+            {exportMsg && <span className="text-muted" style={{ fontSize: '0.8em' }}>{exportMsg}</span>}
           </div>
 
           <div className="table-container">

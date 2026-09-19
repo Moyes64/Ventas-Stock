@@ -332,6 +332,13 @@ export const priceUpdate = {
   parseExcel: (filePath: string) => electron.priceUpdate.parseExcel(filePath) as Promise<ParseExcelResult>,
   applyUpdates: (updates: PriceUpdateItem[]) =>
     electron.priceUpdate.applyUpdates(updates) as Promise<{ updated: number }>,
+  exportCsv: (content: string, defaultName: string) =>
+    electron.priceUpdate.exportCsv(content, defaultName) as Promise<{
+      success: boolean
+      filePath?: string
+      canceled?: boolean
+      error?: string
+    }>,
 }
 
 // Sync

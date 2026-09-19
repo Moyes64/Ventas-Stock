@@ -1,4 +1,5 @@
 import { ipcMain, dialog } from 'electron'
+import fs from 'fs'
 import type { Database } from 'better-sqlite3'
 import { parsePriceExcel } from '../modules/price-update/parser'
 import { ProductRepository } from '../modules/catalog/repository'
@@ -46,5 +47,24 @@ export function registerPriceUpdateHandlers(db: Database): void {
     })
     applyAll(updates)
     return { updated: updates.length }
+  })
+
+  // Exportar la comparación en pantalla a un archivo CSV que se abre con Excel
+  ipcMain.handle('priceUpdate:exportCsv', async (_event, content: string, defaultName: string) => {
+    const { filePath, canceled } = await dialog.showSaveDialog({
+      title: 'Exportar comparación de precios a Excel',
+      defaultPath: defaultName,
+      filters: [{ name: 'CSV (Excel)', extensions: ['csv'] }],
+    })
+
+    if (canceled || !filePath) return { success: false, canceled: true }
+
+    try {
+      // BOM inicial para que Excel interprete el archivo como UTF-8 (acentos, símbolo $).
+      fs.writeFileSync(filePath, String.fromCharCode(0xfeff) + content, 'utf-8')
+      return { success: true, filePath }
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) }
+    }
   })
 }

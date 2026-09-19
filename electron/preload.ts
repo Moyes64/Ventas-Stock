@@ -176,6 +176,8 @@ const electronAPI = {
     selectExcel: () => invoke<string | null>('priceUpdate:selectExcel'),
     parseExcel: (filePath: string) => invoke('priceUpdate:parseExcel', filePath),
     applyUpdates: (updates: unknown) => invoke('priceUpdate:applyUpdates', updates),
+    exportCsv: (content: string, defaultName: string) =>
+      invoke('priceUpdate:exportCsv', content, defaultName),
   },
 
   // Printer Config
