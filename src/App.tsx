@@ -4,6 +4,7 @@ import Dashboard from './pages/Dashboard'
 import SalesPage from './pages/sales/SalesPage'
 import NewSalePage from './pages/sales/NewSalePage'
 import ProductsPage from './pages/catalog/ProductsPage'
+import MarkupPage from './pages/catalog/MarkupPage'
 import CustomersPage from './pages/customers/CustomersPage'
 import SuppliersPage from './pages/suppliers/SuppliersPage'
 import StockPage from './pages/stock/StockPage'
@@ -49,6 +50,7 @@ export default function App() {
             <Route path="sales" element={<SalesPage />} />
             <Route path="sales/new" element={<NewSalePage />} />
             <Route path="catalog" element={<ProductsPage />} />
+            <Route path="catalog/markup" element={<MarkupPage />} />
             <Route path="customers" element={<CustomersPage />} />
             <Route path="suppliers" element={<SuppliersPage />} />
             <Route path="stock" element={<StockPage />} />

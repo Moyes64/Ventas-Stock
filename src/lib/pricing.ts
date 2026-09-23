@@ -45,3 +45,15 @@ export function calcImpliedMargin(
   const denomPct = (cost / priceSinIva) * 100
   return 100 - comisionPct - costoFijoPct - denomPct
 }
+
+/**
+ * Redondea un precio HACIA ARRIBA al múltiplo de `step` (1, 10, 100, 1000…).
+ * Siempre hacia arriba para que el % de markup resultante nunca quede por
+ * debajo del objetivo. step <= 0 redondea hacia arriba al centavo. El épsilon
+ * evita saltar al múltiplo siguiente por errores de punto flotante cuando el
+ * precio ya es un múltiplo exacto.
+ */
+export function roundUpToStep(value: number, step: number): number {
+  if (step <= 0) return Math.ceil(value * 100 - 1e-6) / 100
+  return Math.ceil(value / step - 1e-9) * step
+}

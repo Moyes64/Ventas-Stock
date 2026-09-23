@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { catalog, suppliers as suppliersApi, printing as printingApi } from '../../lib/ipc'
 import type { Product, TaxRate, Supplier } from '../../types/ipc'
 import { useConfirm } from '../../hooks/useConfirm'
@@ -17,6 +18,7 @@ export default function ProductsPage() {
   const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { confirm, dialog: confirmDialog } = useConfirm()
+  const navigate = useNavigate()
 
   useEffect(() => {
     void suppliersApi.list(true).then(setSuppliersList)
@@ -94,6 +96,9 @@ export default function ProductsPage() {
         <div className="page-header-actions">
           <button className="btn btn-primary" onClick={() => { setEditProduct(null); setShowForm(true) }}>
             + Nuevo Producto
+          </button>
+          <button className="btn btn-secondary" onClick={() => navigate('/catalog/markup')}>
+            📈 Gestión de %Markup
           </button>
           <select
             className="input"
