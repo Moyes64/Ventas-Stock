@@ -24,9 +24,31 @@ import type {
   FinanceMpReconciliation,
   SaveMpReconciliationInput,
   MpReconciliationRow,
+  PartnerLoan,
+  PartnerLoanKind,
 } from './types'
 
 const RETIRO_SOCIO_CATEGORIA = 'Retiro de Socio'
+const PRESTAMO_SOCIO_CATEGORIA = 'Préstamo a Socio'
+const DEVOLUCION_PRESTAMO_CATEGORIA = 'Devolución de Préstamo'
+const APORTE_SOCIO_CATEGORIA = 'Aporte de Socio'
+const DEVOLUCION_APORTE_CATEGORIA = 'Devolución de Aporte'
+/** Categoría de devolución → categoría del movimiento original que cancela. */
+const DEVOLUCION_ORIGEN: Record<string, { origen: string; kind: PartnerLoanKind }> = {
+  [DEVOLUCION_PRESTAMO_CATEGORIA]: { origen: PRESTAMO_SOCIO_CATEGORIA, kind: 'prestamo' },
+  [DEVOLUCION_APORTE_CATEGORIA]: { origen: APORTE_SOCIO_CATEGORIA, kind: 'aporte' },
+}
+/**
+ * Plata que va y viene entre los socios y el negocio: exige indicar el socio y
+ * no es resultado del negocio (no suma ni resta a la utilidad del patrimonio).
+ */
+const SOCIO_CATEGORIAS = [
+  RETIRO_SOCIO_CATEGORIA,
+  PRESTAMO_SOCIO_CATEGORIA,
+  DEVOLUCION_PRESTAMO_CATEGORIA,
+  APORTE_SOCIO_CATEGORIA,
+  DEVOLUCION_APORTE_CATEGORIA,
+]
 const VENTA_CATEGORIA = 'Venta'
 const COMISION_MP_CATEGORIA = 'Comisión Mercado Pago'
 const AJUSTE_CONCILIACION_CATEGORIA = 'Ajuste Conciliación MP'
@@ -133,15 +155,52 @@ export class FinanceService {
       }
     }
 
-    if (categoria?.name === RETIRO_SOCIO_CATEGORIA && !input.partnerId) {
-      throw new Error('Debés indicar el socio para un retiro de socio')
-    }
-    if (input.partnerId) {
-      const partner = this.repo.findPartnerById(input.partnerId)
-      if (!partner) throw new Error(`El socio ${input.partnerId} no existe`)
+    let partnerId = input.partnerId ?? null
+    const devolucion = categoria ? DEVOLUCION_ORIGEN[categoria.name] : undefined
+    if (devolucion) {
+      if (!input.relatedMovementId) {
+        throw new Error(
+          devolucion.kind === 'prestamo'
+            ? 'Indicá qué préstamo se está devolviendo'
+            : 'Indicá qué aporte se está devolviendo'
+        )
+      }
+      const original = this.repo.findMovementById(input.relatedMovementId)
+      const origenCategoria = original?.categoriaId ? this.repo.findCategoryById(original.categoriaId) : undefined
+      if (!original || origenCategoria?.name !== devolucion.origen) {
+        throw new Error(`El movimiento #${input.relatedMovementId} no es un "${devolucion.origen}"`)
+      }
+      if (original.partnerId !== null && partnerId !== null && partnerId !== original.partnerId) {
+        throw new Error('El socio de la devolución tiene que ser el mismo del movimiento original')
+      }
+      partnerId = partnerId ?? original.partnerId
+      if (fecha < original.fecha) {
+        throw new Error('La devolución no puede tener fecha anterior al movimiento original')
+      }
+      const saldo = round2(original.monto - this.repo.sumRelatedMovements(original.id))
+      if (saldo <= 0) {
+        throw new Error(`El movimiento #${original.id} ya está totalmente devuelto`)
+      }
+      if (round2(input.monto) > saldo) {
+        throw new Error(`El monto supera el saldo pendiente de devolución ($${saldo.toFixed(2)})`)
+      }
+    } else if (input.relatedMovementId) {
+      throw new Error('Solo las devoluciones de préstamo o de aporte se vinculan a otro movimiento')
     }
 
-    const id = this.repo.createMovement(input)
+    if (categoria && SOCIO_CATEGORIAS.includes(categoria.name) && !partnerId) {
+      throw new Error(`Debés indicar el socio para "${categoria.name}"`)
+    }
+    if (partnerId) {
+      const partner = this.repo.findPartnerById(partnerId)
+      if (!partner) throw new Error(`El socio ${partnerId} no existe`)
+    }
+
+    const id = this.repo.createMovement({
+      ...input,
+      partnerId,
+      relatedMovementId: devolucion ? input.relatedMovementId : null,
+    })
     const created = this.repo.findMovementById(id)
     if (!created) throw new Error('Error al recuperar el movimiento creado')
     return created
@@ -155,7 +214,24 @@ export class FinanceService {
         'Este movimiento se generó automáticamente desde una venta. Para revertirlo, cancelá la venta en el módulo de Ventas.'
       )
     }
+    if (this.repo.countRelatedMovements(id) > 0) {
+      throw new Error('Este movimiento tiene devoluciones registradas. Eliminá primero las devoluciones.')
+    }
     this.repo.deleteMovement(id)
+  }
+
+  /**
+   * Préstamos a socios y aportes de socios con lo devuelto hasta ahora.
+   * onlyPending = true deja solo los que todavía tienen saldo por devolver.
+   */
+  listPartnerLoans(onlyPending = false): PartnerLoan[] {
+    const origins: Array<{ kind: PartnerLoanKind; categoriaId: number }> = []
+    const prestamo = this.repo.findCategoryByName(PRESTAMO_SOCIO_CATEGORIA)
+    const aporte = this.repo.findCategoryByName(APORTE_SOCIO_CATEGORIA)
+    if (prestamo) origins.push({ kind: 'prestamo', categoriaId: prestamo.id })
+    if (aporte) origins.push({ kind: 'aporte', categoriaId: aporte.id })
+    const loans = this.repo.listPartnerLoans(origins, this.repo.getFoundingDate())
+    return onlyPending ? loans.filter(l => l.saldo > 0) : loans
   }
 
   /** Ingresos registrados cuya fecha de acreditación todavía no llegó (hoy como referencia). */
@@ -444,19 +520,26 @@ export class FinanceService {
     // existía, no utilidad generada por el negocio.
     // Los ingresos todavía pendientes de acreditación (ej. Mercado Pago) se excluyen:
     // no son plata disponible para retirar hasta que efectivamente se acrediten.
+    // Retiros, préstamos, aportes y sus devoluciones son plata que va y viene entre
+    // los socios y el negocio, no resultado del negocio: se excluyen de ambos lados.
     const asOfDate = localToday()
-    const totalIngresos = this.repo.sumFinanceMovementsByTipo('ingreso', undefined, foundingDate, undefined, undefined, asOfDate)
-    const totalEgresosSinRetiros = retiroCategoria
-      ? this.repo.sumFinanceMovementsByTipo('egreso', undefined, foundingDate, undefined, retiroCategoria.id)
-      : this.repo.sumFinanceMovementsByTipo('egreso', undefined, foundingDate)
+    const socioCategoriaIds = SOCIO_CATEGORIAS
+      .map(name => this.repo.findCategoryByName(name)?.id)
+      .filter((id): id is number => id !== undefined)
+    const totalIngresos = this.repo.sumFinanceMovementsByTipo('ingreso', undefined, foundingDate, undefined, socioCategoriaIds, asOfDate)
+    const totalEgresos = this.repo.sumFinanceMovementsByTipo('egreso', undefined, foundingDate, undefined, socioCategoriaIds)
 
-    const utilidadNetaTotal = totalIngresos - totalEgresosSinRetiros
+    const utilidadNetaTotal = totalIngresos - totalEgresos
+    const loans = this.listPartnerLoans()
 
     return partners.map(partner => {
       const utilidadAcumulada = (partner.ownershipPct / 100) * utilidadNetaTotal
       const retirosRealizados = retiroCategoria
         ? this.repo.sumFinanceMovementsByPartner(retiroCategoria.id, partner.id, foundingDate)
         : 0
+      const propios = loans.filter(l => l.partnerId === partner.id)
+      const sum = (kind: PartnerLoanKind, field: 'monto' | 'saldo') =>
+        round2(propios.filter(l => l.kind === kind).reduce((s, l) => s + l[field], 0))
       return {
         partnerId: partner.id,
         partnerName: partner.name,
@@ -464,6 +547,9 @@ export class FinanceService {
         utilidadAcumulada,
         retirosRealizados,
         saldoPendiente: utilidadAcumulada - retirosRealizados,
+        prestamosPendientes: sum('prestamo', 'saldo'),
+        aportesRealizados: sum('aporte', 'monto'),
+        aportesPendientes: sum('aporte', 'saldo'),
       }
     })
   }

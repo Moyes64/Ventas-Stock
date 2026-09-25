@@ -50,6 +50,7 @@ import type {
   FinanceCashFlowPoint,
   FinanceCategoryExpense,
   FinancePartnerEquity,
+  FinancePartnerLoan,
   FinancePendingAccreditation,
   FinanceTransfer,
   CreateFinanceTransferInput,
@@ -474,6 +475,8 @@ export const finance = {
   getExpensesByCategory: (dateFrom: string, dateTo: string, accountId?: number) =>
     electron.finance.getExpensesByCategory(dateFrom, dateTo, accountId) as Promise<FinanceCategoryExpense[]>,
   getPartnersEquity: () => electron.finance.getPartnersEquity() as Promise<FinancePartnerEquity[]>,
+  listPartnerLoans: (onlyPending?: boolean) =>
+    electron.finance.listPartnerLoans(onlyPending) as Promise<FinancePartnerLoan[]>,
   listMpFeeRates: (paymentMethod?: MpFeePaymentMethod) =>
     electron.finance.listMpFeeRates(paymentMethod) as Promise<FinanceMpFeeRate[]>,
   createMpFeeRate: (input: CreateMpFeeRateInput) =>

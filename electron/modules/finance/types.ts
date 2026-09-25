@@ -42,6 +42,9 @@ export interface FinanceMovement {
    *  venta se cobró con más de un medio. null en ventas de un solo medio y en
    *  movimientos que no vienen de una venta. */
   salePaymentId: number | null
+  /** Solo en devoluciones ("Devolución de Préstamo" / "Devolución de Aporte"):
+   *  el préstamo o aporte original que esta devolución cancela (total o parcialmente). */
+  relatedMovementId: number | null
   createdAt: string
 }
 
@@ -57,6 +60,7 @@ export interface CreateMovementInput {
   supplierId?: number | null
   saleId?: number | null
   salePaymentId?: number | null
+  relatedMovementId?: number | null
 }
 
 export interface MovementFilters {
@@ -138,6 +142,31 @@ export interface PartnerEquity {
   utilidadAcumulada: number
   retirosRealizados: number
   saldoPendiente: number
+  /** Préstamos del negocio al socio todavía no devueltos (lo que el socio le debe al negocio). */
+  prestamosPendientes: number
+  /** Total aportado por el socio desde la fecha fundacional. */
+  aportesRealizados: number
+  /** Aportes que el negocio todavía no le devolvió al socio (lo que el negocio le debe al socio). */
+  aportesPendientes: number
+}
+
+export type PartnerLoanKind = 'prestamo' | 'aporte'
+
+/**
+ * Un préstamo a socio o un aporte de socio, con lo devuelto hasta ahora.
+ * saldo = monto − devuelto; saldo 0 = cancelado.
+ */
+export interface PartnerLoan {
+  movementId: number
+  kind: PartnerLoanKind
+  partnerId: number | null
+  partnerName: string | null
+  accountId: number
+  fecha: string
+  descripcion: string
+  monto: number
+  devuelto: number
+  saldo: number
 }
 
 // ── Comisiones de Mercado Pago (QR / Débito / Crédito / tienda web) y conciliación ──

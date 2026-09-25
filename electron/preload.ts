@@ -282,6 +282,7 @@ const electronAPI = {
     getExpensesByCategory: (dateFrom: string, dateTo: string, accountId?: number) =>
       invoke('finance:getExpensesByCategory', dateFrom, dateTo, accountId),
     getPartnersEquity: () => invoke('finance:getPartnersEquity'),
+    listPartnerLoans: (onlyPending?: boolean) => invoke('finance:listPartnerLoans', onlyPending),
     listMpFeeRates: (paymentMethod?: string) => invoke('finance:listMpFeeRates', paymentMethod),
     createMpFeeRate: (input: unknown) => invoke('finance:createMpFeeRate', input),
     deleteMpFeeRate: (id: number) => invoke('finance:deleteMpFeeRate', id),

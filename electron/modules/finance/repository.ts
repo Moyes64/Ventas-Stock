@@ -20,6 +20,8 @@ import type {
   CreateMpFeeRateInput,
   FinanceMpReconciliation,
   MpReconciliationStatus,
+  PartnerLoan,
+  PartnerLoanKind,
 } from './types'
 
 interface PartnerRow {
@@ -58,6 +60,7 @@ interface MovementRow {
   supplier_id: number | null
   sale_id: number | null
   sale_payment_id: number | null
+  related_movement_id: number | null
   created_at: string
 }
 
@@ -307,9 +310,9 @@ export class FinanceRepository {
     const result = this.db
       .prepare(
         `INSERT INTO finance_movements
-           (account_id, tipo, categoria_id, monto, descripcion, fecha, fecha_acreditacion, partner_id, supplier_id, sale_id, sale_payment_id)
+           (account_id, tipo, categoria_id, monto, descripcion, fecha, fecha_acreditacion, partner_id, supplier_id, sale_id, sale_payment_id, related_movement_id)
          VALUES
-           (@accountId, @tipo, @categoriaId, @monto, @descripcion, @fecha, @fechaAcreditacion, @partnerId, @supplierId, @saleId, @salePaymentId)`
+           (@accountId, @tipo, @categoriaId, @monto, @descripcion, @fecha, @fechaAcreditacion, @partnerId, @supplierId, @saleId, @salePaymentId, @relatedMovementId)`
       )
       .run({
         accountId: input.accountId,
@@ -323,12 +326,72 @@ export class FinanceRepository {
         supplierId: input.supplierId ?? null,
         saleId: input.saleId ?? null,
         salePaymentId: input.salePaymentId ?? null,
+        relatedMovementId: input.relatedMovementId ?? null,
       })
     return result.lastInsertRowid as number
   }
 
   deleteMovement(id: number): void {
     this.db.prepare('DELETE FROM finance_movements WHERE id = ?').run(id)
+  }
+
+  /** Cantidad de movimientos (devoluciones) vinculados a un movimiento original. */
+  countRelatedMovements(id: number): number {
+    const row = this.db
+      .prepare('SELECT COUNT(*) AS n FROM finance_movements WHERE related_movement_id = ?')
+      .get(id) as { n: number }
+    return row.n
+  }
+
+  /** Suma de las devoluciones ya registradas contra un préstamo/aporte. */
+  sumRelatedMovements(id: number): number {
+    const row = this.db
+      .prepare('SELECT COALESCE(SUM(monto), 0) AS total FROM finance_movements WHERE related_movement_id = ?')
+      .get(id) as { total: number }
+    return row.total
+  }
+
+  /**
+   * Préstamos a socios (originCategoriaId del kind 'prestamo') y aportes de socios
+   * (kind 'aporte'), cada uno con lo devuelto hasta ahora. Un original sin devoluciones
+   * tiene devuelto = 0; la devolución puede venir en varias cuotas.
+   */
+  listPartnerLoans(
+    origins: Array<{ kind: PartnerLoanKind; categoriaId: number }>,
+    dateFrom?: string
+  ): PartnerLoan[] {
+    if (origins.length === 0) return []
+    const params: Record<string, unknown> = {}
+    const kindCases = origins
+      .map((o, i) => {
+        params[`cat${i}`] = o.categoriaId
+        params[`kind${i}`] = o.kind
+        return `WHEN @cat${i} THEN @kind${i}`
+      })
+      .join(' ')
+    const conditions = [`fm.categoria_id IN (${origins.map((_, i) => `@cat${i}`).join(', ')})`]
+    if (dateFrom !== undefined) {
+      conditions.push('fm.fecha >= @dateFrom')
+      params.dateFrom = dateFrom
+    }
+    const rows = this.db
+      .prepare(
+        `SELECT fm.id AS movementId,
+                CASE fm.categoria_id ${kindCases} END AS kind,
+                fm.partner_id AS partnerId,
+                fp.name AS partnerName,
+                fm.account_id AS accountId,
+                fm.fecha AS fecha,
+                fm.descripcion AS descripcion,
+                fm.monto AS monto,
+                COALESCE((SELECT SUM(d.monto) FROM finance_movements d WHERE d.related_movement_id = fm.id), 0) AS devuelto
+         FROM finance_movements fm
+         LEFT JOIN finance_partners fp ON fp.id = fm.partner_id
+         WHERE ${conditions.join(' AND ')}
+         ORDER BY fm.fecha ASC, fm.id ASC`
+      )
+      .all(params) as Array<Omit<PartnerLoan, 'saldo'>>
+    return rows.map(r => ({ ...r, saldo: Math.round((r.monto - r.devuelto) * 100) / 100 }))
   }
 
   // ── Pendientes de acreditación ───────────────────────────────────────────
@@ -477,16 +540,19 @@ export class FinanceRepository {
     accountId?: number,
     dateFrom?: string,
     dateTo?: string,
-    excludeCategoriaId?: number,
+    excludeCategoriaIds: number[] = [],
     asOfDate?: string
   ): number {
     const { where, params } = this.buildDateAccountFilter(accountId, dateFrom, dateTo)
     const conditions = where ? [where.replace(/^WHERE /, '')] : []
     conditions.push('tipo = @tipo')
     params.tipo = tipo
-    if (excludeCategoriaId !== undefined) {
-      conditions.push('(categoria_id IS NULL OR categoria_id != @excludeCategoriaId)')
-      params.excludeCategoriaId = excludeCategoriaId
+    if (excludeCategoriaIds.length > 0) {
+      const placeholders = excludeCategoriaIds.map((id, i) => {
+        params[`excludeCat${i}`] = id
+        return `@excludeCat${i}`
+      })
+      conditions.push(`(categoria_id IS NULL OR categoria_id NOT IN (${placeholders.join(', ')}))`)
     }
     // Los ingresos cuya fecha_acreditacion todavía no llegó no son plata disponible
     // todavía, aunque ya estén registrados como movimiento (ver sumFinanceMovementsNet).
@@ -503,7 +569,7 @@ export class FinanceRepository {
   }
 
   sumFinanceMovementsByPartner(categoriaId: number, partnerId: number, dateFrom?: string): number {
-    const conditions = ["tipo = 'egreso'", 'categoria_id = @categoriaId', 'partner_id = @partnerId']
+    const conditions = ['categoria_id = @categoriaId', 'partner_id = @partnerId']
     const params: Record<string, unknown> = { categoriaId, partnerId }
     if (dateFrom !== undefined) {
       conditions.push('fecha >= @dateFrom')
@@ -828,6 +894,7 @@ export class FinanceRepository {
       supplierId: row.supplier_id,
       saleId: row.sale_id,
       salePaymentId: row.sale_payment_id,
+      relatedMovementId: row.related_movement_id,
       createdAt: row.created_at,
     }
   }

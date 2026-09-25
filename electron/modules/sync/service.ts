@@ -176,6 +176,8 @@ export class SyncService {
         utilidadAcumulada: p.utilidadAcumulada,
         retirosRealizados: p.retirosRealizados,
         saldoPendiente: p.saldoPendiente,
+        prestamosPendientes: p.prestamosPendientes,
+        aportesPendientes: p.aportesPendientes,
       })),
       pendingAccreditations: pending.map(p => ({
         accountName: p.accountName,

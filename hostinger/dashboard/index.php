@@ -477,7 +477,7 @@ $lowStock   = array_filter($stock, fn($p) => $p['isLow'] ?? false);
   <details class="collapsible" open>
     <summary>Patrimonio y retiros por socio</summary>
     <table class="mini-table">
-      <thead><tr><th>Socio</th><th>%</th><th>Utilidad</th><th>Retiros</th><th>Saldo</th></tr></thead>
+      <thead><tr><th>Socio</th><th>%</th><th>Utilidad</th><th>Retiros</th><th>Saldo</th><th>Debe préstamos</th><th>Aportes a devolver</th></tr></thead>
       <tbody>
         <?php foreach ($partnersEquity as $p): ?>
         <tr>
@@ -488,6 +488,8 @@ $lowStock   = array_filter($stock, fn($p) => $p['isLow'] ?? false);
           <td class="<?= ($p['saldoPendiente'] ?? 0) < 0 ? 'text-danger' : '' ?>">
             <?= fmt((float)($p['saldoPendiente'] ?? 0)) ?>
           </td>
+          <td class="<?= ($p['prestamosPendientes'] ?? 0) > 0 ? 'text-danger' : '' ?>"><?= fmt((float)($p['prestamosPendientes'] ?? 0)) ?></td>
+          <td><?= fmt((float)($p['aportesPendientes'] ?? 0)) ?></td>
         </tr>
         <?php endforeach; ?>
       </tbody>

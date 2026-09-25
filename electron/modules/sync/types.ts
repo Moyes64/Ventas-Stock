@@ -161,6 +161,8 @@ export interface SyncFinancePartnerEquity {
   utilidadAcumulada: number
   retirosRealizados: number
   saldoPendiente: number
+  prestamosPendientes: number
+  aportesPendientes: number
 }
 
 export interface SyncFinance {

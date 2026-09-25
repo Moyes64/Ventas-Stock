@@ -191,6 +191,9 @@ export default function FinanceDashboardPage() {
 
       {/* Patrimonio y retiros por socio */}
       <h3>Patrimonio y retiros por socio</h3>
+      <p className="page-subtitle">
+        La utilidad no incluye aportes, retiros, préstamos a socios ni sus devoluciones: son movimientos entre los socios y el negocio.
+      </p>
       <div className="table-container">
         <table className="table">
           <thead>
@@ -200,6 +203,9 @@ export default function FinanceDashboardPage() {
               <th>Utilidad acumulada</th>
               <th>Retiros realizados</th>
               <th>Saldo pendiente</th>
+              <th title="Préstamos del negocio al socio todavía no devueltos">Debe por préstamos</th>
+              <th title="Total aportado por el socio">Aportes realizados</th>
+              <th title="Aportes que el negocio todavía no le devolvió al socio">Aportes a devolver</th>
             </tr>
           </thead>
           <tbody>
@@ -210,6 +216,9 @@ export default function FinanceDashboardPage() {
                 <td>{currency(p.utilidadAcumulada)}</td>
                 <td>{currency(p.retirosRealizados)}</td>
                 <td className={p.saldoPendiente < 0 ? 'text-danger' : ''}>{currency(p.saldoPendiente)}</td>
+                <td className={p.prestamosPendientes > 0 ? 'text-danger' : ''}>{currency(p.prestamosPendientes)}</td>
+                <td>{currency(p.aportesRealizados)}</td>
+                <td>{currency(p.aportesPendientes)}</td>
               </tr>
             ))}
           </tbody>

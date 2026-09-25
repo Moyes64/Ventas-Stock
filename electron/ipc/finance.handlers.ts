@@ -92,6 +92,10 @@ export function registerFinanceHandlers(db: Database): void {
     return financeService.getPartnersEquity()
   })
 
+  ipcMain.handle('finance:listPartnerLoans', (_event, onlyPending?: boolean) => {
+    return financeService.listPartnerLoans(onlyPending)
+  })
+
   // Comisiones de Mercado Pago (QR / Débito / Crédito)
   ipcMain.handle('finance:listMpFeeRates', (_event, paymentMethod?: MpFeePaymentMethod) => {
     return financeService.listMpFeeRates(paymentMethod)

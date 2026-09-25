@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { finance, suppliers } from '../../lib/ipc'
 import { localFirstOfMonth, localToday, formatDate } from '../../lib/date'
 import type {
@@ -6,13 +6,35 @@ import type {
   FinanceCategory,
   FinanceMovement,
   FinancePartner,
+  FinancePartnerLoan,
+  FinancePartnerLoanKind,
   FinancePendingAccreditation,
   FinanceTransfer,
   Supplier,
 } from '../../types/ipc'
 
-const RETIRO_SOCIO = 'Retiro de Socio'
 const PAGO_PROVEEDORES = 'Pago a Proveedores'
+/** Categorías que exigen indicar el socio (plata entre los socios y el negocio). */
+const SOCIO_CATEGORIAS = [
+  'Retiro de Socio',
+  'Préstamo a Socio',
+  'Devolución de Préstamo',
+  'Aporte de Socio',
+  'Devolución de Aporte',
+]
+/** Categoría de devolución → tipo de movimiento original que cancela. */
+const DEVOLUCION_KIND: Record<string, FinancePartnerLoanKind> = {
+  'Devolución de Préstamo': 'prestamo',
+  'Devolución de Aporte': 'aporte',
+}
+const DEVOLUCION_CATEGORIA: Record<FinancePartnerLoanKind, string> = {
+  prestamo: 'Devolución de Préstamo',
+  aporte: 'Devolución de Aporte',
+}
+const LOAN_KIND_LABEL: Record<FinancePartnerLoanKind, string> = {
+  prestamo: 'Préstamo a socio',
+  aporte: 'Aporte de socio',
+}
 
 type MovementSortKey = 'fecha' | 'cuenta' | 'tipo' | 'categoria' | 'socioProveedor' | 'descripcion' | 'monto' | 'acreditacion'
 
@@ -35,6 +57,8 @@ export default function MovementsPage() {
   const [movements, setMovements] = useState<FinanceMovement[]>([])
   const [pending, setPending] = useState<FinancePendingAccreditation[]>([])
   const [transfers, setTransfers] = useState<FinanceTransfer[]>([])
+  // Préstamos a socios / aportes de socios (todos, sin filtro de fecha) con lo devuelto hasta ahora
+  const [loans, setLoans] = useState<FinancePartnerLoan[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [foundingDate, setFoundingDate] = useState<string | null>(null)
@@ -59,6 +83,12 @@ export default function MovementsPage() {
   const [fechaAcreditacion, setFechaAcreditacion] = useState('')
   const [partnerId, setPartnerId] = useState<number | ''>('')
   const [supplierId, setSupplierId] = useState<number | ''>('')
+  const [relatedMovementId, setRelatedMovementId] = useState<number | ''>('')
+  const formRef = useRef<HTMLDivElement>(null)
+  const montoRef = useRef<HTMLInputElement>(null)
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [formHighlight, setFormHighlight] = useState(false)
+  const [loanBoxError, setLoanBoxError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
@@ -83,8 +113,18 @@ export default function MovementsPage() {
 
   const categoriasDelTipo = categories.filter(c => c.appliesTo === tipo || c.appliesTo === 'ambos')
   const categoriaSeleccionada = categories.find(c => c.id === categoriaId)
-  const requiereSocio = categoriaSeleccionada?.name === RETIRO_SOCIO
+  const requiereSocio = categoriaSeleccionada ? SOCIO_CATEGORIAS.includes(categoriaSeleccionada.name) : false
   const permiteProveedor = categoriaSeleccionada?.name === PAGO_PROVEEDORES
+  const devolucionKind = categoriaSeleccionada ? DEVOLUCION_KIND[categoriaSeleccionada.name] : undefined
+  const pendingLoans = loans.filter(l => l.saldo > 0)
+  // Préstamos/aportes que se pueden elegir para la devolución: los del tipo que
+  // corresponde, con saldo, y del socio elegido (si ya se eligió uno).
+  const loansDevolvibles = devolucionKind
+    ? pendingLoans.filter(
+        l => l.kind === devolucionKind && (partnerId === '' || l.partnerId === null || l.partnerId === partnerId)
+      )
+    : []
+  const loanById = new Map(loans.map(l => [l.movementId, l]))
 
   async function loadCatalogs() {
     const [accs, cats, parts, sups, fd] = await Promise.all([
@@ -133,6 +173,14 @@ export default function MovementsPage() {
     }
   }
 
+  async function loadLoans() {
+    try {
+      setLoans(await finance.listPartnerLoans())
+    } catch {
+      // No es crítico: sin esto solo se pierden el recuadro de pendientes y los estados de devolución.
+    }
+  }
+
   async function loadPending() {
     try {
       setPending(await finance.getPendingAccreditations())
@@ -144,6 +192,7 @@ export default function MovementsPage() {
   useEffect(() => {
     void loadCatalogs()
     void loadPending()
+    void loadLoans()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -159,6 +208,43 @@ export default function MovementsPage() {
     setFechaAcreditacion('')
     setPartnerId('')
     setSupplierId('')
+    setRelatedMovementId('')
+  }
+
+  function selectLoan(id: number | '') {
+    setRelatedMovementId(id)
+    const loan = id === '' ? undefined : loanById.get(id)
+    if (!loan) return
+    if (loan.partnerId !== null) setPartnerId(loan.partnerId)
+    setMonto(String(loan.saldo))
+    if (!descripcion.trim()) {
+      setDescripcion(`Devolución ${loan.kind === 'prestamo' ? 'préstamo' : 'aporte'} #${loan.movementId} — ${loan.descripcion}`)
+    }
+  }
+
+  /** Precarga el form de alta con la devolución (total del saldo) de un préstamo/aporte pendiente. */
+  function startDevolucion(loan: FinancePartnerLoan) {
+    const categoria = categories.find(c => c.name === DEVOLUCION_CATEGORIA[loan.kind])
+    if (!categoria) {
+      setLoanBoxError(`No existe la categoría "${DEVOLUCION_CATEGORIA[loan.kind]}"`)
+      return
+    }
+    setLoanBoxError(null)
+    setTipo(loan.kind === 'prestamo' ? 'ingreso' : 'egreso')
+    setCategoriaId(categoria.id)
+    setPartnerId(loan.partnerId ?? '')
+    setRelatedMovementId(loan.movementId)
+    setMonto(String(loan.saldo))
+    setDescripcion(`Devolución ${loan.kind === 'prestamo' ? 'préstamo' : 'aporte'} #${loan.movementId} — ${loan.descripcion}`)
+    setFechaAcreditacion('')
+    setSaveError(null)
+    // El scroll de la app es de un contenedor interno, no de window: se lleva el
+    // form a la vista, se resalta un momento y se deja el foco en el monto.
+    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    setTimeout(() => montoRef.current?.focus({ preventScroll: true }), 350)
+    setFormHighlight(true)
+    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current)
+    highlightTimerRef.current = setTimeout(() => setFormHighlight(false), 1500)
   }
 
   async function handleSave() {
@@ -175,8 +261,12 @@ export default function MovementsPage() {
       setSaveError('El monto debe ser mayor a cero')
       return
     }
+    if (devolucionKind && relatedMovementId === '') {
+      setSaveError(devolucionKind === 'prestamo' ? 'Seleccioná el préstamo que se devuelve' : 'Seleccioná el aporte que se devuelve')
+      return
+    }
     if (requiereSocio && partnerId === '') {
-      setSaveError('Seleccioná el socio que realiza el retiro')
+      setSaveError('Seleccioná el socio')
       return
     }
     if (fechaAcreditacion && fechaAcreditacion < fecha) {
@@ -197,10 +287,12 @@ export default function MovementsPage() {
         fechaAcreditacion: tipo === 'ingreso' && fechaAcreditacion ? fechaAcreditacion : null,
         partnerId: partnerId === '' ? null : partnerId,
         supplierId: supplierId === '' ? null : supplierId,
+        relatedMovementId: devolucionKind && relatedMovementId !== '' ? relatedMovementId : null,
       })
       resetForm()
       await loadMovements()
       await loadPending()
+      await loadLoans()
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Error al guardar el movimiento')
     } finally {
@@ -213,6 +305,7 @@ export default function MovementsPage() {
       await finance.deleteMovement(id)
       await loadMovements()
       await loadPending()
+      await loadLoans()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al eliminar el movimiento')
     }
@@ -302,6 +395,30 @@ export default function MovementsPage() {
 
   function socioProveedorLabel(m: FinanceMovement): string {
     return m.partnerId ? partnerName(m.partnerId) : m.supplierId ? supplierName(m.supplierId) : ''
+  }
+
+  /** Estado de devolución de un préstamo/aporte, o a qué original apunta una devolución. */
+  function loanStatusBadge(m: FinanceMovement) {
+    if (m.relatedMovementId !== null) {
+      return (
+        <span className="badge badge--info" style={{ marginLeft: 6 }} title="Devolución vinculada al movimiento original">
+          ↩ devuelve #{m.relatedMovementId}
+        </span>
+      )
+    }
+    const loan = loanById.get(m.id)
+    if (!loan) return null
+    if (loan.saldo <= 0) {
+      return <span className="badge badge--success" style={{ marginLeft: 6 }}>✓ Devuelto</span>
+    }
+    if (loan.devuelto > 0) {
+      return (
+        <span className="badge badge--warning" style={{ marginLeft: 6 }}>
+          Parcial · devuelto {currency(loan.devuelto)} de {currency(loan.monto)}
+        </span>
+      )
+    }
+    return <span className="badge badge--warning" style={{ marginLeft: 6 }}>Pendiente de devolución</span>
   }
 
   function sortValue(m: FinanceMovement, key: MovementSortKey): string | number {
@@ -401,8 +518,15 @@ export default function MovementsPage() {
       <h2 className="section-title">📋 Movimientos de Ingresos y Egresos</h2>
 
       {/* Nuevo movimiento */}
-      <div className="caja-movement-form">
-        <h3>Nuevo movimiento</h3>
+      <div ref={formRef} className={`caja-movement-form${formHighlight ? ' caja-movement-form--highlight' : ''}`}>
+        <h3>
+          Nuevo movimiento
+          {devolucionKind && relatedMovementId !== '' && (
+            <span className="badge badge--info" style={{ marginLeft: 8 }}>
+              ↩ devolución de {devolucionKind === 'prestamo' ? 'préstamo' : 'aporte'} #{relatedMovementId}
+            </span>
+          )}
+        </h3>
         <div className="form-row">
           <div className="form-group">
             <label className="label">Cuenta</label>
@@ -421,7 +545,7 @@ export default function MovementsPage() {
             <label className="label">Tipo</label>
             <select
               value={tipo}
-              onChange={e => { setTipo(e.target.value as 'ingreso' | 'egreso'); setCategoriaId('') }}
+              onChange={e => { setTipo(e.target.value as 'ingreso' | 'egreso'); setCategoriaId(''); setRelatedMovementId('') }}
               className="select"
             >
               <option value="ingreso">↑ Ingreso</option>
@@ -432,7 +556,7 @@ export default function MovementsPage() {
             <label className="label">Categoría</label>
             <select
               value={categoriaId}
-              onChange={e => setCategoriaId(e.target.value === '' ? '' : parseInt(e.target.value))}
+              onChange={e => { setCategoriaId(e.target.value === '' ? '' : parseInt(e.target.value)); setRelatedMovementId('') }}
               className="select"
             >
               <option value="">— Sin categoría —</option>
@@ -467,6 +591,7 @@ export default function MovementsPage() {
           <div className="form-group">
             <label className="label">Monto</label>
             <input
+              ref={montoRef}
               type="number"
               min="0.01"
               step="0.01"
@@ -496,12 +621,36 @@ export default function MovementsPage() {
               <label className="label">Socio</label>
               <select
                 value={partnerId}
-                onChange={e => setPartnerId(e.target.value === '' ? '' : parseInt(e.target.value))}
+                onChange={e => {
+                  const id = e.target.value === '' ? '' : parseInt(e.target.value)
+                  setPartnerId(id)
+                  const loan = relatedMovementId === '' ? undefined : loanById.get(relatedMovementId)
+                  if (loan && loan.partnerId !== null && loan.partnerId !== id) setRelatedMovementId('')
+                }}
                 className="select"
               >
                 <option value="">— Seleccionar —</option>
                 {partners.map(p => (
                   <option key={p.id} value={p.id}>{p.name} ({p.ownershipPct}%)</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {devolucionKind && (
+            <div className="form-group">
+              <label className="label">{devolucionKind === 'prestamo' ? 'Préstamo que se devuelve' : 'Aporte que se devuelve'}</label>
+              <select
+                value={relatedMovementId}
+                onChange={e => selectLoan(e.target.value === '' ? '' : parseInt(e.target.value))}
+                className="select"
+              >
+                <option value="">
+                  {loansDevolvibles.length === 0 ? '— No hay pendientes —' : '— Seleccionar —'}
+                </option>
+                {loansDevolvibles.map(l => (
+                  <option key={l.movementId} value={l.movementId}>
+                    #{l.movementId} · {formatDate(l.fecha)} · {l.partnerName ?? 'sin socio'} · {l.descripcion} · saldo {currency(l.saldo)}
+                  </option>
                 ))}
               </select>
             </div>
@@ -614,6 +763,59 @@ export default function MovementsPage() {
 
       {foundingDate && (
         <p className="page-subtitle">📅 Contabilidad iniciada el {formatDate(foundingDate)} — no se pueden ver ni cargar movimientos anteriores.</p>
+      )}
+
+      {pendingLoans.length > 0 && (
+        <div className="pending-accreditation-box">
+          <h3>🤝 Préstamos y aportes de socios pendientes de devolución</h3>
+          <table className="table table--compact">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Fecha</th>
+                <th>Tipo</th>
+                <th>Socio</th>
+                <th>Descripción</th>
+                <th>Monto</th>
+                <th>Devuelto</th>
+                <th>Saldo</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {pendingLoans.map(l => (
+                <tr key={l.movementId}>
+                  <td>{l.movementId}</td>
+                  <td>{formatDate(l.fecha)}</td>
+                  <td title={l.kind === 'prestamo' ? 'El socio le debe al negocio' : 'El negocio le debe al socio'}>
+                    {LOAN_KIND_LABEL[l.kind]}
+                  </td>
+                  <td>{l.partnerName ?? <span className="text-danger" title="Asignale el socio a este aporte">sin socio</span>}</td>
+                  <td>{l.descripcion}</td>
+                  <td>{currency(l.monto)}</td>
+                  <td>{currency(l.devuelto)}</td>
+                  <td><strong>{currency(l.saldo)}</strong></td>
+                  <td>
+                    {devolucionKind && relatedMovementId === l.movementId ? (
+                      <button
+                        className="btn btn-primary btn-sm"
+                        onClick={() => startDevolucion(l)}
+                        title="Ya está cargada en el formulario de arriba: revisá el monto y tocá + Agregar"
+                      >
+                        ↑ En el formulario
+                      </button>
+                    ) : (
+                      <button className="btn btn-secondary btn-sm" onClick={() => startDevolucion(l)}>
+                        ↩ Registrar devolución
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {loanBoxError && <p className="error">{loanBoxError}</p>}
+        </div>
       )}
 
       {pending.length > 0 && (
@@ -759,7 +961,10 @@ export default function MovementsPage() {
                       </td>
                       <td>{categoryName(m.categoriaId)}</td>
                       <td>{socioProveedorLabel(m) || '—'}</td>
-                      <td>{m.descripcion}</td>
+                      <td>
+                        {m.descripcion}
+                        {loanStatusBadge(m)}
+                      </td>
                       <td className={m.tipo === 'egreso' ? 'text-danger' : ''}>
                         {m.tipo === 'egreso' ? '−' : '+'}{currency(m.monto)}
                       </td>

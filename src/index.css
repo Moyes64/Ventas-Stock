@@ -1111,6 +1111,15 @@ code {
   margin-bottom: 20px;
 }
 
+.caja-movement-form {
+  transition: box-shadow 0.3s, border-color 0.3s;
+}
+
+.caja-movement-form--highlight {
+  border-color: #0369a1;
+  box-shadow: 0 0 0 3px #bae6fd;
+}
+
 .caja-movement-form h3 {
   font-size: 15px;
   font-weight: 600;
