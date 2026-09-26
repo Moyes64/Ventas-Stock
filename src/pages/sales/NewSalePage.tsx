@@ -35,6 +35,9 @@ export default function NewSalePage() {
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null)
   const [cart, setCart] = useState<CartItem[]>([])
   const [quantityDrafts, setQuantityDrafts] = useState<Record<number, string>>({})
+  // Precio unitario editado a mano (solo en Venta N / remito) -- ej. ventas por
+  // Mercado Libre, que se registran por el monto que realmente se cobró.
+  const [priceDrafts, setPriceDrafts] = useState<Record<number, string>>({})
   const [cajaChecked, setCajaChecked] = useState(false)
   const [cajaAbierta, setCajaAbierta] = useState(false)
   const [processing, setProcessing] = useState(false)
@@ -84,6 +87,18 @@ export default function NewSalePage() {
   useEffect(() => {
     if (!isHiddenOptionsVisible) setIsBlackSale(false)
   }, [isHiddenOptionsVisible])
+
+  // El precio editable es solo para remitos: al volver a factura, todo el
+  // carrito vuelve al precio de catálogo.
+  useEffect(() => {
+    if (isBlackSale) return
+    setPriceDrafts({})
+    setCart(prev =>
+      prev.some(item => item.unitPrice !== item.product.price)
+        ? prev.map(item => ({ ...item, unitPrice: item.product.price, subtotal: item.quantity * item.product.price }))
+        : prev
+    )
+  }, [isBlackSale])
 
   // Reset monto entregado when no leg (simple o combinada) es efectivo
   useEffect(() => {
@@ -169,6 +184,11 @@ export default function NewSalePage() {
       delete next[productId]
       return next
     })
+    setPriceDrafts(prev => {
+      const next = { ...prev }
+      delete next[productId]
+      return next
+    })
     setError(null)
   }
 
@@ -178,6 +198,17 @@ export default function NewSalePage() {
       prev.map(item =>
         item.product.id === productId
           ? { ...item, quantity, subtotal: quantity * item.unitPrice }
+          : item
+      )
+    )
+    setError(null)
+  }
+
+  function updateUnitPrice(productId: number, unitPrice: number) {
+    setCart(prev =>
+      prev.map(item =>
+        item.product.id === productId
+          ? { ...item, unitPrice, subtotal: item.quantity * unitPrice }
           : item
       )
     )
@@ -271,6 +302,10 @@ export default function NewSalePage() {
     const itemsForCheckout = cart.filter(item => item.quantity > 0)
     if (itemsForCheckout.length === 0) {
       setError('El carrito está vacío')
+      return
+    }
+    if (itemsForCheckout.some(item => item.unitPrice <= 0)) {
+      setError('Hay productos con precio en cero. Cargá el precio de venta de cada producto.')
       return
     }
     if (isSplitPayment) {
@@ -790,7 +825,35 @@ export default function NewSalePage() {
                   {cart.map(item => (
                     <tr key={item.product.id}>
                       <td>{item.product.name}</td>
-                      <td>{currency(item.unitPrice)}</td>
+                      <td>
+                        {isBlackSale ? (
+                          <>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              value={priceDrafts[item.product.id] ?? formatMontoInput(item.unitPrice.toFixed(2).replace('.', ',').replace(/,00$/, ''))}
+                              onChange={e => {
+                                const formatted = formatMontoInput(e.target.value)
+                                setPriceDrafts(prev => ({ ...prev, [item.product.id]: formatted }))
+                                updateUnitPrice(item.product.id, Math.round(parseMonto(formatted) * 100) / 100)
+                              }}
+                              onBlur={() => setPriceDrafts(prev => {
+                                const next = { ...prev }
+                                delete next[item.product.id]
+                                return next
+                              })}
+                              onFocus={e => e.target.select()}
+                              className="input input--price"
+                              title="Precio de venta real (editable en Venta N)"
+                            />
+                            {item.unitPrice !== item.product.price && (
+                              <div className="price-list-hint">Lista: {currency(item.product.price)}</div>
+                            )}
+                          </>
+                        ) : (
+                          currency(item.unitPrice)
+                        )}
+                      </td>
                       <td>
                         <input
                           type="number"
