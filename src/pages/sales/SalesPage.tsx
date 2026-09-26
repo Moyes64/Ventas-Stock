@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { sales, printing, systemParams, mail } from '../../lib/ipc'
+import { sales, printing, systemParams, mail, reporting } from '../../lib/ipc'
 import { localToday, formatDate } from '../../lib/date'
 import type { Sale } from '../../types/ipc'
 import { useConfirm } from '../../hooks/useConfirm'
@@ -31,6 +31,9 @@ export default function SalesPage() {
   const [error, setError] = useState<string | null>(null)
   const [dateFrom, setDateFrom] = useState(localToday)
   const [dateTo, setDateTo] = useState(localToday)
+  // Totalizador del período: se calcula en la base (mismo criterio que el
+  // reporte "Ventas por día") para no quedar limitado a las 100 filas listadas.
+  const [periodTotal, setPeriodTotal] = useState<{ count: number; amount: number } | null>(null)
   const [printingId, setPrintingId] = useState<number | null>(null)
   const [changePrintingId, setChangePrintingId] = useState<number | null>(null)
   const [mailingId, setMailingId] = useState<number | null>(null)
@@ -43,8 +46,15 @@ export default function SalesPage() {
     setLoading(true)
     setError(null)
     try {
-      const data = await sales.list({ dateFrom, dateTo, limit: 100 })
+      const [data, summary] = await Promise.all([
+        sales.list({ dateFrom, dateTo, limit: 100 }),
+        reporting.salesByDateRange({ dateFrom, dateTo }),
+      ])
       setSaleList(data)
+      setPeriodTotal({
+        count: summary.reduce((acc, d) => acc + d.salesCount, 0),
+        amount: summary.reduce((acc, d) => acc + d.totalAmount, 0),
+      })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al cargar ventas')
     } finally {
@@ -156,7 +166,23 @@ export default function SalesPage() {
 
       {!loading && !error && (
         <>
-          <p className="results-count">{saleList.length} ventas encontradas</p>
+          {periodTotal && (
+            <div className="stats-grid" style={{ gridTemplateColumns: 'minmax(260px, 380px)' }}>
+              <div className="stat-card stat-card--total">
+                <div className="stat-value">{currency(periodTotal.amount)}</div>
+                <div className="stat-label">
+                  Total vendido {dateFrom === dateTo ? `el ${formatDate(dateFrom)}` : `del ${formatDate(dateFrom)} al ${formatDate(dateTo)}`}
+                </div>
+                <div className="stat-sub stat-sub--light">
+                  {periodTotal.count} {periodTotal.count === 1 ? 'venta' : 'ventas'} (sin canceladas, rechazadas ni pedidos web pendientes)
+                </div>
+              </div>
+            </div>
+          )}
+          <p className="results-count">
+            {saleList.length} ventas encontradas
+            {saleList.length === 100 && ' (se muestran las 100 más recientes; el total incluye todo el período)'}
+          </p>
           <div className="table-container">
             <table className="table">
               <thead>
