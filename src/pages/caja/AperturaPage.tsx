@@ -24,7 +24,7 @@ export default function AperturaPage() {
       if (!session) {
         const suggested = await caja.getSuggestedApertura(date)
         setSuggestion(suggested)
-        setAperturaAmount(suggested ? String(suggested.amount) : '')
+        setAperturaAmount(suggested ? String(Math.round(suggested.amount)) : '')
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al verificar la caja')
