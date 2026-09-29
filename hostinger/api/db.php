@@ -376,6 +376,10 @@ function initSchema(): void {
     // Orden de exhibición de los destacados (migración no destructiva)
     try { $pdo->exec("ALTER TABLE web_products ADD COLUMN featured_order INT NOT NULL DEFAULT 0"); } catch (\Exception $e) {}
 
+    // Categorías de regalo del buscador de la home (slugs separados por coma,
+    // ej. 'ninos,familia') — migración no destructiva
+    try { $pdo->exec("ALTER TABLE web_products ADD COLUMN gift_categories VARCHAR(255) NOT NULL DEFAULT ''"); } catch (\Exception $e) {}
+
     // Desglose del total (envío / recargo tarjeta crédito) — migración no destructiva.
     // `total` ya los incluye; estas columnas son solo para poder mostrarlos por
     // separado en el comprobante en vez de una diferencia sin explicar.
@@ -432,6 +436,9 @@ function initSchema(): void {
     // instalaciones que ya tenían esas columnas.
     try { $pdo->exec("ALTER TABLE search_logs DROP COLUMN edad"); } catch (\Exception $e) {}
     try { $pdo->exec("ALTER TABLE search_logs DROP COLUMN jugadores"); } catch (\Exception $e) {}
+
+    // Categoría de regalo elegida en el buscador (estampillas) — no destructiva
+    try { $pdo->exec("ALTER TABLE search_logs ADD COLUMN categoria VARCHAR(20) NULL"); } catch (\Exception $e) {}
 
     // Rate limiting — registro de búsquedas (mismo criterio que order_creation_attempts)
     $pdo->exec("

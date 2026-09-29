@@ -72,6 +72,7 @@ export interface SyncWebProduct {
   visible: boolean
   featured: boolean
   featuredOrder: number
+  giftCategories: string // slugs separados por coma (ver web-catalog/giftCategories.ts)
   price: number          // precio efectivo web
   stock: number
   webCategoryId: number | null

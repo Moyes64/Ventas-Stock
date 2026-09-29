@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { webCatalog } from '../../lib/ipc'
 import type { WebProduct, WebCategory, UnpublishedProduct } from '../../types/ipc'
+import { GIFT_CATEGORIES } from '../../lib/giftCategories'
 
 export default function WebCatalogPage() {
   const navigate = useNavigate()
@@ -19,13 +20,16 @@ export default function WebCatalogPage() {
   const filterVis = (searchParams.get('vis') as 'all' | 'visible' | 'hidden' | null) ?? 'all'
   const onlyFeatured = searchParams.get('featured') === '1'
   const search = searchParams.get('q') ?? ''
+  // 'all' | 'none' (sin ninguna categoría de regalo) | slug
+  const filterGift = searchParams.get('gift') ?? 'all'
 
-  function updateFilters(next: { cat?: string; vis?: string; featured?: boolean; q?: string }) {
+  function updateFilters(next: { cat?: string; vis?: string; featured?: boolean; q?: string; gift?: string }) {
     const sp = new URLSearchParams(searchParams)
     if (next.cat !== undefined) next.cat === 'all' ? sp.delete('cat') : sp.set('cat', next.cat)
     if (next.vis !== undefined) next.vis === 'all' ? sp.delete('vis') : sp.set('vis', next.vis)
     if (next.featured !== undefined) next.featured ? sp.set('featured', '1') : sp.delete('featured')
     if (next.q !== undefined) next.q ? sp.set('q', next.q) : sp.delete('q')
+    if (next.gift !== undefined) next.gift === 'all' ? sp.delete('gift') : sp.set('gift', next.gift)
     setSearchParams(sp, { replace: true })
   }
 
@@ -94,6 +98,8 @@ export default function WebCatalogPage() {
       if (typeof filterCat === 'number' && p.webCategoryId !== filterCat) return false
       if (filterVis === 'visible' && !p.visible) return false
       if (filterVis === 'hidden' && p.visible) return false
+      if (filterGift === 'none' && p.giftCategories.length > 0) return false
+      if (filterGift !== 'all' && filterGift !== 'none' && !p.giftCategories.includes(filterGift)) return false
       if (search && !p.productName.toLowerCase().includes(search.toLowerCase())) return false
       return true
     })
@@ -221,6 +227,16 @@ export default function WebCatalogPage() {
           <option value="visible">Publicados</option>
           <option value="hidden">Ocultos</option>
         </select>
+        <select
+          className="select"
+          value={filterGift}
+          onChange={e => updateFilters({ gift: e.target.value })}
+          title="Categorías de regalo del buscador de la home"
+        >
+          <option value="all">🎁 Todas las cat. de regalo</option>
+          <option value="none">Sin categoría de regalo</option>
+          {GIFT_CATEGORIES.map(c => <option key={c.slug} value={c.slug}>{c.emoji} {c.label}</option>)}
+        </select>
         <button
           className={`btn btn-sm ${onlyFeatured ? 'btn-primary' : 'btn-ghost'}`}
           onClick={() => updateFilters({ featured: !onlyFeatured })}
@@ -258,6 +274,13 @@ export default function WebCatalogPage() {
                   {wp.images.length > 0 && <span className="wc-imgcount">📷 {wp.images.length}</span>}
                   {wp.shortDescription && <span className="wc-has-desc">📝</span>}
                 </div>
+                {wp.giftCategories.length > 0 && (
+                  <div className="wc-gift-tags">
+                    {GIFT_CATEGORIES.filter(c => wp.giftCategories.includes(c.slug)).map(c => (
+                      <span key={c.slug} className="wc-gift-tag" title={c.label}>{c.emoji} {c.label}</span>
+                    ))}
+                  </div>
+                )}
                 <div className="wc-price">
                   $ {(wp.webPrice ?? wp.productPrice).toFixed(2)}
                   {wp.webPrice !== null && <span className="wc-price-web"> (precio web)</span>}

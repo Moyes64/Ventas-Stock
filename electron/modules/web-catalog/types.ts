@@ -24,6 +24,8 @@ export interface WebProduct {
   visible: boolean
   featured: boolean
   featuredOrder: number
+  /** Slugs de las categorías de regalo (ver giftCategories.ts) */
+  giftCategories: string[]
   webPrice: number | null
   shortDescription: string
   longDescription: string
@@ -42,6 +44,7 @@ export interface WebProduct {
   productPrice: number
   productStock: number
   productSku: string
+  supplierName: string | null
   // joined images
   images: WebProductImage[]
 }
@@ -52,6 +55,8 @@ export interface SaveWebProductInput {
   visible: boolean
   featured: boolean
   featuredOrder: number
+  /** undefined = no tocar las que ya tiene el producto */
+  giftCategories?: string[]
   webPrice: number | null
   shortDescription: string
   longDescription: string

@@ -14,4 +14,6 @@ export interface SearchBucketCount {
 export interface SearchAnalyticsReport {
   totalSearches: number
   priceBuckets: SearchBucketCount[]
+  /** Estampillas de categoría de regalo; ausente si search-logs.php es anterior a esa versión */
+  giftBuckets?: SearchBucketCount[]
 }

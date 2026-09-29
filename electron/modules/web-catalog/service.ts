@@ -9,6 +9,7 @@ import type {
   SaveWebProductInput,
   SaveWebCategoryInput,
 } from './types'
+import { parseGiftCategories, serializeGiftCategories } from './giftCategories'
 
 // Las imágenes se suben tal cual a Hostinger y de ahí las optimiza Vercel
 // (facturado por uso); si entran sin comprimir agotan esa cuota rápido.
@@ -74,6 +75,7 @@ interface WebProductRow {
   visible: number
   featured: number
   featured_order: number
+  gift_categories: string
   web_price: number | null
   short_description: string
   long_description: string
@@ -91,6 +93,7 @@ interface WebProductRow {
   product_price: number
   product_stock: number
   product_sku: string
+  supplier_name: string | null
 }
 
 interface WebImageRow {
@@ -122,6 +125,7 @@ function mapProduct(r: WebProductRow, images: WebProductImage[]): WebProduct {
     visible: r.visible === 1,
     featured: r.featured === 1,
     featuredOrder: r.featured_order,
+    giftCategories: parseGiftCategories(r.gift_categories),
     webPrice: r.web_price,
     shortDescription: r.short_description,
     longDescription: r.long_description,
@@ -139,6 +143,7 @@ function mapProduct(r: WebProductRow, images: WebProductImage[]): WebProduct {
     productPrice: r.product_price,
     productStock: r.product_stock,
     productSku: r.product_sku,
+    supplierName: r.supplier_name,
     images,
   }
 }
@@ -183,9 +188,11 @@ export class WebCatalogService {
     const rows = this.db.prepare(`
       SELECT wp.*,
              p.name AS product_name, p.price AS product_price,
-             p.stock_quantity AS product_stock, p.sku AS product_sku
+             p.stock_quantity AS product_stock, p.sku AS product_sku,
+             s.name AS supplier_name
       FROM web_products wp
       JOIN products p ON p.id = wp.product_id
+      LEFT JOIN suppliers s ON s.id = p.supplier_id
       ORDER BY wp.sort_order ASC, p.name ASC
     `).all() as WebProductRow[]
 
@@ -199,9 +206,11 @@ export class WebCatalogService {
     const row = this.db.prepare(`
       SELECT wp.*,
              p.name AS product_name, p.price AS product_price,
-             p.stock_quantity AS product_stock, p.sku AS product_sku
+             p.stock_quantity AS product_stock, p.sku AS product_sku,
+             s.name AS supplier_name
       FROM web_products wp
       JOIN products p ON p.id = wp.product_id
+      LEFT JOIN suppliers s ON s.id = p.supplier_id
       WHERE wp.product_id = ?
     `).get(productId) as WebProductRow | undefined
     if (!row) return null
@@ -210,20 +219,27 @@ export class WebCatalogService {
 
   saveWebProduct(input: SaveWebProductInput): WebProduct {
     const existing = this.db
-      .prepare('SELECT id FROM web_products WHERE product_id=?')
-      .get(input.productId) as { id: number } | undefined
+      .prepare('SELECT id, gift_categories FROM web_products WHERE product_id=?')
+      .get(input.productId) as { id: number; gift_categories: string } | undefined
+
+    const supplier = this.db.prepare(`
+      SELECT s.name FROM products p LEFT JOIN suppliers s ON s.id = p.supplier_id WHERE p.id = ?
+    `).get(input.productId) as { name: string | null } | undefined
+    const giftCategories = input.giftCategories === undefined
+      ? (existing?.gift_categories ?? '')
+      : serializeGiftCategories(input.giftCategories, supplier?.name ?? null)
 
     if (existing) {
       this.db.prepare(`
         UPDATE web_products SET
-          web_category_id=?, visible=?, featured=?, featured_order=?, web_price=?,
+          web_category_id=?, visible=?, featured=?, featured_order=?, gift_categories=?, web_price=?,
           short_description=?, long_description=?, age_min=?, players_min=?,
           players_max=?, play_time_min=?, difficulty=?, video_url=?, tags=?,
           sort_order=?, updated_at=datetime('now','localtime')
         WHERE product_id=?
       `).run(
         input.webCategoryId, input.visible ? 1 : 0, input.featured ? 1 : 0, input.featuredOrder,
-        input.webPrice, input.shortDescription, input.longDescription,
+        giftCategories, input.webPrice, input.shortDescription, input.longDescription,
         input.ageMin, input.playersMin, input.playersMax, input.playTimeMin,
         input.difficulty, input.videoUrl, input.tags, input.sortOrder,
         input.productId,
@@ -231,13 +247,13 @@ export class WebCatalogService {
     } else {
       this.db.prepare(`
         INSERT INTO web_products (
-          product_id, web_category_id, visible, featured, featured_order, web_price,
+          product_id, web_category_id, visible, featured, featured_order, gift_categories, web_price,
           short_description, long_description, age_min, players_min,
           players_max, play_time_min, difficulty, video_url, tags, sort_order
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
       `).run(
         input.productId, input.webCategoryId, input.visible ? 1 : 0, input.featured ? 1 : 0, input.featuredOrder,
-        input.webPrice, input.shortDescription, input.longDescription,
+        giftCategories, input.webPrice, input.shortDescription, input.longDescription,
         input.ageMin, input.playersMin, input.playersMax, input.playTimeMin,
         input.difficulty, input.videoUrl, input.tags, input.sortOrder,
       )

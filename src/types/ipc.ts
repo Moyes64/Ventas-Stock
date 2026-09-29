@@ -286,6 +286,8 @@ export interface SearchBucketCount {
 export interface SearchAnalyticsReport {
   totalSearches: number
   priceBuckets: SearchBucketCount[]
+  /** Estampillas de categoría de regalo; ausente si search-logs.php es anterior a esa versión */
+  giftBuckets?: SearchBucketCount[]
 }
 
 export interface RankingItem {
@@ -537,6 +539,7 @@ export interface WebProduct {
   visible: boolean
   featured: boolean
   featuredOrder: number
+  giftCategories: string[]
   webPrice: number | null
   shortDescription: string
   longDescription: string
@@ -554,6 +557,7 @@ export interface WebProduct {
   productPrice: number
   productStock: number
   productSku: string
+  supplierName: string | null
   images: WebProductImage[]
 }
 

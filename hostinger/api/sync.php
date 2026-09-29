@@ -90,13 +90,14 @@ try {
     if (!empty($payload['webProducts']) && is_array($payload['webProducts'])) {
         $stmtProd = $pdo->prepare("
             INSERT INTO web_products
-                (id, slug, name, visible, featured, featured_order, price, stock, web_category_id,
+                (id, slug, name, visible, featured, featured_order, gift_categories, price, stock, web_category_id,
                  short_description, long_description, age_min, players_min, players_max,
                  play_time_min, difficulty, video_url, tags, sort_order)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON DUPLICATE KEY UPDATE
                 slug=VALUES(slug), name=VALUES(name), visible=VALUES(visible),
                 featured=VALUES(featured), featured_order=VALUES(featured_order),
+                gift_categories=VALUES(gift_categories),
                 price=VALUES(price), stock=VALUES(stock),
                 web_category_id=VALUES(web_category_id),
                 short_description=VALUES(short_description),
@@ -121,6 +122,7 @@ try {
                 $prod['visible'] ? 1 : 0,
                 $prod['featured'] ? 1 : 0,
                 $prod['featuredOrder'] ?? 0,
+                $prod['giftCategories'] ?? '',
                 $prod['price'],
                 $prod['stock'] ?? 0,
                 $prod['webCategoryId'] ?? null,

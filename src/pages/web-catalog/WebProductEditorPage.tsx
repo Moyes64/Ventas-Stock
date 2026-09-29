@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { webCatalog } from '../../lib/ipc'
 import type { WebProduct, WebCategory } from '../../types/ipc'
+import { giftCategoriesFor } from '../../lib/giftCategories'
 
 const DIFFICULTY_LABELS = ['', '⭐ Muy fácil', '⭐⭐ Fácil', '⭐⭐⭐ Medio', '⭐⭐⭐⭐ Difícil', '⭐⭐⭐⭐⭐ Muy difícil']
 
@@ -24,6 +25,7 @@ export default function WebProductEditorPage() {
     visible: false,
     featured: false,
     featuredOrder: '0' as string,
+    giftCategories: [] as string[],
     webPrice: '' as string,
     shortDescription: '',
     longDescription: '',
@@ -51,6 +53,7 @@ export default function WebProductEditorPage() {
           visible: product.visible,
           featured: product.featured,
           featuredOrder: String(product.featuredOrder),
+          giftCategories: product.giftCategories,
           webPrice: product.webPrice !== null ? String(product.webPrice) : '',
           shortDescription: product.shortDescription,
           longDescription: product.longDescription,
@@ -83,6 +86,15 @@ export default function WebProductEditorPage() {
     setForm(prev => ({ ...prev, [key]: value }))
   }
 
+  function toggleGiftCategory(slug: string, on: boolean) {
+    setForm(prev => ({
+      ...prev,
+      giftCategories: on
+        ? [...prev.giftCategories.filter(s => s !== slug), slug]
+        : prev.giftCategories.filter(s => s !== slug),
+    }))
+  }
+
   async function handleSave() {
     if (!wp) return
     setSaving(true)
@@ -94,6 +106,7 @@ export default function WebProductEditorPage() {
         visible: form.visible,
         featured: form.featured,
         featuredOrder: parseInt(form.featuredOrder) || 0,
+        giftCategories: form.giftCategories,
         webPrice: form.webPrice !== '' ? parseFloat(form.webPrice) : null,
         shortDescription: form.shortDescription,
         longDescription: form.longDescription,
@@ -235,6 +248,24 @@ export default function WebProductEditorPage() {
                 )}
               </div>
             )}
+
+            <div className="wc-gift-block">
+              <div className="label">🎁 Categorías de regalo <span className="field-hint">(estampillas del buscador "Encontrá el regalo perfecto")</span></div>
+              <div className="wc-gift-grid">
+                {giftCategoriesFor(wp.supplierName).map(c => (
+                  <label key={c.slug} className="wc-switch-label">
+                    <input
+                      type="checkbox"
+                      checked={form.giftCategories.includes(c.slug)}
+                      onChange={e => toggleGiftCategory(c.slug, e.target.checked)}
+                      className="wc-switch-input"
+                    />
+                    <span className="wc-switch"></span>
+                    <span>{c.emoji} {c.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
           </div>
 
           {/* Categoría y precio */}

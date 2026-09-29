@@ -6,14 +6,14 @@
  * POST /api/search-logs.php  → pandorabox-web registra una búsqueda (público,
  *                               sin API key, origen restringido — mismo
  *                               criterio que POST /api/orders).
- *                               body: { precio, internal? }
+ *                               body: { precio?, categoria?, internal? }
+ *                               (al menos uno de precio/categoria)
  * GET  /api/search-logs.php  → Ventas-Stock trae el reporte agregado para la
  *                               sección Reportes (requiere X-Api-Key).
  *                               ?dateFrom=YYYY-MM-DD&dateTo=YYYY-MM-DD&includeInternal=1
  *
- * Los valores válidos de precio son los mismos rangos que lib/filters.ts en
- * pandorabox-web — si esos rangos cambian ahí, actualizar la lista de abajo
- * también.
+ * Los valores válidos de precio y categoría son los mismos que lib/filters.ts
+ * en pandorabox-web — si cambian ahí, actualizar las listas de abajo también.
  *
  * Nota: hasta 2026-08-25 este endpoint también trackeaba edad sugerida y
  * cantidad de jugadores — se sacaron tras revisar la usabilidad del buscador
@@ -36,6 +36,15 @@ const PRICE_BUCKETS = [
     '30-50'    => '$30.000 – $50.000',
     '50-80'    => '$50.000 – $80.000',
     'mas-80'   => '+$80.000',
+];
+
+const GIFT_CATEGORIES = [
+    'menores-6'    => 'Menores de 6 años',
+    'ninos'        => 'Niños y niñas',
+    'adolescentes' => 'Adolescentes',
+    'jovenes'      => 'Jóvenes y más',
+    'familia'      => 'Familia',
+    'escape'       => 'Cajas de Escape',
 ];
 
 /** Cuenta cuántas filas caen en cada bucket de $field, en el mismo orden que $labels. */
@@ -80,11 +89,12 @@ if ($method === 'POST') {
     $body = json_decode(file_get_contents('php://input'), true) ?? [];
 
     $precio = (isset($body['precio']) && array_key_exists($body['precio'], PRICE_BUCKETS)) ? $body['precio'] : null;
+    $categoria = (isset($body['categoria']) && array_key_exists($body['categoria'], GIFT_CATEGORIES)) ? $body['categoria'] : null;
     $internal = !empty($body['internal']) ? 1 : 0;
 
-    if ($precio === null) {
+    if ($precio === null && $categoria === null) {
         http_response_code(400);
-        echo json_encode(['error' => 'La búsqueda no tiene un precio válido']);
+        echo json_encode(['error' => 'La búsqueda no tiene un precio ni una categoría válidos']);
         exit;
     }
 
@@ -94,8 +104,8 @@ if ($method === 'POST') {
         // vez del DEFAULT CURRENT_TIMESTAMP de la columna, que usa el timezone del
         // hosting y podía correr una búsqueda de último momento al "día siguiente"
         // en el reporte filtrado por fecha local.
-        $stmt = $pdo->prepare('INSERT INTO search_logs (created_at, precio, is_internal) VALUES (?, ?, ?)');
-        $stmt->execute([argentinaNow(), $precio, $internal]);
+        $stmt = $pdo->prepare('INSERT INTO search_logs (created_at, precio, categoria, is_internal) VALUES (?, ?, ?, ?)');
+        $stmt->execute([argentinaNow(), $precio, $categoria, $internal]);
         echo json_encode(['ok' => true]);
     } catch (Exception $e) {
         apiError($e);
@@ -130,13 +140,14 @@ if ($method === 'GET') {
         }
         $where = $conditions ? ('WHERE ' . implode(' AND ', $conditions)) : '';
 
-        $stmt = $pdo->prepare("SELECT precio FROM search_logs $where");
+        $stmt = $pdo->prepare("SELECT precio, categoria FROM search_logs $where");
         $stmt->execute($params);
         $rows = $stmt->fetchAll();
 
         echo json_encode([
             'totalSearches' => count($rows),
             'priceBuckets' => countBuckets($rows, 'precio', PRICE_BUCKETS),
+            'giftBuckets' => countBuckets($rows, 'categoria', GIFT_CATEGORIES),
         ]);
     } catch (Exception $e) {
         apiError($e);

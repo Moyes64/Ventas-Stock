@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { api, ApiError } from '../lib/api'
 import type { WebCategory, WebProduct } from '../types/contract'
 import ProductImage from './ProductImage'
+import { giftCategoriesFor } from '../lib/giftCategories'
 
 const MAX_IMAGES = 5
 
@@ -9,6 +10,7 @@ interface FormState {
   visible: boolean
   featured: boolean
   featuredOrder: string
+  giftCategories: string[]
   webCategoryId: string
   webPrice: string
   shortDescription: string
@@ -28,6 +30,7 @@ function toForm(p: WebProduct): FormState {
     visible: p.visible,
     featured: p.featured,
     featuredOrder: String(p.featuredOrder),
+    giftCategories: p.giftCategories,
     webCategoryId: p.webCategoryId !== null ? String(p.webCategoryId) : '',
     webPrice: p.webPrice !== null ? String(p.webPrice) : '',
     shortDescription: p.shortDescription,
@@ -97,6 +100,7 @@ export default function ProductEditorView({ productId, onBack }: { productId: nu
         visible: form.visible,
         featured: form.featured,
         featuredOrder: Number(form.featuredOrder) || 0,
+        giftCategories: form.giftCategories,
         webPrice: numOrNull(form.webPrice),
         shortDescription: form.shortDescription,
         longDescription: form.longDescription,
@@ -218,6 +222,27 @@ export default function ProductEditorView({ productId, onBack }: { productId: nu
               <input type="number" value={form.featuredOrder} onChange={e => setForm({ ...form, featuredOrder: e.target.value })} />
             </div>
           )}
+        </div>
+
+        <div className="field">
+          <label>Categorías de regalo (buscador "Encontrá el regalo perfecto")</label>
+          <div className="field-row">
+            {giftCategoriesFor(product.supplierName).map(c => (
+              <label className="toggle" key={c.slug}>
+                <input
+                  type="checkbox"
+                  checked={form.giftCategories.includes(c.slug)}
+                  onChange={e => setForm({
+                    ...form,
+                    giftCategories: e.target.checked
+                      ? [...form.giftCategories.filter(s => s !== c.slug), c.slug]
+                      : form.giftCategories.filter(s => s !== c.slug),
+                  })}
+                />
+                {c.emoji} {c.label}
+              </label>
+            ))}
+          </div>
         </div>
 
         <div className="field-row">

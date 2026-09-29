@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { api, ApiError } from '../lib/api'
 import type { WebCategory, WebProduct, SaveWebProductInput, UnpublishedProduct } from '../types/contract'
 import ProductImage from './ProductImage'
+import { GIFT_CATEGORIES } from '../lib/giftCategories'
 
 function toSaveInput(wp: WebProduct): SaveWebProductInput {
   return {
@@ -36,6 +37,8 @@ export default function ProductListView({ onEditProduct }: { onEditProduct: (pro
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
   const [visFilter, setVisFilter] = useState<'all' | 'visible' | 'hidden'>('all')
   const [featuredOnly, setFeaturedOnly] = useState(false)
+  // 'all' | 'none' (sin ninguna categoría de regalo) | slug
+  const [giftFilter, setGiftFilter] = useState('all')
 
   async function load() {
     setLoading(true)
@@ -64,9 +67,11 @@ export default function ProductListView({ onEditProduct }: { onEditProduct: (pro
     else if (categoryFilter !== 'all') list = list.filter(p => p.webCategoryId === Number(categoryFilter))
     if (visFilter === 'visible') list = list.filter(p => p.visible)
     else if (visFilter === 'hidden') list = list.filter(p => !p.visible)
+    if (giftFilter === 'none') list = list.filter(p => p.giftCategories.length === 0)
+    else if (giftFilter !== 'all') list = list.filter(p => p.giftCategories.includes(giftFilter))
     if (featuredOnly) list = list.filter(p => p.featured).sort((a, b) => a.featuredOrder - b.featuredOrder)
     return list
-  }, [products, search, categoryFilter, visFilter, featuredOnly])
+  }, [products, search, categoryFilter, visFilter, featuredOnly, giftFilter])
 
   async function toggleVisible(wp: WebProduct) {
     try {
@@ -134,6 +139,11 @@ export default function ProductListView({ onEditProduct }: { onEditProduct: (pro
             <option value="visible">Solo publicados</option>
             <option value="hidden">Solo ocultos</option>
           </select>
+          <select value={giftFilter} onChange={e => setGiftFilter(e.target.value)}>
+            <option value="all">Todas las cat. de regalo</option>
+            <option value="none">Sin categoría de regalo</option>
+            {GIFT_CATEGORIES.map(c => <option key={c.slug} value={c.slug}>{c.emoji} {c.label}</option>)}
+          </select>
           <label className="toggle">
             <input type="checkbox" checked={featuredOnly} onChange={e => setFeaturedOnly(e.target.checked)} />
             Solo destacados
@@ -179,6 +189,9 @@ export default function ProductListView({ onEditProduct }: { onEditProduct: (pro
                 {p.visible ? 'Publicado' : 'Oculto'}
               </span>
               {p.featured && <span className="badge badge--on">★ Destacado</span>}
+              {GIFT_CATEGORIES.filter(c => p.giftCategories.includes(c.slug)).map(c => (
+                <span key={c.slug} className="badge badge--off" title={c.label}>{c.emoji} {c.label}</span>
+              ))}
             </div>
             <div className="card-actions">
               <button className="btn btn-sm" onClick={() => onEditProduct(p.productId)}>Editar</button>

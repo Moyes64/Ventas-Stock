@@ -2100,3 +2100,10 @@ code {
 .wc-switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; background: #fff; border-radius: 50%; transition: transform .2s; }
 .wc-switch-input:checked + .wc-switch { background: #16a34a; }
 .wc-switch-input:checked + .wc-switch::after { transform: translateX(16px); }
+
+/* Categorías de regalo (editor + listado) */
+.wc-gift-block { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--color-border); }
+.wc-gift-block > .label { display: block; margin-bottom: 10px; }
+.wc-gift-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px 16px; }
+.wc-gift-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 6px; }
+.wc-gift-tag { font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 4px; background: #ede9fe; color: #6d28d9; }

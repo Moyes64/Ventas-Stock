@@ -738,8 +738,8 @@ export default function ReportingPage() {
         <div className="search-analytics-report">
           <p className="page-subtitle">
             Búsquedas hechas con el buscador rápido de pandorabox-web (&quot;Encontrá el regalo
-            perfecto&quot;) — para tener una idea de qué rango de precio busca la clientela
-            potencial. Requiere tener configurado &quot;Sync Web&quot; y haber subido
+            perfecto&quot;) — para tener una idea de qué rango de precio y qué categoría de
+            regalo busca la clientela potencial. Requiere tener configurado &quot;Sync Web&quot; y haber subido
             search-logs.php al hosting.
           </p>
 
@@ -780,10 +780,18 @@ export default function ReportingPage() {
               {searchReport.totalSearches === 0 ? (
                 <p className="empty-row">Sin búsquedas para el período seleccionado</p>
               ) : (
-                <div className="pie-wrapper">
-                  <h3 className="pie-title">💲 Precio</h3>
-                  <BarList items={searchReport.priceBuckets} color="#4f8ef7" />
-                </div>
+                <>
+                  <div className="pie-wrapper">
+                    <h3 className="pie-title">💲 Precio</h3>
+                    <BarList items={searchReport.priceBuckets} color="#4f8ef7" />
+                  </div>
+                  {searchReport.giftBuckets && (
+                    <div className="pie-wrapper">
+                      <h3 className="pie-title">🎁 Categoría de regalo</h3>
+                      <BarList items={searchReport.giftBuckets} color="#8b5cf6" />
+                    </div>
+                  )}
+                </>
               )}
             </>
           )}

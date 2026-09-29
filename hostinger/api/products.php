@@ -7,6 +7,7 @@
  * GET /api/products?featured=1  → solo destacados
  * GET /api/products?category=slug
  * GET /api/products?search=palabra
+ * GET /api/products?gift=slug     → categoría de regalo (buscador de la home)
  *
  * Subir a: public_html/pandorabox/api/products.php
  */
@@ -27,6 +28,7 @@ try {
     $featured = isset($_GET['featured']) ? (bool)$_GET['featured'] : null;
     $catSlug  = $_GET['category'] ?? null;
     $search   = $_GET['search']   ?? null;
+    $gift     = $_GET['gift']     ?? null;
 
     // ── Producto individual ───────────────────────────────────────────────
     if ($slug !== null) {
@@ -69,6 +71,10 @@ try {
     if ($catSlug !== null) {
         $where[] = 'c.slug = ?';
         $params[] = $catSlug;
+    }
+    if ($gift !== null) {
+        $where[] = 'FIND_IN_SET(?, p.gift_categories) > 0';
+        $params[] = $gift;
     }
     if ($search !== null) {
         $where[] = '(p.name LIKE ? OR p.short_description LIKE ? OR p.tags LIKE ?)';
