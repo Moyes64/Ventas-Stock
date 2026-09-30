@@ -8,6 +8,7 @@
  * GET /api/products?category=slug
  * GET /api/products?search=palabra
  * GET /api/products?gift=slug     → categoría de regalo (buscador de la home)
+ * GET /api/products?ids=1,2,3     → solo id/stock/price (carrito de la web)
  *
  * Subir a: public_html/pandorabox/api/products.php
  */
@@ -29,6 +30,25 @@ try {
     $catSlug  = $_GET['category'] ?? null;
     $search   = $_GET['search']   ?? null;
     $gift     = $_GET['gift']     ?? null;
+    $ids      = $_GET['ids']      ?? null;
+
+    // ── Stock/precio actual de varios productos (carrito de la web) ───────
+    // Liviano a propósito: sin imágenes ni descripciones, el carrito lo pide
+    // cada vez que se abre para no mostrar stock/precios viejos de localStorage.
+    if ($ids !== null) {
+        $idList = array_values(array_unique(array_filter(array_map('intval', explode(',', $ids)))));
+        if (!$idList) { echo json_encode([]); exit; }
+        $idList = array_slice($idList, 0, 100);
+        $placeholders = implode(',', array_fill(0, count($idList), '?'));
+        $stmt = $pdo->prepare("SELECT id, stock, price FROM web_products WHERE visible = 1 AND id IN ($placeholders)");
+        $stmt->execute($idList);
+        echo json_encode(array_map(fn($r) => [
+            'id'    => (int)$r['id'],
+            'stock' => (int)$r['stock'],
+            'price' => (float)$r['price'],
+        ], $stmt->fetchAll()));
+        exit;
+    }
 
     // ── Producto individual ───────────────────────────────────────────────
     if ($slug !== null) {

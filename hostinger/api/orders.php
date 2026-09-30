@@ -188,6 +188,63 @@ if ($method === 'POST' && $action === null) {
             $surchargePct = $surchargeRow ? (float)$surchargeRow['param_value'] : 0.0;
         }
 
+        // Validar items contra web_products: stock suficiente y precio/nombre del
+        // servidor. Nunca se confía en unitPrice/productName del body (se podía
+        // mandar cualquier precio desde fuera del navegador) ni en que el carrito
+        // del front haya respetado el stock.
+        $requested = [];
+        foreach ($body['items'] as $item) {
+            $pid = (int)($item['productId'] ?? 0);
+            $qty = (int)($item['quantity'] ?? 0);
+            if ($pid <= 0 || $qty <= 0) {
+                http_response_code(400);
+                echo json_encode(['error' => 'Invalid order data']);
+                exit;
+            }
+            $requested[$pid] = ($requested[$pid] ?? 0) + $qty;
+        }
+        $placeholders = implode(',', array_fill(0, count($requested), '?'));
+        $stmtProducts = $pdo->prepare("SELECT id, name, price, stock FROM web_products WHERE visible = 1 AND id IN ($placeholders)");
+        $stmtProducts->execute(array_keys($requested));
+        $dbProducts = [];
+        foreach ($stmtProducts->fetchAll() as $p) $dbProducts[(int)$p['id']] = $p;
+
+        $validItems = [];
+        $stockErrors = [];
+        foreach ($requested as $pid => $qty) {
+            $p = $dbProducts[$pid] ?? null;
+            if (!$p) {
+                $stockErrors[] = ['productId' => $pid, 'available' => 0, 'message' => 'Un producto del carrito ya no está disponible'];
+                continue;
+            }
+            $available = (int)$p['stock'];
+            if ($qty > $available) {
+                $stockErrors[] = [
+                    'productId' => $pid,
+                    'available' => max(0, $available),
+                    'message'   => $available > 0
+                        ? "{$p['name']}: solo quedan {$available} unidades"
+                        : "{$p['name']}: sin stock",
+                ];
+                continue;
+            }
+            $validItems[] = [
+                'productId'   => $pid,
+                'productName' => $p['name'],
+                'quantity'    => $qty,
+                'unitPrice'   => (float)$p['price'],
+            ];
+        }
+        if ($stockErrors) {
+            http_response_code(409);
+            echo json_encode([
+                'error'       => 'No hay stock suficiente. ' . implode('. ', array_column($stockErrors, 'message')) . '.',
+                'stockErrors' => $stockErrors,
+            ]);
+            exit;
+        }
+        $body['items'] = $validItems;
+
         $subtotal = array_reduce($body['items'], function($sum, $item) {
             return $sum + ($item['quantity'] * $item['unitPrice']);
         }, 0.0) + $shippingCost;
