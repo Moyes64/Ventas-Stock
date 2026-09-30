@@ -24,13 +24,22 @@ interface MatchedItem extends RemitoItem {
 }
 
 const SOURCE_LABELS: Record<string, { label: string; cls: string }> = {
-  barcode:  { label: '📊 Código barras', cls: 'badge--success' },
+  sku:      { label: '🏷️ SKU',            cls: 'badge--success' },
+  barcode: { label: '📊 Código barras', cls: 'badge--success' },
   mapping:  { label: '🔗 Mapeo guardado', cls: 'badge--info'    },
   name:     { label: '🔤 Nombre similar', cls: 'badge--warning' },
   manual:   { label: '✋ Manual',         cls: 'badge--warning' },
 }
 
 type Step = 'upload' | 'review' | 'done'
+
+function normalizeCode(s: string): string {
+  return s.trim().toLowerCase().replace(/[\s.\-_/]/g, '').replace(/^0+(?=.)/, '')
+}
+
+function normalizeText(s: string): string {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim()
+}
 
 export default function RemitoScannerPage() {
   const [step, setStep] = useState<Step>('upload')
@@ -91,12 +100,26 @@ export default function RemitoScannerPage() {
       setAllProducts(products)
 
       // Índices para matching
+      // SKU: el código de artículo del remito contra el SKU o el código de proveedor del producto
+      const bySku = new Map<string, Product>()
+      for (const p of products) {
+        if (p.supplierCode) bySku.set(normalizeCode(p.supplierCode), p)
+      }
+      for (const p of products) {
+        if (p.sku) bySku.set(normalizeCode(p.sku), p)
+      }
       const byBarcode = new Map(
         products.filter(p => p.barcode).map(p => [p.barcode!, p])
       )
+      // Nombre: se compara la descripción completa (no un prefijo), para no confundir
+      // variantes que solo difieren al final ("... luna 2" vs "... Planeta Marte")
       const byNameContains = (desc: string) => {
-        const dl = desc.toLowerCase()
-        return products.find(p => p.name.toLowerCase().includes(dl.slice(0, 25))) ?? null
+        const dl = normalizeText(desc)
+        if (dl.length < 4) return null
+        return products.find(p => {
+          const pl = normalizeText(p.name)
+          return pl === dl || pl.includes(dl) || dl.includes(pl)
+        }) ?? null
       }
 
       // Consultar mappings guardados para los códigos de artículo del remito
@@ -104,25 +127,31 @@ export default function RemitoScannerPage() {
       const savedMappings = await remitoScanner.getMappings(supplierCodes)
 
       const matched: MatchedItem[] = ext.items.map(item => {
-        // 1. Código de barras exacto
+        // 1. SKU (identificador primario)
+        const bySkuMatch = item.articulo ? bySku.get(normalizeCode(item.articulo)) : undefined
+        if (bySkuMatch) {
+          return { ...item, productId: bySkuMatch.id, productName: bySkuMatch.name,
+                   matchSource: 'sku', confirmedQty: item.cantidad, include: true }
+        }
+        // 2. Código de barras exacto
         const byBC = item.codigoBarras ? byBarcode.get(item.codigoBarras) : undefined
         if (byBC) {
           return { ...item, productId: byBC.id, productName: byBC.name,
                    matchSource: 'barcode', confirmedQty: item.cantidad, include: true }
         }
-        // 2. Mapeo guardado
+        // 3. Mapeo guardado
         const mapped = item.articulo ? savedMappings[item.articulo] : undefined
         if (mapped) {
           return { ...item, productId: mapped.productId, productName: mapped.productName,
                    matchSource: 'mapping', confirmedQty: item.cantidad, include: true }
         }
-        // 3. Nombre similar (fallback)
+        // 4. Nombre similar (fallback) — queda destildado para que el usuario lo revise
         const byName = byNameContains(item.descripcion)
         if (byName) {
           return { ...item, productId: byName.id, productName: byName.name,
-                   matchSource: 'name', confirmedQty: item.cantidad, include: true }
+                   matchSource: 'name', confirmedQty: item.cantidad, include: false }
         }
-        // 4. Sin coincidencia
+        // 5. Sin coincidencia
         return { ...item, productId: null, productName: null,
                  matchSource: null, confirmedQty: item.cantidad, include: false }
       })
@@ -185,7 +214,7 @@ export default function RemitoScannerPage() {
     setCreatingProduct(true)
     setCreateError(null)
     try {
-      const newId = await catalog.createProduct({
+      const created = await catalog.createProduct({
         name: f.name.trim(),
         sku: f.sku.trim(),
         barcode: f.barcode.trim() || null,
@@ -196,19 +225,16 @@ export default function RemitoScannerPage() {
         supplierCode: items[newProductIdx].articulo ?? '',
         gainPercent: parseFloat(f.gainPercent) || 0,
         stockMin: 0,
-      }) as number
-      // Recargar lista de productos
+      })
+      // Recargar lista de productos (para que el nuevo aparezca en el desplegable)
       const products = await catalog.listProducts(true)
       setAllProducts(products)
-      const created = products.find(p => p.id === newId)
-      if (created) {
-        updateItem(newProductIdx, {
-          productId: created.id,
-          productName: created.name,
-          matchSource: 'manual',
-          include: true,
-        })
-      }
+      updateItem(newProductIdx, {
+        productId: created.id,
+        productName: created.name,
+        matchSource: 'manual',
+        include: true,
+      })
       setNewProductIdx(null)
     } catch (e) {
       setCreateError(e instanceof Error ? e.message : String(e))

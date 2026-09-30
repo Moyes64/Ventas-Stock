@@ -599,7 +599,7 @@ export interface RemitoMapping {
   productName: string
 }
 
-export type MatchSource = 'barcode' | 'mapping' | 'name' | 'manual' | null
+export type MatchSource = 'sku' | 'barcode' | 'mapping' | 'name' | 'manual' | null
 
 // ── Printer Config ────────────────────────────────────────────────────────────
 
