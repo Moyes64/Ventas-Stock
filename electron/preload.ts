@@ -100,6 +100,7 @@ const electronAPI = {
     printChangeTicket: (saleId: number) => invoke('printing:printChangeTicket', saleId),
     printStockReport: () => invoke('printing:printStockReport'),
     printPriceReport: (supplierId?: number) => invoke('printing:printPriceReport', supplierId),
+    exportPriceReport: (supplierId?: number) => invoke('printing:exportPriceReport', supplierId),
   },
 
   // Reporting

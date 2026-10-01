@@ -13,6 +13,7 @@ export default function ProductsPage() {
   const [showForm, setShowForm] = useState(false)
   const [editProduct, setEditProduct] = useState<Product | null>(null)
   const [printingReport, setPrintingReport] = useState(false)
+  const [exportingReport, setExportingReport] = useState(false)
   const [suppliersList, setSuppliersList] = useState<Supplier[]>([])
   const [printSupplierId, setPrintSupplierId] = useState<number | ''>('')
   const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
@@ -89,6 +90,25 @@ export default function ProductsPage() {
     }
   }
 
+  async function handleExportPriceReport() {
+    setExportingReport(true)
+    try {
+      const result = await printingApi.exportPriceReport(printSupplierId || undefined)
+      if (result.canceled) return
+      if (result.success) {
+        setToast({ type: 'success', text: `Listado exportado (${result.count ?? 0} artículos): ${result.filePath ?? ''}` })
+      } else {
+        setToast({ type: 'error', text: result.error ?? 'Error al exportar el listado' })
+      }
+    } catch (err) {
+      setToast({ type: 'error', text: err instanceof Error ? err.message : 'Error al exportar el listado' })
+    } finally {
+      setExportingReport(false)
+      if (toastTimerRef.current !== null) clearTimeout(toastTimerRef.current)
+      toastTimerRef.current = setTimeout(() => setToast(null), 6000)
+    }
+  }
+
   return (
     <div className="page">
       <div className="page-header">
@@ -105,15 +125,23 @@ export default function ProductsPage() {
             style={{ maxWidth: 220 }}
             value={printSupplierId}
             onChange={e => setPrintSupplierId(e.target.value === '' ? '' : Number(e.target.value))}
-            title="Filtrar el listado a imprimir por proveedor"
+            title="Filtrar el listado de precios (impresión o Excel) por proveedor"
           >
-            <option value="">Imprimir: todos los proveedores</option>
+            <option value="">Listado: todos los proveedores</option>
             {suppliersList.map(s => (
-              <option key={s.id} value={s.id}>Imprimir: {s.name}</option>
+              <option key={s.id} value={s.id}>Listado: {s.name}</option>
             ))}
           </select>
           <button className="btn btn-secondary" disabled={printingReport} onClick={() => void handlePrintPriceReport()}>
             🖨️ {printingReport ? 'Imprimiendo…' : 'Imprimir listado de precios'}
+          </button>
+          <button
+            className="btn btn-secondary"
+            disabled={exportingReport}
+            onClick={() => void handleExportPriceReport()}
+            title="Exportar el listado de precios a Excel (.xlsx) o CSV"
+          >
+            📊 {exportingReport ? 'Exportando…' : 'Exportar a Excel'}
           </button>
         </div>
       </div>

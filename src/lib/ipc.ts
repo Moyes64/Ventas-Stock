@@ -226,6 +226,8 @@ export const printing = {
     electron.printing.printStockReport() as Promise<{ success: boolean; error?: string; count?: number }>,
   printPriceReport: (supplierId?: number) =>
     electron.printing.printPriceReport(supplierId) as Promise<{ success: boolean; error?: string; count?: number }>,
+  exportPriceReport: (supplierId?: number) =>
+    electron.printing.exportPriceReport(supplierId) as Promise<{ success: boolean; canceled?: boolean; error?: string; count?: number; filePath?: string }>,
 }
 
 // Reporting

@@ -1,4 +1,7 @@
-import { ipcMain } from 'electron'
+import { ipcMain, dialog } from 'electron'
+import fs from 'fs'
+import path from 'path'
+import * as XLSX from 'xlsx'
 import type { Database } from 'better-sqlite3'
 import { PrintingService } from '../modules/printing/service'
 import { printSystemTicket } from '../modules/printing/system-printer'
@@ -209,6 +212,90 @@ export function registerPrintingHandlers(db: Database): void {
       const buffer = buildPriceReportBuffer(products, supplierName)
       await sendEscPos(printerCfg, buffer)
       return { success: true, count: products.length }
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  // Mismo listado de precios pero exportado a archivo: .xlsx (por defecto) o
+  // .csv, según la extensión que elija el usuario en el diálogo de guardado.
+  ipcMain.handle('printing:exportPriceReport', async (_event, supplierId?: number) => {
+    try {
+      const productService = new ProductService(db)
+      const allProducts = productService.list()
+      const products = (supplierId
+        ? allProducts.filter(p => p.supplierId === supplierId)
+        : allProducts
+      ).sort((a, b) => a.name.localeCompare(b.name, 'es'))
+
+      if (products.length === 0) {
+        return {
+          success: false,
+          error: supplierId
+            ? 'El proveedor seleccionado no tiene productos activos cargados.'
+            : 'No hay productos activos para exportar.',
+        }
+      }
+
+      const supplierService = new SupplierService(db)
+      const supplierNames = new Map(supplierService.list(false).map(s => [s.id, s.name]))
+      const supplierName = supplierId ? supplierNames.get(supplierId) : undefined
+
+      const baseName = `Listado_precios${supplierName ? `_${supplierName}` : ''}_${new Date().toISOString().slice(0, 10)}`
+        .replace(/[\\/:*?"<>|]/g, '')
+      const { filePath, canceled } = await dialog.showSaveDialog({
+        title: 'Exportar listado de precios a Excel',
+        defaultPath: `${baseName}.xlsx`,
+        filters: [
+          { name: 'Excel', extensions: ['xlsx'] },
+          { name: 'CSV (Excel)', extensions: ['csv'] },
+        ],
+      })
+      if (canceled || !filePath) return { success: false, canceled: true }
+
+      const headers = ['SKU', 'Código de barras', 'Producto', 'Proveedor', 'Costo', 'Ganancia %', 'Precio al público']
+      const isCsv = path.extname(filePath).toLowerCase() === '.csv'
+
+      if (isCsv) {
+        // Formato regional AR: separador ';' y coma decimal, con BOM para que
+        // Excel lo abra como UTF-8 (acentos).
+        const num = (n: number) => n.toFixed(2).replace('.', ',')
+        const cell = (v: string) => /[";\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v
+        const lines = [headers, ...products.map(p => [
+          p.sku,
+          p.barcode ?? '',
+          p.name,
+          p.supplierId ? supplierNames.get(p.supplierId) ?? '' : '',
+          num(p.cost),
+          num(p.gainPercent),
+          num(p.price),
+        ])].map(r => r.map(cell).join(';'))
+        fs.writeFileSync(filePath, String.fromCharCode(0xfeff) + lines.join('\r\n'), 'utf-8')
+      } else {
+        const rows = products.map(p => [
+          p.sku,
+          p.barcode ?? '',
+          p.name,
+          p.supplierId ? supplierNames.get(p.supplierId) ?? '' : '',
+          p.cost,
+          p.gainPercent,
+          p.price,
+        ])
+        const sheet = XLSX.utils.aoa_to_sheet([headers, ...rows])
+        sheet['!cols'] = [{ wch: 14 }, { wch: 16 }, { wch: 45 }, { wch: 22 }, { wch: 12 }, { wch: 11 }, { wch: 16 }]
+        // Formato numérico para costo / ganancia / precio (columnas E-G)
+        for (let r = 1; r <= rows.length; r++) {
+          for (const c of [4, 5, 6]) {
+            const ref = XLSX.utils.encode_cell({ r, c })
+            if (sheet[ref]) sheet[ref].z = '#,##0.00'
+          }
+        }
+        const book = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(book, sheet, 'Listado de precios')
+        fs.writeFileSync(filePath, XLSX.write(book, { type: 'buffer', bookType: 'xlsx' }) as Buffer)
+      }
+
+      return { success: true, count: products.length, filePath }
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : String(err) }
     }
