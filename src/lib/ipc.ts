@@ -24,6 +24,7 @@ import type {
   BackupInfo,
   DailySummaryReport,
   SalesSummary,
+  ExchangeDifference,
   SearchAnalyticsReport,
   RankingItem,
   PurchasesReport,
@@ -234,6 +235,8 @@ export const printing = {
 export const reporting = {
   salesByDateRange: (filters: { dateFrom?: string; dateTo?: string }) =>
     electron.reporting.salesByDateRange(filters) as Promise<SalesSummary[]>,
+  exchangeDifferences: (filters: { dateFrom?: string; dateTo?: string }) =>
+    electron.reporting.exchangeDifferences(filters) as Promise<ExchangeDifference[]>,
   topProducts: (filters: { dateFrom?: string; dateTo?: string }) =>
     electron.reporting.topProducts(filters) as Promise<unknown[]>,
   lowStock: () => electron.reporting.lowStock() as Promise<unknown[]>,

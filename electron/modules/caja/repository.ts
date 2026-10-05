@@ -125,6 +125,31 @@ export class CajaRepository {
     return result
   }
 
+  /** Diferencias a favor del comercio cobradas en cambios (con y sin ticket) del
+   *  día, por medio de pago. No son ventas, así que no están en el resumen de arriba.
+   *  Las saldadas con crédito de cliente no se cuentan (no entra dinero). */
+  getExchangeDifferencesByPaymentMethod(date: string): Record<string, number> {
+    const rows = this.db
+      .prepare(
+        `SELECT settlement_method AS payment_method, SUM(difference) AS total_amount
+         FROM (
+           SELECT settlement_method, difference, created_at FROM free_exchanges
+           UNION ALL
+           SELECT settlement_method, difference, created_at FROM exchanges
+         )
+         WHERE difference > 0.009 AND settlement_method IS NOT NULL
+           AND settlement_method != 'credito_cliente' AND date(created_at) = ?
+         GROUP BY settlement_method`
+      )
+      .all(date) as Array<{ payment_method: string; total_amount: number }>
+
+    const result: Record<string, number> = {}
+    for (const row of rows) {
+      result[row.payment_method] = row.total_amount
+    }
+    return result
+  }
+
   // ── Private helpers ───────────────────────────────────────────────────────
 
   private mapSession(row: SessionRow): CashSession {

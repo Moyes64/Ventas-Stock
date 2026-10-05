@@ -174,6 +174,22 @@ export default function CierrePage() {
               ))}
             </div>
 
+            {Object.keys(summary.exchangeDifferencesByPaymentMethod).length > 0 && (
+              <>
+                <h3 className="caja-summary-title" style={{ marginTop: '1.5rem' }}>
+                  Diferencias cobradas por cambios (sin facturar)
+                </h3>
+                <div className="caja-summary-table">
+                  {Object.entries(summary.exchangeDifferencesByPaymentMethod).map(([method, amount]) => (
+                    <div key={method} className="caja-summary-row">
+                      <span>{PAYMENT_METHOD_LABELS[method] ?? method}</span>
+                      <span>{currency(amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
             {summary.movements.length > 0 && (
               <>
                 <h3 className="caja-summary-title" style={{ marginTop: '1.5rem' }}>

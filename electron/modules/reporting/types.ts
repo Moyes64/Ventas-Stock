@@ -104,3 +104,14 @@ export interface IncompleteEntry {
   voucherDate: string | null
   notes: string
 }
+
+export interface ExchangeDifference {
+  source: 'sin_ticket' | 'con_ticket'
+  exchangeId: number
+  /** Venta original (solo cambios con ticket). */
+  saleId: number | null
+  date: string
+  createdAt: string
+  amount: number
+  paymentMethod: string
+}

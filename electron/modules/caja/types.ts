@@ -33,6 +33,10 @@ export interface CierreSummary {
     qr: number
     mercadopago: number
   }
+  /** Diferencias cobradas en cambios (con/sin ticket) del día, por medio de pago.
+   *  Solo los medios con monto; no están incluidas en salesByPaymentMethod. Las
+   *  cobradas en efectivo ya cuentan en ingresosTotal (generan un movimiento en Caja). */
+  exchangeDifferencesByPaymentMethod: Record<string, number>
   // Movimientos de la cuenta Caja del día (cargados desde el módulo de Finanzas)
   movements: FinanceMovement[]
   // Transferencias entre cuentas de la cuenta Caja del día

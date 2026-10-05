@@ -9,6 +9,7 @@ import type {
   PurchasesReport,
   PurchaseSupplierGroup,
   IncompleteEntry,
+  ExchangeDifference,
 } from './types'
 
 interface PurchaseRow {
@@ -66,6 +67,30 @@ export class ReportingService {
       .all(params) as SalesSummary[]
 
     return rows
+  }
+
+  /**
+   * Diferencias a favor del comercio cobradas en cambios/devoluciones (con y sin
+   * ticket) — dinero que entró pero no es una Sale, así que no aparece en los
+   * totales de ventas. Excluye las saldadas con crédito de cliente (no entra plata).
+   */
+  exchangeDifferences(filters: ReportFilters): ExchangeDifference[] {
+    const params = { dateFrom: filters.dateFrom ?? '0000-00-00', dateTo: filters.dateTo ?? '9999-12-31' }
+    return this.db
+      .prepare(
+        `SELECT 'sin_ticket' AS source, id AS exchangeId, NULL AS saleId, date(created_at) AS date,
+                created_at AS createdAt, difference AS amount, settlement_method AS paymentMethod
+         FROM free_exchanges
+         WHERE difference > 0.009 AND settlement_method IS NOT NULL AND settlement_method != 'credito_cliente'
+           AND date(created_at) BETWEEN @dateFrom AND @dateTo
+         UNION ALL
+         SELECT 'con_ticket', id, sale_id, date(created_at), created_at, difference, settlement_method
+         FROM exchanges
+         WHERE difference > 0.009 AND settlement_method IS NOT NULL AND settlement_method != 'credito_cliente'
+           AND date(created_at) BETWEEN @dateFrom AND @dateTo
+         ORDER BY createdAt DESC`
+      )
+      .all(params) as ExchangeDifference[]
   }
 
   topProductsByRevenue(filters: ReportFilters): ProductReport[] {

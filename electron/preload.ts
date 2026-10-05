@@ -106,6 +106,7 @@ const electronAPI = {
   // Reporting
   reporting: {
     salesByDateRange: (filters: unknown) => invoke('reporting:salesByDateRange', filters),
+    exchangeDifferences: (filters: unknown) => invoke('reporting:exchangeDifferences', filters),
     topProducts: (filters: unknown) => invoke('reporting:topProducts', filters),
     lowStock: () => invoke('reporting:lowStock'),
     stockMovements: (filters: unknown) => invoke('reporting:stockMovements', filters),

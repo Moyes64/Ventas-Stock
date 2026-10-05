@@ -10,6 +10,10 @@ export function registerReportingHandlers(db: Database): void {
     return reportingService.salesByDateRange(filters)
   })
 
+  ipcMain.handle('reporting:exchangeDifferences', (_event, filters: ReportFilters) => {
+    return reportingService.exchangeDifferences(filters)
+  })
+
   ipcMain.handle('reporting:topProducts', (_event, filters: ReportFilters) => {
     return reportingService.topProductsByRevenue(filters)
   })

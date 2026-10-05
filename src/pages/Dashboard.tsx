@@ -2,12 +2,13 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { reporting, catalog } from '../lib/ipc'
 import { localToday, formatWeekdayDate } from '../lib/date'
-import type { DailySummaryReport } from '../types/ipc'
+import type { DailySummaryReport, ExchangeDifference } from '../types/ipc'
 import { useHiddenOptions } from '../context/HiddenOptionsContext'
 
 export default function Dashboard() {
   const [todaySummary, setTodaySummary] = useState<DailySummaryReport | null>(null)
   const [lowStockCount, setLowStockCount] = useState(0)
+  const [exchangeDiffs, setExchangeDiffs] = useState<ExchangeDifference[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const { isHiddenOptionsVisible } = useHiddenOptions()
@@ -16,10 +17,12 @@ export default function Dashboard() {
     async function loadData() {
       try {
         const today = localToday()
-        const [summaries, lowStockItems] = await Promise.all([
+        const [summaries, lowStockItems, diffs] = await Promise.all([
           reporting.dailySummary({ dateFrom: today, dateTo: today }),
           catalog.listLowStock(),
+          reporting.exchangeDifferences({ dateFrom: today, dateTo: today }),
         ])
+        setExchangeDiffs(diffs)
         setTodaySummary(summaries[0] ?? null)
         setLowStockCount(lowStockItems.length)
       } catch (err) {
@@ -37,6 +40,8 @@ export default function Dashboard() {
   const currency = (n: number) =>
     new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(n)
 
+  const exchangeDiffTotal = exchangeDiffs.reduce((acc, d) => acc + d.amount, 0)
+
   return (
     <div className="page">
       <h1 className="page-title">Dashboard</h1>
@@ -51,6 +56,11 @@ export default function Dashboard() {
         <div className="stat-card">
           <div className="stat-value">{currency(todaySummary?.whiteSalesTotal ?? 0)}</div>
           <div className="stat-label">Total hoy</div>
+          {exchangeDiffs.length > 0 && (
+            <div className="stat-sub" title="Cobrado por diferencias en cambios/devoluciones. No es una venta ni está facturado.">
+              + {currency(exchangeDiffTotal)} por diferencias de cambios ({exchangeDiffs.length})
+            </div>
+          )}
         </div>
         <div className={`stat-card ${lowStockCount > 0 ? 'stat-card--warning' : ''}`}>
           <div className="stat-value">{lowStockCount}</div>

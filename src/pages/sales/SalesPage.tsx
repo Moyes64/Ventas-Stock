@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { sales, printing, systemParams, mail, reporting } from '../../lib/ipc'
-import { localToday, formatDate } from '../../lib/date'
-import type { Sale } from '../../types/ipc'
+import { localToday, formatDate, formatDateTime } from '../../lib/date'
+import type { Sale, ExchangeDifference } from '../../types/ipc'
 import { useConfirm } from '../../hooks/useConfirm'
 
 const STATUS_LABELS: Record<string, string> = {
@@ -13,6 +13,15 @@ const STATUS_LABELS: Record<string, string> = {
   WEB_ORDER: '🌐 Pedido Web',
   PROCESSED: '🌐 Pedido Web Procesado',
   CANCELLED: '🚫 Cancelada',
+}
+
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  contado_efectivo: '💵 Efectivo',
+  transferencia: '🏦 Transferencia',
+  qr: '📱 QR',
+  debito: '💳 Débito',
+  credito: '💳 Crédito',
+  mercadopago: '🛒 Mercado Pago',
 }
 
 const STATUS_CLASSES: Record<string, string> = {
@@ -34,6 +43,7 @@ export default function SalesPage() {
   // Totalizador del período: se calcula en la base (mismo criterio que el
   // reporte "Ventas por día") para no quedar limitado a las 100 filas listadas.
   const [periodTotal, setPeriodTotal] = useState<{ count: number; amount: number } | null>(null)
+  const [exchangeDiffs, setExchangeDiffs] = useState<ExchangeDifference[]>([])
   const [printingId, setPrintingId] = useState<number | null>(null)
   const [changePrintingId, setChangePrintingId] = useState<number | null>(null)
   const [mailingId, setMailingId] = useState<number | null>(null)
@@ -46,11 +56,13 @@ export default function SalesPage() {
     setLoading(true)
     setError(null)
     try {
-      const [data, summary] = await Promise.all([
+      const [data, summary, diffs] = await Promise.all([
         sales.list({ dateFrom, dateTo, limit: 100 }),
         reporting.salesByDateRange({ dateFrom, dateTo }),
+        reporting.exchangeDifferences({ dateFrom, dateTo }),
       ])
       setSaleList(data)
+      setExchangeDiffs(diffs)
       setPeriodTotal({
         count: summary.reduce((acc, d) => acc + d.salesCount, 0),
         amount: summary.reduce((acc, d) => acc + d.totalAmount, 0),
@@ -176,6 +188,11 @@ export default function SalesPage() {
                 <div className="stat-sub stat-sub--light">
                   {periodTotal.count} {periodTotal.count === 1 ? 'venta' : 'ventas'} (sin canceladas, rechazadas ni pedidos web pendientes)
                 </div>
+                {exchangeDiffs.length > 0 && (
+                  <div className="stat-sub stat-sub--light" title="Cobrado por diferencias en cambios/devoluciones. No es una venta ni está facturado.">
+                    + {currency(exchangeDiffs.reduce((acc, d) => acc + d.amount, 0))} cobrados por diferencias de cambios (sin facturar)
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -265,6 +282,42 @@ export default function SalesPage() {
               </tbody>
             </table>
           </div>
+
+          {exchangeDiffs.length > 0 && (
+            <>
+              <h3 style={{ marginTop: '1.5rem' }}>Diferencias cobradas por cambios</h3>
+              <p className="text-muted">
+                Cuando el cliente se lleva un producto más caro que el que devuelve. No son ventas ni están facturadas;
+                el ingreso figura en Finanzas.
+              </p>
+              <div className="table-container">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Fecha</th>
+                      <th>Cambio</th>
+                      <th>Medio de pago</th>
+                      <th>Monto</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {exchangeDiffs.map(d => (
+                      <tr key={`${d.source}-${d.exchangeId}`}>
+                        <td>{formatDateTime(d.createdAt)}</td>
+                        <td>
+                          {d.source === 'sin_ticket'
+                            ? `Sin ticket #${d.exchangeId}`
+                            : `Con ticket #${d.exchangeId} (venta #${d.saleId})`}
+                        </td>
+                        <td>{PAYMENT_METHOD_LABELS[d.paymentMethod] ?? d.paymentMethod}</td>
+                        <td>{currency(d.amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
         </>
       )}
 

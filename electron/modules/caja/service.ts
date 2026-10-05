@@ -86,6 +86,7 @@ export class CajaService {
     // están contados en cashSalesTotal — solo los manuales entran en ingresos/egresos.
     const movements = allMovements.filter(m => m.saleId === null)
     const salesByMethod = this.repo.getSalesSummaryByPaymentMethod(date)
+    const exchangeDifferencesByPaymentMethod = this.repo.getExchangeDifferencesByPaymentMethod(date)
 
     // Transferencias entre cuentas que involucran a Caja ese día (dinero que
     // físicamente entró o salió de la caja pero no pasa por finance_movements).
@@ -126,6 +127,7 @@ export class CajaService {
         qr: salesByMethod['qr'] ?? 0,
         mercadopago: salesByMethod['mercadopago'] ?? 0,
       },
+      exchangeDifferencesByPaymentMethod,
       movements,
       transfers,
     }

@@ -277,6 +277,17 @@ export interface SalesSummary {
   processedCount: number
 }
 
+/** Diferencia a favor del comercio cobrada en un cambio (con o sin ticket). No es una venta. */
+export interface ExchangeDifference {
+  source: 'sin_ticket' | 'con_ticket'
+  exchangeId: number
+  saleId: number | null
+  date: string
+  createdAt: string
+  amount: number
+  paymentMethod: string
+}
+
 export interface SearchBucketCount {
   value: string
   label: string
@@ -696,6 +707,10 @@ export interface CierreSummary {
     qr: number
     mercadopago: number
   }
+  /** Diferencias cobradas en cambios (con/sin ticket) del día, por medio de pago.
+   *  Solo los medios con monto; no están incluidas en salesByPaymentMethod. Las
+   *  cobradas en efectivo ya cuentan en ingresosTotal (generan un movimiento en Caja). */
+  exchangeDifferencesByPaymentMethod: Record<string, number>
   movements: FinanceMovement[]
   transfers: FinanceTransfer[]
 }
