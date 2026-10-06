@@ -45,3 +45,16 @@ export function formatDate(value: string | Date): string {
   const d = value instanceof Date ? value : new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00` : value)
   return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
 }
+
+/**
+ * Día hábil siguiente a una fecha YYYY-MM-DD (saltea sábados y domingos; no
+ * contempla feriados). Ej: viernes -> lunes, sábado -> lunes, lunes -> martes.
+ */
+export function nextBusinessDay(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const date = new Date(y, m - 1, d)
+  do {
+    date.setDate(date.getDate() + 1)
+  } while (date.getDay() === 0 || date.getDay() === 6)
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}

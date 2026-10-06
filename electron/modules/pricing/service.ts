@@ -1,7 +1,7 @@
 import type { Database } from 'better-sqlite3'
 import { localToday } from '../../lib/date'
 import { FinanceRepository } from '../finance/repository'
-import type { MpFeePaymentMethod } from '../finance/types'
+import type { FeePaymentMethod } from '../finance/types'
 import { ProductRepository } from '../catalog/repository'
 import { PricingRepository } from './repository'
 import type { ProductForPricing, ProductSalesMix } from './repository'
@@ -26,12 +26,16 @@ const NON_OVERHEAD_CATEGORIES = new Set([
   'Pago a Proveedores',
   'Retiro de Socio',
   'Comisión Mercado Pago',
+  'Comisión FISERV',
   'Ajuste Conciliación MP',
   'Devolución a Cliente',
 ])
 
-/** Medios de pago a los que Mercado Pago les cobra comisión (mismo set que el módulo de Finanzas). */
-const MP_FEE_METHODS = new Set<MpFeePaymentMethod>(['qr', 'debito', 'credito', 'mercadopago'])
+/** Medios de pago con comisión del procesador, MP o FISERV (mismo set que el módulo de Finanzas). */
+const FEE_METHODS = new Set<FeePaymentMethod>([
+  'qr', 'debito', 'credito', 'mercadopago',
+  'fiserv_qr', 'fiserv_debito', 'fiserv_credito_1', 'fiserv_credito_2', 'fiserv_credito_3',
+])
 
 const DEFAULT_VENTANA_DIAS = 90
 
@@ -155,8 +159,8 @@ export class PricingService {
     let comisionBaseTotal = 0
     for (const pm of paymentMix) {
       comisionBaseTotal += pm.total
-      if (MP_FEE_METHODS.has(pm.paymentMethod as MpFeePaymentMethod)) {
-        const rate = this.financeRepo.findEffectiveMpFeeRate(pm.paymentMethod as MpFeePaymentMethod, dateTo)
+      if (FEE_METHODS.has(pm.paymentMethod as FeePaymentMethod)) {
+        const rate = this.financeRepo.findEffectiveMpFeeRate(pm.paymentMethod as FeePaymentMethod, dateTo)
         if (rate) {
           const effectivePct = rate.pct * (1 + rate.ivaPct / 100)
           comisionWeightedSum += pm.total * effectivePct

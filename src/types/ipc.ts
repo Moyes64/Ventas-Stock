@@ -175,6 +175,11 @@ export type PaymentMethod =
   | 'mercadopago'
   | 'qr'
   | 'mixto'
+  | 'fiserv_qr'
+  | 'fiserv_debito'
+  | 'fiserv_credito_1'
+  | 'fiserv_credito_2'
+  | 'fiserv_credito_3'
 
 export interface SalePayment {
   id: number
@@ -706,6 +711,11 @@ export interface CierreSummary {
     credito: number
     qr: number
     mercadopago: number
+    fiserv_qr: number
+    fiserv_debito: number
+    fiserv_credito_1: number
+    fiserv_credito_2: number
+    fiserv_credito_3: number
   }
   /** Diferencias cobradas en cambios (con/sin ticket) del día, por medio de pago.
    *  Solo los medios con monto; no están incluidas en salesByPaymentMethod. Las
@@ -881,9 +891,20 @@ export interface FinancePartnerLoan {
 
 export type MpFeePaymentMethod = 'qr' | 'debito' | 'credito' | 'mercadopago'
 
+/** Medios del posnet FISERV (se acreditan en MP-Anabella al día hábil siguiente). */
+export type FiservPaymentMethod =
+  | 'fiserv_qr'
+  | 'fiserv_debito'
+  | 'fiserv_credito_1'
+  | 'fiserv_credito_2'
+  | 'fiserv_credito_3'
+
+/** Todo medio de pago con comisión versionada (MP + FISERV). */
+export type FeePaymentMethod = MpFeePaymentMethod | FiservPaymentMethod
+
 export interface FinanceMpFeeRate {
   id: number
-  paymentMethod: MpFeePaymentMethod
+  paymentMethod: FeePaymentMethod
   pct: number
   ivaPct: number
   vigenteDesde: string
@@ -891,7 +912,7 @@ export interface FinanceMpFeeRate {
 }
 
 export interface CreateMpFeeRateInput {
-  paymentMethod: MpFeePaymentMethod
+  paymentMethod: FeePaymentMethod
   pct: number
   ivaPct?: number
   vigenteDesde?: string

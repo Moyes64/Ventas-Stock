@@ -178,9 +178,23 @@ export interface PartnerLoan {
  */
 export type MpFeePaymentMethod = 'qr' | 'debito' | 'credito' | 'mercadopago'
 
+/**
+ * Medios de pago del posnet FISERV. El cobro queda en una cuenta de FISERV y se
+ * transfiere a MP-Anabella pasado 1 día hábil; cada modalidad tiene su arancel.
+ */
+export type FiservPaymentMethod =
+  | 'fiserv_qr'
+  | 'fiserv_debito'
+  | 'fiserv_credito_1'
+  | 'fiserv_credito_2'
+  | 'fiserv_credito_3'
+
+/** Todo medio de pago con comisión versionada en finance_mp_fee_rates (MP + FISERV). */
+export type FeePaymentMethod = MpFeePaymentMethod | FiservPaymentMethod
+
 export interface FinanceMpFeeRate {
   id: number
-  paymentMethod: MpFeePaymentMethod
+  paymentMethod: FeePaymentMethod
   /** % de comisión antes de IVA (ej: 0.8 = 0.8%). */
   pct: number
   /** % de IVA que se aplica sobre la comisión (ej: 21). */
@@ -191,7 +205,7 @@ export interface FinanceMpFeeRate {
 }
 
 export interface CreateMpFeeRateInput {
-  paymentMethod: MpFeePaymentMethod
+  paymentMethod: FeePaymentMethod
   pct: number
   ivaPct?: number
   vigenteDesde?: string

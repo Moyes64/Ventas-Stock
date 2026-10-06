@@ -221,6 +221,11 @@ $lowStock   = array_filter($stock, fn($p) => $p['isLow'] ?? false);
       'transferencia'    => ['📲','Transferencia'],
       'debito'           => ['💳','Débito'],
       'credito'          => ['💳','Crédito'],
+      'fiserv_credito_3' => ['💳','FISERV 3 cuotas'],
+      'fiserv_credito_2' => ['💳','FISERV 2 cuotas'],
+      'fiserv_credito_1' => ['💳','FISERV Crédito'],
+      'fiserv_debito'    => ['💳','FISERV Débito'],
+      'fiserv_qr'        => ['📱','FISERV QR'],
     ]; ?>
     <?php foreach ($pmLabels as $key => [$icon, $label]): ?>
       <?php $val = (float)($pm[$key] ?? 0); if ($val <= 0) continue; ?>

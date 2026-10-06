@@ -118,6 +118,11 @@ export class CajaRepository {
       credito: 0,
       qr: 0,
       mercadopago: 0,
+      fiserv_qr: 0,
+      fiserv_debito: 0,
+      fiserv_credito_1: 0,
+      fiserv_credito_2: 0,
+      fiserv_credito_3: 0,
     }
     for (const row of rows) {
       result[row.payment_method] = row.total_amount

@@ -3,6 +3,7 @@ import { invoicing as invoicingApi, printing, sales as salesApi, mail } from '..
 import { localToday, formatDate, formatDateTime } from '../../lib/date'
 import type { PaymentMethod, Sale, SaleEmailLogEntry } from '../../types/ipc'
 import { useHiddenOptions } from '../../context/HiddenOptionsContext'
+import { FISERV_LABELS, FISERV_METHODS } from '../../lib/fiserv'
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   contado_efectivo: '💵 Contado Efectivo',
@@ -12,10 +13,12 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
   credito: '💳 Crédito',
   credito_cliente: '🎁 Crédito del cliente',
   mercadopago: '🛒 Mercado Pago (Web)',
+  ...FISERV_LABELS,
 }
 
 const EDITABLE_PAYMENT_METHODS: PaymentMethod[] = [
   'contado_efectivo', 'transferencia', 'qr', 'debito', 'credito', 'mercadopago',
+  ...FISERV_METHODS,
 ]
 
 const STATUS_LABELS: Record<string, string> = {

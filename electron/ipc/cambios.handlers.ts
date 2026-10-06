@@ -11,6 +11,7 @@ const REFUND_CATEGORIA = 'Devolución a Cliente'
  *  a favor del comercio. 'credito_cliente' se resuelve aparte (consume saldo). */
 const MONEY_PAYMENT_METHODS = new Set([
   'contado_efectivo', 'transferencia', 'debito', 'credito', 'qr', 'mercadopago',
+  'fiserv_qr', 'fiserv_debito', 'fiserv_credito_1', 'fiserv_credito_2', 'fiserv_credito_3',
 ])
 
 export interface QrPayload {

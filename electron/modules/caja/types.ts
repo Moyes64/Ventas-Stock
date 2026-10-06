@@ -1,6 +1,8 @@
 import type { FinanceMovement, FinanceTransfer } from '../finance/types'
 
-export type PaymentMethod = 'contado_efectivo' | 'transferencia' | 'debito' | 'credito' | 'qr' | 'mercadopago'
+export type PaymentMethod =
+  | 'contado_efectivo' | 'transferencia' | 'debito' | 'credito' | 'qr' | 'mercadopago'
+  | 'fiserv_qr' | 'fiserv_debito' | 'fiserv_credito_1' | 'fiserv_credito_2' | 'fiserv_credito_3'
 export type SessionStatus = 'open' | 'closed'
 
 export interface CashSession {
@@ -32,6 +34,11 @@ export interface CierreSummary {
     credito: number
     qr: number
     mercadopago: number
+    fiserv_qr: number
+    fiserv_debito: number
+    fiserv_credito_1: number
+    fiserv_credito_2: number
+    fiserv_credito_3: number
   }
   /** Diferencias cobradas en cambios (con/sin ticket) del día, por medio de pago.
    *  Solo los medios con monto; no están incluidas en salesByPaymentMethod. Las

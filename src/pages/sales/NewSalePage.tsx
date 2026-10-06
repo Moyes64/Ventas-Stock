@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { catalog, customers, sales, printing, parameters as parametersApi, caja as cajaApi, mail, credits } from '../../lib/ipc'
 import type { Product, Customer, Sale, Parameter, PaymentMethod } from '../../types/ipc'
 import { useHiddenOptions } from '../../context/HiddenOptionsContext'
+import { FISERV_OPTIONS } from '../../lib/fiserv'
 
 interface CartItem {
   product: Product
@@ -574,6 +575,7 @@ export default function NewSalePage() {
     { value: 'qr', label: '📱 QR' },
     { value: 'debito', label: '💳 Débito' },
     { value: 'credito', label: '💳 Crédito' },
+    ...FISERV_OPTIONS,
     ...(selectedCustomerId && creditBalance !== null && creditBalance > 0
       ? [{ value: 'credito_cliente' as PaymentMethod, label: `🎁 Crédito del cliente (${currency(creditBalance)})` }]
       : []),

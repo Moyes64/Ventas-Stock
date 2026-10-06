@@ -16,6 +16,11 @@ export type PaymentMethod =
   | 'mercadopago'
   | 'qr'
   | 'mixto'
+  | 'fiserv_qr'
+  | 'fiserv_debito'
+  | 'fiserv_credito_1'
+  | 'fiserv_credito_2'
+  | 'fiserv_credito_3'
 
 export interface SalePayment {
   id: number

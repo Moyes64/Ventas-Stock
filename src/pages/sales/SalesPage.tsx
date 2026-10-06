@@ -4,6 +4,7 @@ import { sales, printing, systemParams, mail, reporting } from '../../lib/ipc'
 import { localToday, formatDate, formatDateTime } from '../../lib/date'
 import type { Sale, ExchangeDifference } from '../../types/ipc'
 import { useConfirm } from '../../hooks/useConfirm'
+import { FISERV_LABELS } from '../../lib/fiserv'
 
 const STATUS_LABELS: Record<string, string> = {
   AUTHORIZED: '✅ Autorizada',
@@ -22,6 +23,7 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
   debito: '💳 Débito',
   credito: '💳 Crédito',
   mercadopago: '🛒 Mercado Pago',
+  ...FISERV_LABELS,
 }
 
 const STATUS_CLASSES: Record<string, string> = {

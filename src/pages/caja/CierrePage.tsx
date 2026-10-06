@@ -3,6 +3,7 @@ import { caja, finance, printing } from '../../lib/ipc'
 import { localToday, formatDate } from '../../lib/date'
 import type { CierreSummary, FinanceAccount } from '../../types/ipc'
 import { useConfirm } from '../../hooks/useConfirm'
+import { FISERV_LABELS } from '../../lib/fiserv'
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   contado_efectivo: '💵 Contado Efectivo',
@@ -11,6 +12,7 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
   debito: '💳 Débito',
   credito: '💳 Crédito',
   mercadopago: '🛒 Mercado Pago (Web)',
+  ...FISERV_LABELS,
 }
 
 export default function CierrePage() {

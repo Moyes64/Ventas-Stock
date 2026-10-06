@@ -16,6 +16,7 @@ import type {
   CreateTransferInput,
   TransferFilters,
   MpFeePaymentMethod,
+  FeePaymentMethod,
   FinanceMpFeeRate,
   CreateMpFeeRateInput,
   FinanceMpReconciliation,
@@ -624,10 +625,10 @@ export class FinanceRepository {
     return rows
   }
 
-  // ── Comisiones de Mercado Pago (QR / Débito / Crédito) ──────────────────────
+  // ── Comisiones de Mercado Pago y FISERV (tasas versionadas) ───────────────────
 
   /** Tasa vigente para un medio de pago a una fecha dada (la más reciente con vigente_desde <= fecha). */
-  findEffectiveMpFeeRate(paymentMethod: MpFeePaymentMethod, fecha: string): FinanceMpFeeRate | undefined {
+  findEffectiveMpFeeRate(paymentMethod: FeePaymentMethod, fecha: string): FinanceMpFeeRate | undefined {
     const row = this.db
       .prepare(
         `SELECT * FROM finance_mp_fee_rates
@@ -646,7 +647,7 @@ export class FinanceRepository {
   }
 
   /** La versión más reciente cargada para un medio de pago (independiente de si ya está vigente o es futura). */
-  findLatestMpFeeRate(paymentMethod: MpFeePaymentMethod): FinanceMpFeeRate | undefined {
+  findLatestMpFeeRate(paymentMethod: FeePaymentMethod): FinanceMpFeeRate | undefined {
     const row = this.db
       .prepare(
         `SELECT * FROM finance_mp_fee_rates WHERE payment_method = @paymentMethod
@@ -656,7 +657,7 @@ export class FinanceRepository {
     return row ? this.mapFeeRate(row) : undefined
   }
 
-  listMpFeeRates(paymentMethod?: MpFeePaymentMethod): FinanceMpFeeRate[] {
+  listMpFeeRates(paymentMethod?: FeePaymentMethod): FinanceMpFeeRate[] {
     const rows = paymentMethod
       ? (this.db
           .prepare('SELECT * FROM finance_mp_fee_rates WHERE payment_method = ? ORDER BY vigente_desde DESC, id DESC')
@@ -914,7 +915,7 @@ export class FinanceRepository {
   private mapFeeRate(row: FeeRateRow): FinanceMpFeeRate {
     return {
       id: row.id,
-      paymentMethod: row.payment_method as MpFeePaymentMethod,
+      paymentMethod: row.payment_method as FeePaymentMethod,
       pct: row.pct,
       ivaPct: row.iva_pct,
       vigenteDesde: row.vigente_desde,

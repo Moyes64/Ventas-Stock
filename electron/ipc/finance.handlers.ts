@@ -10,6 +10,7 @@ import type {
   CreateTransferInput,
   TransferFilters,
   MpFeePaymentMethod,
+  FeePaymentMethod,
   CreateMpFeeRateInput,
   SaveMpReconciliationInput,
 } from '../modules/finance/types'
@@ -96,8 +97,8 @@ export function registerFinanceHandlers(db: Database): void {
     return financeService.listPartnerLoans(onlyPending)
   })
 
-  // Comisiones de Mercado Pago (QR / Débito / Crédito)
-  ipcMain.handle('finance:listMpFeeRates', (_event, paymentMethod?: MpFeePaymentMethod) => {
+  // Comisiones de Mercado Pago y FISERV (tasas versionadas)
+  ipcMain.handle('finance:listMpFeeRates', (_event, paymentMethod?: FeePaymentMethod) => {
     return financeService.listMpFeeRates(paymentMethod)
   })
 

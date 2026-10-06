@@ -57,6 +57,7 @@ import type {
   CreateFinanceTransferInput,
   FinanceTransferFilters,
   MpFeePaymentMethod,
+  FeePaymentMethod,
   FinanceMpFeeRate,
   CreateMpFeeRateInput,
   FinanceMpReconciliation,
@@ -482,7 +483,7 @@ export const finance = {
   getPartnersEquity: () => electron.finance.getPartnersEquity() as Promise<FinancePartnerEquity[]>,
   listPartnerLoans: (onlyPending?: boolean) =>
     electron.finance.listPartnerLoans(onlyPending) as Promise<FinancePartnerLoan[]>,
-  listMpFeeRates: (paymentMethod?: MpFeePaymentMethod) =>
+  listMpFeeRates: (paymentMethod?: FeePaymentMethod) =>
     electron.finance.listMpFeeRates(paymentMethod) as Promise<FinanceMpFeeRate[]>,
   createMpFeeRate: (input: CreateMpFeeRateInput) =>
     electron.finance.createMpFeeRate(input) as Promise<FinanceMpFeeRate>,

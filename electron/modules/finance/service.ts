@@ -1,5 +1,5 @@
 import type { Database } from 'better-sqlite3'
-import { localToday } from '../../lib/date'
+import { localToday, nextBusinessDay } from '../../lib/date'
 import { FinanceRepository } from './repository'
 import type {
   FinancePartner,
@@ -19,6 +19,8 @@ import type {
   CreateTransferInput,
   TransferFilters,
   MpFeePaymentMethod,
+  FiservPaymentMethod,
+  FeePaymentMethod,
   FinanceMpFeeRate,
   CreateMpFeeRateInput,
   FinanceMpReconciliation,
@@ -51,13 +53,47 @@ const SOCIO_CATEGORIAS = [
 ]
 const VENTA_CATEGORIA = 'Venta'
 const COMISION_MP_CATEGORIA = 'Comisión Mercado Pago'
+const COMISION_FISERV_CATEGORIA = 'Comisión FISERV'
 const AJUSTE_CONCILIACION_CATEGORIA = 'Ajuste Conciliación MP'
 const MP_ANABELLA_ACCOUNT_NAME = 'Mercado Pago - Anabella'
-/** Medios de pago cuyo dinero se acredita en la cuenta MP-Anabella (posnet local, transferencias, web). */
-const MP_ANABELLA_PAYMENT_METHODS = new Set(['transferencia', 'debito', 'credito', 'mercadopago', 'qr'])
 /** Medios de pago a los que Mercado Pago les cobra comisión: posnet físico (QR/tarjeta) + tienda web. */
 const MP_FEE_METHODS: MpFeePaymentMethod[] = ['qr', 'debito', 'credito', 'mercadopago']
-const MP_FEE_PAYMENT_METHODS = new Set<MpFeePaymentMethod>(MP_FEE_METHODS)
+/** Medios del posnet FISERV: el cobro queda en FISERV y se transfiere a mano a
+ *  MP-Anabella pasado 1 día hábil -- se registra en MP-Anabella como pendiente
+ *  de acreditación hasta ese día. */
+const FISERV_METHODS: FiservPaymentMethod[] = [
+  'fiserv_qr', 'fiserv_debito', 'fiserv_credito_1', 'fiserv_credito_2', 'fiserv_credito_3',
+]
+const FISERV_PAYMENT_METHODS = new Set<string>(FISERV_METHODS)
+/** Todo medio con comisión versionada (MP + FISERV). */
+const FEE_METHODS: FeePaymentMethod[] = [...MP_FEE_METHODS, ...FISERV_METHODS]
+const FEE_PAYMENT_METHODS = new Set<string>(FEE_METHODS)
+/** Medios de pago cuyo dinero se acredita en la cuenta MP-Anabella (posnet MP y FISERV, transferencias, web). */
+const MP_ANABELLA_PAYMENT_METHODS = new Set(['transferencia', ...MP_FEE_METHODS, ...FISERV_METHODS])
+
+const FISERV_LABELS: Record<FiservPaymentMethod, string> = {
+  fiserv_qr: 'QR',
+  fiserv_debito: 'Débito',
+  fiserv_credito_1: 'Crédito 1 pago',
+  fiserv_credito_2: 'Crédito 2 cuotas',
+  fiserv_credito_3: 'Crédito 3 cuotas',
+}
+
+/** Categoría y prefijo de descripción del egreso de comisión según el procesador. */
+function feeLabels(paymentMethod: FeePaymentMethod): { categoria: string; prefijo: string } {
+  if (FISERV_PAYMENT_METHODS.has(paymentMethod)) {
+    return {
+      categoria: COMISION_FISERV_CATEGORIA,
+      prefijo: `Comisión FISERV (${FISERV_LABELS[paymentMethod as FiservPaymentMethod]})`,
+    }
+  }
+  return { categoria: COMISION_MP_CATEGORIA, prefijo: `Comisión MP (${paymentMethod.toUpperCase()})` }
+}
+
+/** FISERV acredita (vía transferencia manual) al día hábil siguiente; el resto, en el momento. */
+function accreditationDate(paymentMethod: string, fecha: string): string | null {
+  return FISERV_PAYMENT_METHODS.has(paymentMethod) ? nextBusinessDay(fecha) : null
+}
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100
@@ -355,15 +391,16 @@ export class FinanceService {
       monto: input.monto,
       descripcion: `Venta #${input.saleId}`,
       fecha: input.fecha,
+      fechaAcreditacion: accreditationDate(input.paymentMethod, input.fecha),
       saleId: input.saleId,
       salePaymentId: input.salePaymentId ?? null,
     })
 
-    if (MP_FEE_PAYMENT_METHODS.has(input.paymentMethod as MpFeePaymentMethod)) {
+    if (FEE_PAYMENT_METHODS.has(input.paymentMethod)) {
       this.registerMpFeeForSale(
         input.saleId,
         input.salePaymentId ?? null,
-        input.paymentMethod as MpFeePaymentMethod,
+        input.paymentMethod as FeePaymentMethod,
         input.monto,
         input.fecha,
         account.id
@@ -400,18 +437,21 @@ export class FinanceService {
       monto: input.monto,
       descripcion,
       fecha: input.fecha,
+      fechaAcreditacion: accreditationDate(input.paymentMethod, input.fecha),
     })
 
-    if (MP_FEE_PAYMENT_METHODS.has(input.paymentMethod as MpFeePaymentMethod)) {
-      const comision = this.calcMpFee(input.paymentMethod as MpFeePaymentMethod, input.monto, input.fecha)
+    if (FEE_PAYMENT_METHODS.has(input.paymentMethod)) {
+      const paymentMethod = input.paymentMethod as FeePaymentMethod
+      const comision = this.calcMpFee(paymentMethod, input.monto, input.fecha)
       if (comision !== null) {
-        const feeCategoria = this.repo.findCategoryByName(COMISION_MP_CATEGORIA)
+        const { categoria, prefijo } = feeLabels(paymentMethod)
+        const feeCategoria = this.repo.findCategoryByName(categoria)
         this.repo.createMovement({
           accountId: account.id,
           tipo: 'egreso',
           categoriaId: feeCategoria?.id ?? null,
           monto: comision,
-          descripcion: `Comisión MP (${input.paymentMethod.toUpperCase()}) - ${descripcion}`,
+          descripcion: `${prefijo} - ${descripcion}`,
           fecha: input.fecha,
         })
       }
@@ -423,7 +463,7 @@ export class FinanceService {
   /** Calcula la comisión de MP (% + IVA, según la tasa vigente a la fecha) para un
    *  monto y medio de pago dados. `null` si todavía no hay una tasa configurada, o
    *  si la comisión calculada es cero (mejor no descontar nada que asumir mal). */
-  private calcMpFee(paymentMethod: MpFeePaymentMethod, monto: number, fecha: string): number | null {
+  private calcMpFee(paymentMethod: FeePaymentMethod, monto: number, fecha: string): number | null {
     const rate = this.repo.findEffectiveMpFeeRate(paymentMethod, fecha)
     if (!rate) return null
     const comision = round2(monto * (rate.pct / 100) * (1 + rate.ivaPct / 100))
@@ -433,7 +473,7 @@ export class FinanceService {
   private registerMpFeeForSale(
     saleId: number,
     salePaymentId: number | null,
-    paymentMethod: MpFeePaymentMethod,
+    paymentMethod: FeePaymentMethod,
     monto: number,
     fecha: string,
     accountId: number
@@ -441,13 +481,14 @@ export class FinanceService {
     const comision = this.calcMpFee(paymentMethod, monto, fecha)
     if (comision === null) return
 
-    const categoria = this.repo.findCategoryByName(COMISION_MP_CATEGORIA)
+    const labels = feeLabels(paymentMethod)
+    const categoria = this.repo.findCategoryByName(labels.categoria)
     this.repo.createMovement({
       accountId,
       tipo: 'egreso',
       categoriaId: categoria?.id ?? null,
       monto: comision,
-      descripcion: `Comisión MP (${paymentMethod.toUpperCase()}) - Venta #${saleId}`,
+      descripcion: `${labels.prefijo} - Venta #${saleId}`,
       fecha,
       saleId,
       salePaymentId,
@@ -554,15 +595,15 @@ export class FinanceService {
     })
   }
 
-  // ── Comisiones de Mercado Pago (QR / Débito / Crédito) ──────────────────────
+  // ── Comisiones de Mercado Pago y FISERV (tasas versionadas) ─────────────────
 
-  listMpFeeRates(paymentMethod?: MpFeePaymentMethod): FinanceMpFeeRate[] {
+  listMpFeeRates(paymentMethod?: FeePaymentMethod): FinanceMpFeeRate[] {
     return this.repo.listMpFeeRates(paymentMethod)
   }
 
   createMpFeeRate(input: CreateMpFeeRateInput): FinanceMpFeeRate {
-    if (!MP_FEE_METHODS.includes(input.paymentMethod)) {
-      throw new Error('El medio de pago debe ser "qr", "debito", "credito" o "mercadopago"')
+    if (!FEE_METHODS.includes(input.paymentMethod)) {
+      throw new Error(`Medio de pago sin comisión configurable: "${input.paymentMethod}"`)
     }
     if (typeof input.pct !== 'number' || Number.isNaN(input.pct) || input.pct < 0) {
       throw new Error('El % de comisión debe ser un número mayor o igual a cero')
