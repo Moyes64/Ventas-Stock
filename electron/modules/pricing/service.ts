@@ -19,16 +19,21 @@ import type {
 } from './types'
 
 /** Categorías de egreso que NO son costo fijo de estructura (COGS, retiros de
- *  socio, comisiones/ajustes de MP que ya se calculan aparte, devoluciones) —
+ *  socio y préstamos/aportes entre socios y el negocio, comisiones/ajustes de MP
+ *  que ya se calculan aparte, devoluciones, compras puntuales de equipamiento
+ *  que no se repiten mes a mes) —
  *  todo lo demás que el usuario cargue en Finanzas como egreso cuenta como
  *  overhead fijo del negocio. */
 const NON_OVERHEAD_CATEGORIES = new Set([
   'Pago a Proveedores',
   'Retiro de Socio',
+  'Préstamo a Socio',
+  'Devolución de Aporte',
   'Comisión Mercado Pago',
   'Comisión FISERV',
   'Ajuste Conciliación MP',
   'Devolución a Cliente',
+  'Equipamiento',
 ])
 
 /** Medios de pago con comisión del procesador, MP o FISERV (mismo set que el módulo de Finanzas). */
