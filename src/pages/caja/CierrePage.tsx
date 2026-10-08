@@ -97,6 +97,10 @@ export default function CierrePage() {
 
   return (
     <div className="caja-section">
+      <div className="alert alert--warning">
+        ⚠️ Recordar hacer cierre de lote de FISERV
+      </div>
+
       <h2 className="section-title">🔒 Cierre de Caja</h2>
 
       <div className="form-group">
