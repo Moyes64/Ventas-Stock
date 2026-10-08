@@ -92,6 +92,20 @@ export default function MovementsPage() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
+  // Operaciones de socios fuera de Pandora (pago directo / compensación)
+  const [socioOp, setSocioOp] = useState<'pago' | 'compensacion'>('pago')
+  const [opPartnerId, setOpPartnerId] = useState<number | ''>('')
+  const [opCategoriaId, setOpCategoriaId] = useState<number | ''>('')
+  const [opSupplierId, setOpSupplierId] = useState<number | ''>('')
+  const [opAporteId, setOpAporteId] = useState<number | ''>('')
+  const [opMonto, setOpMonto] = useState('')
+  const [opFecha, setOpFecha] = useState(localToday)
+  const [opDescripcion, setOpDescripcion] = useState('')
+  const [opSaving, setOpSaving] = useState(false)
+  const [opError, setOpError] = useState<string | null>(null)
+  const [opMsg, setOpMsg] = useState<string | null>(null)
+  const socioOpRef = useRef<HTMLDivElement>(null)
+
   // Form de transferencia entre cuentas
   const [transferFrom, setTransferFrom] = useState<number | ''>('')
   const [transferTo, setTransferTo] = useState<number | ''>('')
@@ -125,6 +139,15 @@ export default function MovementsPage() {
       )
     : []
   const loanById = new Map(loans.map(l => [l.movementId, l]))
+  // La cuenta "Socios (fuera de Pandora)" no admite movimientos sueltos ni transferencias:
+  // solo se usa desde "Operaciones entre socios".
+  const realAccounts = accounts.filter(a => a.type !== 'socios')
+  const gastoCategorias = categories.filter(
+    c => (c.appliesTo === 'egreso' || c.appliesTo === 'ambos') && !SOCIO_CATEGORIAS.includes(c.name)
+  )
+  const opCategoria = categories.find(c => c.id === opCategoriaId)
+  const aportesCompensables = pendingLoans.filter(l => l.kind === 'aporte' && l.partnerId !== null)
+  const opAporte = opAporteId === '' ? undefined : loanById.get(opAporteId)
 
   async function loadCatalogs() {
     const [accs, cats, parts, sups, fd] = await Promise.all([
@@ -138,13 +161,17 @@ export default function MovementsPage() {
     setCategories(cats)
     setPartners(parts)
     setSuppliersList(sups)
-    if (accs.length > 0) setAccountId(accs[0].id)
-    if (accs.length > 0) setTransferFrom(accs[0].id)
-    if (accs.length > 1) setTransferTo(accs[1].id)
+    const reales = accs.filter(a => a.type !== 'socios')
+    if (reales.length > 0) setAccountId(reales[0].id)
+    if (reales.length > 0) setTransferFrom(reales[0].id)
+    if (reales.length > 1) setTransferTo(reales[1].id)
+    const pagoProveedores = cats.find(c => c.name === PAGO_PROVEEDORES)
+    if (pagoProveedores) setOpCategoriaId(pagoProveedores.id)
     setFoundingDate(fd)
     setFilterDateFrom(prev => (prev < fd ? fd : prev))
     setFecha(prev => (prev < fd ? fd : prev))
     setTransferFecha(prev => (prev < fd ? fd : prev))
+    setOpFecha(prev => (prev < fd ? fd : prev))
   }
 
   async function loadMovements() {
@@ -300,6 +327,73 @@ export default function MovementsPage() {
     }
   }
 
+  /** Precarga el form de compensación con un aporte pendiente (total del saldo). */
+  function startCompensacion(loan: FinancePartnerLoan) {
+    setSocioOp('compensacion')
+    setOpAporteId(loan.movementId)
+    setOpPartnerId('')
+    setOpMonto(String(loan.saldo))
+    setOpError(null)
+    setOpMsg(null)
+    socioOpRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  function selectOpAporte(id: number | '') {
+    setOpAporteId(id)
+    const loan = id === '' ? undefined : loanById.get(id)
+    if (loan) setOpMonto(String(loan.saldo))
+    if (loan && loan.partnerId === opPartnerId) setOpPartnerId('')
+  }
+
+  async function handleSocioOpSave() {
+    const montoNum = parseFloat(opMonto)
+    if (isNaN(montoNum) || montoNum <= 0) {
+      setOpError('El monto debe ser mayor a cero')
+      return
+    }
+    setOpSaving(true)
+    setOpError(null)
+    setOpMsg(null)
+    try {
+      if (socioOp === 'pago') {
+        if (opPartnerId === '') throw new Error('Seleccioná el socio que pagó')
+        if (opCategoriaId === '') throw new Error('Seleccioná la categoría del gasto')
+        if (!opDescripcion.trim()) throw new Error('La descripción es obligatoria')
+        await finance.createPartnerDirectPayment({
+          partnerId: opPartnerId,
+          categoriaId: opCategoriaId,
+          supplierId: opCategoria?.name === PAGO_PROVEEDORES && opSupplierId !== '' ? opSupplierId : null,
+          monto: montoNum,
+          descripcion: opDescripcion.trim(),
+          fecha: opFecha,
+        })
+        setOpMsg(`✅ Registrado: aporte de ${partnerName(opPartnerId)} y el gasto por ${currency(montoNum)}`)
+      } else {
+        if (opAporteId === '') throw new Error('Seleccioná el aporte que se compensa')
+        if (opPartnerId === '') throw new Error('Seleccioná el socio que paga')
+        await finance.createPartnerCompensation({
+          aporteMovementId: opAporteId,
+          toPartnerId: opPartnerId,
+          monto: montoNum,
+          descripcion: opDescripcion.trim() || undefined,
+          fecha: opFecha,
+        })
+        setOpMsg(`✅ Compensación registrada: ahora Pandora le debe ${currency(montoNum)} a ${partnerName(opPartnerId)}`)
+      }
+      setOpPartnerId('')
+      setOpSupplierId('')
+      setOpAporteId('')
+      setOpMonto('')
+      setOpDescripcion('')
+      await loadMovements()
+      await loadLoans()
+    } catch (err) {
+      setOpError(err instanceof Error ? err.message : 'Error al registrar la operación')
+    } finally {
+      setOpSaving(false)
+    }
+  }
+
   async function handleDelete(id: number) {
     try {
       await finance.deleteMovement(id)
@@ -399,6 +493,24 @@ export default function MovementsPage() {
 
   /** Estado de devolución de un préstamo/aporte, o a qué original apunta una devolución. */
   function loanStatusBadge(m: FinanceMovement) {
+    const pairBadge = m.pairMovementId !== null && (
+      <span
+        className="badge badge--purple"
+        style={{ marginLeft: 6 }}
+        title={`Operación de socios fuera de Pandora, vinculada al movimiento #${m.pairMovementId}`}
+      >
+        🤝 fuera de Pandora
+      </span>
+    )
+    return (
+      <>
+        {pairBadge}
+        {loanStatusOnly(m)}
+      </>
+    )
+  }
+
+  function loanStatusOnly(m: FinanceMovement) {
     if (m.relatedMovementId !== null) {
       return (
         <span className="badge badge--info" style={{ marginLeft: 6 }} title="Devolución vinculada al movimiento original">
@@ -536,7 +648,7 @@ export default function MovementsPage() {
               className="select"
             >
               <option value="">— Seleccionar —</option>
-              {accounts.map(a => (
+              {realAccounts.map(a => (
                 <option key={a.id} value={a.id}>{a.name}</option>
               ))}
             </select>
@@ -684,6 +796,133 @@ export default function MovementsPage() {
         {saveError && <p className="error">{saveError}</p>}
       </div>
 
+      {/* Operaciones entre socios fuera de las cuentas de Pandora */}
+      <div ref={socioOpRef} className="caja-movement-form">
+        <h3>🤝 Operaciones entre socios (fuera de las cuentas de Pandora)</h3>
+        <div className="form-row">
+          <label style={{ marginRight: 16 }}>
+            <input type="radio" checked={socioOp === 'pago'} onChange={() => { setSocioOp('pago'); setOpError(null); setOpMsg(null) }} />{' '}
+            💳 Pago directo de un socio
+          </label>
+          <label>
+            <input type="radio" checked={socioOp === 'compensacion'} onChange={() => { setSocioOp('compensacion'); setOpError(null); setOpMsg(null) }} />{' '}
+            ⇄ Compensación entre socios
+          </label>
+        </div>
+        <p className="page-subtitle">
+          {socioOp === 'pago'
+            ? 'El socio pagó con plata propia (ej. un proveedor). Queda como aporte suyo, que Pandora le puede devolver, y el gasto cuenta para el negocio. No cambia el saldo de ninguna cuenta.'
+            : 'Un socio le paga a otro, de su bolsillo, parte de un aporte pendiente. Ese monto se da por devuelto al que aportó y Pandora pasa a debérselo al que pagó. No cambia el saldo de ninguna cuenta.'}
+        </p>
+        <div className="form-row">
+          {socioOp === 'compensacion' && (
+            <div className="form-group form-group--grow">
+              <label className="label">Aporte que se compensa</label>
+              <select
+                value={opAporteId}
+                onChange={e => selectOpAporte(e.target.value === '' ? '' : parseInt(e.target.value))}
+                className="select"
+              >
+                <option value="">{aportesCompensables.length === 0 ? '— No hay aportes pendientes —' : '— Seleccionar —'}</option>
+                {aportesCompensables.map(l => (
+                  <option key={l.movementId} value={l.movementId}>
+                    #{l.movementId} · {formatDate(l.fecha)} · {l.partnerName} · {l.descripcion} · saldo {currency(l.saldo)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div className="form-group">
+            <label className="label">{socioOp === 'pago' ? 'Socio que pagó' : 'Socio que paga'}</label>
+            <select
+              value={opPartnerId}
+              onChange={e => setOpPartnerId(e.target.value === '' ? '' : parseInt(e.target.value))}
+              className="select"
+            >
+              <option value="">— Seleccionar —</option>
+              {partners
+                .filter(p => socioOp === 'pago' || p.id !== opAporte?.partnerId)
+                .map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+            </select>
+          </div>
+          {socioOp === 'pago' && (
+            <div className="form-group">
+              <label className="label">Categoría del gasto</label>
+              <select
+                value={opCategoriaId}
+                onChange={e => setOpCategoriaId(e.target.value === '' ? '' : parseInt(e.target.value))}
+                className="select"
+              >
+                <option value="">— Seleccionar —</option>
+                {gastoCategorias.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {socioOp === 'pago' && opCategoria?.name === PAGO_PROVEEDORES && (
+            <div className="form-group">
+              <label className="label">Proveedor (opcional)</label>
+              <select
+                value={opSupplierId}
+                onChange={e => setOpSupplierId(e.target.value === '' ? '' : parseInt(e.target.value))}
+                className="select"
+              >
+                <option value="">— Sin proveedor —</option>
+                {suppliersList.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+        <div className="form-row">
+          <div className="form-group form-group--grow">
+            <label className="label">{socioOp === 'pago' ? 'Descripción' : 'Descripción (opcional)'}</label>
+            <input
+              type="text"
+              value={opDescripcion}
+              onChange={e => setOpDescripcion(e.target.value)}
+              placeholder={socioOp === 'pago' ? 'Ej: Parte de la factura de Editorial Betina' : 'Ej: Gustavo le transfiere a Anabella'}
+              className="input"
+            />
+          </div>
+          <div className="form-group">
+            <label className="label">Monto</label>
+            <input
+              type="number"
+              min="0.01"
+              step="0.01"
+              value={opMonto}
+              onChange={e => setOpMonto(e.target.value)}
+              onFocus={e => e.target.select()}
+              placeholder="0.00"
+              className="input"
+            />
+          </div>
+          <div className="form-group">
+            <label className="label">Fecha</label>
+            <input
+              type="date"
+              value={opFecha}
+              min={foundingDate ?? undefined}
+              onChange={e => setOpFecha(e.target.value)}
+              className="input"
+            />
+          </div>
+          <div className="form-group form-group--action">
+            <label className="label">&nbsp;</label>
+            <button className="btn btn-primary" onClick={() => { void handleSocioOpSave() }} disabled={opSaving}>
+              {opSaving ? '⏳' : socioOp === 'pago' ? '+ Registrar pago' : '+ Registrar compensación'}
+            </button>
+          </div>
+        </div>
+        {opError && <p className="error">{opError}</p>}
+        {opMsg && <p className="page-subtitle">{opMsg}</p>}
+      </div>
+
       {/* Transferencia entre cuentas */}
       <div className="caja-movement-form">
         <h3>🔁 Transferencia entre cuentas</h3>
@@ -696,7 +935,7 @@ export default function MovementsPage() {
               className="select"
             >
               <option value="">— Seleccionar —</option>
-              {accounts.map(a => (
+              {realAccounts.map(a => (
                 <option key={a.id} value={a.id} disabled={a.id === transferTo}>{a.name}</option>
               ))}
             </select>
@@ -709,7 +948,7 @@ export default function MovementsPage() {
               className="select"
             >
               <option value="">— Seleccionar —</option>
-              {accounts.map(a => (
+              {realAccounts.map(a => (
                 <option key={a.id} value={a.id} disabled={a.id === transferFrom}>{a.name}</option>
               ))}
             </select>
@@ -807,6 +1046,16 @@ export default function MovementsPage() {
                     ) : (
                       <button className="btn btn-secondary btn-sm" onClick={() => startDevolucion(l)}>
                         ↩ Registrar devolución
+                      </button>
+                    )}
+                    {l.kind === 'aporte' && l.partnerId !== null && (
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        style={{ marginLeft: 6 }}
+                        onClick={() => startCompensacion(l)}
+                        title="Otro socio le paga a este, por fuera de Pandora, parte del aporte"
+                      >
+                        ⇄ Compensar
                       </button>
                     )}
                   </td>
@@ -987,6 +1236,7 @@ export default function MovementsPage() {
                           <button
                             className="btn btn-danger btn-sm"
                             onClick={() => { void handleDelete(m.id) }}
+                            title={m.pairMovementId !== null ? `Borra también el movimiento vinculado #${m.pairMovementId}` : undefined}
                           >✕</button>
                         )}
                       </td>

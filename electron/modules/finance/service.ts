@@ -28,6 +28,9 @@ import type {
   MpReconciliationRow,
   PartnerLoan,
   PartnerLoanKind,
+  CreatePartnerDirectPaymentInput,
+  CreatePartnerCompensationInput,
+  PartnerOperationResult,
 } from './types'
 
 const RETIRO_SOCIO_CATEGORIA = 'Retiro de Socio'
@@ -156,7 +159,12 @@ export class FinanceService {
     })
   }
 
-  createMovement(input: CreateMovementInput): FinanceMovement {
+  /**
+   * allowSociosAccount: solo para las operaciones de socios fuera de Pandora
+   * (createPartnerDirectPayment / createPartnerCompensation) — esa cuenta tiene que
+   * quedar siempre en cero, así que no admite movimientos sueltos.
+   */
+  createMovement(input: CreateMovementInput, options: { allowSociosAccount?: boolean } = {}): FinanceMovement {
     if (typeof input.monto !== 'number' || input.monto <= 0) {
       throw new Error('El monto debe ser un número mayor a cero')
     }
@@ -181,6 +189,11 @@ export class FinanceService {
 
     const account = this.repo.findAccountById(input.accountId)
     if (!account) throw new Error(`La cuenta ${input.accountId} no existe`)
+    if (account.type === 'socios' && !options.allowSociosAccount) {
+      throw new Error(
+        `"${account.name}" no admite movimientos sueltos: usá "Pago directo de un socio" o "Compensación entre socios".`
+      )
+    }
 
     let categoria = null as ReturnType<FinanceRepository['findCategoryById']>
     if (input.categoriaId !== undefined && input.categoriaId !== null) {
@@ -250,10 +263,144 @@ export class FinanceService {
         'Este movimiento se generó automáticamente desde una venta. Para revertirlo, cancelá la venta en el módulo de Ventas.'
       )
     }
-    if (this.repo.countRelatedMovements(id) > 0) {
-      throw new Error('Este movimiento tiene devoluciones registradas. Eliminá primero las devoluciones.')
+    // Las operaciones de socios fuera de Pandora son un par ingreso + egreso: se borran juntas.
+    const ids = existing.pairMovementId !== null ? [id, existing.pairMovementId] : [id]
+    for (const movementId of ids) {
+      if (this.repo.countRelatedMovements(movementId) > 0) {
+        throw new Error(
+          movementId === id
+            ? 'Este movimiento tiene devoluciones registradas. Eliminá primero las devoluciones.'
+            : `El movimiento vinculado #${movementId} tiene devoluciones registradas. Eliminá primero las devoluciones.`
+        )
+      }
     }
-    this.repo.deleteMovement(id)
+    this.repo.transaction(() => ids.forEach(movementId => this.repo.deleteMovement(movementId)))
+  }
+
+  // ── Operaciones de socios fuera de las cuentas de Pandora ─────────────────
+
+  private requireSociosAccount(): FinanceAccount {
+    const account = this.repo.findSociosAccount()
+    if (!account) throw new Error('Falta la cuenta "Socios (fuera de Pandora)" (migración 039)')
+    return account
+  }
+
+  /**
+   * Un socio paga de su bolsillo un gasto del negocio (ej. un proveedor). Queda
+   * registrado como un "Aporte de Socio" (que Pandora le puede devolver después)
+   * más el egreso del gasto, ambos en la cuenta "Socios (fuera de Pandora)": no
+   * mueve el saldo de ninguna cuenta real, pero el gasto sí cuenta para la utilidad.
+   */
+  createPartnerDirectPayment(input: CreatePartnerDirectPaymentInput): PartnerOperationResult {
+    const account = this.requireSociosAccount()
+    const partner = this.repo.findPartnerById(input.partnerId)
+    if (!partner) throw new Error('Seleccioná el socio que pagó')
+    const categoria = this.repo.findCategoryById(input.categoriaId)
+    if (!categoria) throw new Error('Seleccioná la categoría del gasto')
+    if (SOCIO_CATEGORIAS.includes(categoria.name)) {
+      throw new Error(`"${categoria.name}" no es un gasto del negocio`)
+    }
+    const aporteCategoria = this.repo.findCategoryByName(APORTE_SOCIO_CATEGORIA)
+    if (!aporteCategoria) throw new Error(`Falta la categoría "${APORTE_SOCIO_CATEGORIA}"`)
+    const descripcion = input.descripcion?.trim()
+    if (!descripcion) throw new Error('La descripción es obligatoria')
+
+    return this.repo.transaction(() => {
+      const ingreso = this.createMovement(
+        {
+          accountId: account.id,
+          tipo: 'ingreso',
+          categoriaId: aporteCategoria.id,
+          monto: input.monto,
+          descripcion: `Pago directo de ${partner.name}: ${descripcion}`,
+          fecha: input.fecha,
+          partnerId: partner.id,
+          supplierId: input.supplierId ?? null,
+        },
+        { allowSociosAccount: true }
+      )
+      const egreso = this.createMovement(
+        {
+          accountId: account.id,
+          tipo: 'egreso',
+          categoriaId: categoria.id,
+          monto: input.monto,
+          descripcion: `${descripcion} (pagado por ${partner.name})`,
+          fecha: input.fecha,
+          supplierId: input.supplierId ?? null,
+        },
+        { allowSociosAccount: true }
+      )
+      return this.finishPair(ingreso, egreso)
+    })
+  }
+
+  /**
+   * Un socio le paga a otro, por fuera de Pandora, parte (o todo) de un aporte
+   * pendiente: el aporte original se da por devuelto en ese monto y Pandora le pasa
+   * a deber lo mismo al socio que pagó (nuevo "Aporte de Socio" a su nombre). Ambas
+   * mitades van a la cuenta "Socios (fuera de Pandora)", así que no mueven saldos.
+   */
+  createPartnerCompensation(input: CreatePartnerCompensationInput): PartnerOperationResult {
+    const account = this.requireSociosAccount()
+    const aporte = this.repo.findMovementById(input.aporteMovementId)
+    const aporteCategoria = this.repo.findCategoryByName(APORTE_SOCIO_CATEGORIA)
+    const devolucionCategoria = this.repo.findCategoryByName(DEVOLUCION_APORTE_CATEGORIA)
+    if (!aporteCategoria || !devolucionCategoria) {
+      throw new Error(`Faltan las categorías "${APORTE_SOCIO_CATEGORIA}" / "${DEVOLUCION_APORTE_CATEGORIA}"`)
+    }
+    if (!aporte || aporte.categoriaId !== aporteCategoria.id) {
+      throw new Error('Seleccioná el aporte que se compensa')
+    }
+    if (aporte.partnerId === null) throw new Error(`El aporte #${aporte.id} no tiene socio asignado`)
+    const fromPartner = this.repo.findPartnerById(aporte.partnerId)
+    const toPartner = this.repo.findPartnerById(input.toPartnerId)
+    if (!fromPartner) throw new Error(`El socio ${aporte.partnerId} no existe`)
+    if (!toPartner) throw new Error('Seleccioná el socio que paga la compensación')
+    if (toPartner.id === fromPartner.id) {
+      throw new Error('El socio que paga tiene que ser distinto del que hizo el aporte')
+    }
+    const extra = input.descripcion?.trim()
+    const detalle = `aporte #${aporte.id}${extra ? ` — ${extra}` : ''}`
+
+    return this.repo.transaction(() => {
+      // La devolución valida fecha y saldo pendiente del aporte original.
+      const egreso = this.createMovement(
+        {
+          accountId: account.id,
+          tipo: 'egreso',
+          categoriaId: devolucionCategoria.id,
+          monto: input.monto,
+          descripcion: `Compensación: ${toPartner.name} le paga a ${fromPartner.name} (${detalle})`,
+          fecha: input.fecha,
+          partnerId: fromPartner.id,
+          relatedMovementId: aporte.id,
+        },
+        { allowSociosAccount: true }
+      )
+      const ingreso = this.createMovement(
+        {
+          accountId: account.id,
+          tipo: 'ingreso',
+          categoriaId: aporteCategoria.id,
+          monto: input.monto,
+          descripcion: `Compensación: ${toPartner.name} asume parte del ${detalle} de ${fromPartner.name}`,
+          fecha: input.fecha,
+          partnerId: toPartner.id,
+          supplierId: aporte.supplierId,
+        },
+        { allowSociosAccount: true }
+      )
+      return this.finishPair(ingreso, egreso)
+    })
+  }
+
+  private finishPair(ingreso: FinanceMovement, egreso: FinanceMovement): PartnerOperationResult {
+    this.repo.linkMovementPair(ingreso.id, egreso.id)
+    const linkedIngreso = this.repo.findMovementById(ingreso.id)
+    const linkedEgreso = this.repo.findMovementById(egreso.id)
+    if (!linkedIngreso || !linkedEgreso) throw new Error('Error al recuperar los movimientos creados')
+    return { ingreso: linkedIngreso, egreso: linkedEgreso }
   }
 
   /**
@@ -325,6 +472,9 @@ export class FinanceService {
     if (!fromAccount) throw new Error(`La cuenta de origen ${input.fromAccountId} no existe`)
     const toAccount = this.repo.findAccountById(input.toAccountId)
     if (!toAccount) throw new Error(`La cuenta de destino ${input.toAccountId} no existe`)
+    if (fromAccount.type === 'socios' || toAccount.type === 'socios') {
+      throw new Error('No se puede transferir desde/hacia la cuenta de socios fuera de Pandora')
+    }
 
     const foundingDate = this.repo.getFoundingDate()
     const fecha = input.fecha ?? localToday()
@@ -510,7 +660,8 @@ export class FinanceService {
     const foundingDate = this.repo.getFoundingDate()
     const today = localToday()
 
-    return accounts.map(account => {
+    // La cuenta de socios fuera de Pandora siempre suma cero: no es plata disponible.
+    return accounts.filter(account => account.type !== 'socios').map(account => {
       let balance: number
       // Para Caja, las transferencias deben sumarse desde la misma fecha que el
       // anchor (no desde foundingDate): el anchor (apertura/cierre físico) ya

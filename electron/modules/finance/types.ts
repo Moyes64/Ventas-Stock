@@ -1,5 +1,7 @@
 export type FinanceMovementTipo = 'ingreso' | 'egreso'
-export type FinanceAccountType = 'efectivo' | 'mercadopago' | 'banco'
+/** 'socios' = cuenta especial para lo que pasa fuera de las cuentas de Pandora
+ *  (pagos directos de un socio, compensaciones entre socios): siempre suma cero. */
+export type FinanceAccountType = 'efectivo' | 'mercadopago' | 'banco' | 'socios'
 export type FinanceCategoryAppliesTo = 'ingreso' | 'egreso' | 'ambos'
 
 export interface FinancePartner {
@@ -45,6 +47,9 @@ export interface FinanceMovement {
   /** Solo en devoluciones ("Devolución de Préstamo" / "Devolución de Aporte"):
    *  el préstamo o aporte original que esta devolución cancela (total o parcialmente). */
   relatedMovementId: number | null
+  /** Solo en operaciones de socios fuera de Pandora (pago directo / compensación):
+   *  la otra mitad del par ingreso + egreso. Se borran juntas. */
+  pairMovementId: number | null
   createdAt: string
 }
 
@@ -61,6 +66,34 @@ export interface CreateMovementInput {
   saleId?: number | null
   salePaymentId?: number | null
   relatedMovementId?: number | null
+}
+
+/** Un socio paga de su bolsillo un gasto del negocio (típicamente un proveedor). */
+export interface CreatePartnerDirectPaymentInput {
+  partnerId: number
+  /** Categoría del gasto (egreso), ej. "Pago a Proveedores". */
+  categoriaId: number
+  supplierId?: number | null
+  monto: number
+  descripcion: string
+  fecha?: string
+}
+
+/** Un socio le paga a otro, por fuera de Pandora, parte de un aporte pendiente. */
+export interface CreatePartnerCompensationInput {
+  /** El "Aporte de Socio" pendiente que se compensa. */
+  aporteMovementId: number
+  /** Socio que paga y pasa a ser acreedor de Pandora por ese monto. */
+  toPartnerId: number
+  monto: number
+  descripcion?: string
+  fecha?: string
+}
+
+/** Las dos mitades de una operación de socios fuera de Pandora. */
+export interface PartnerOperationResult {
+  ingreso: FinanceMovement
+  egreso: FinanceMovement
 }
 
 export interface MovementFilters {

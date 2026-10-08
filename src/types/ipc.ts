@@ -728,7 +728,8 @@ export interface CierreSummary {
 // ── Finanzas (ingresos/egresos multi-cuenta y patrimonio de socios) ───────
 
 export type FinanceMovementTipo = 'ingreso' | 'egreso'
-export type FinanceAccountType = 'efectivo' | 'mercadopago' | 'banco'
+/** 'socios' = cuenta especial para operaciones de socios fuera de Pandora (siempre suma cero). */
+export type FinanceAccountType = 'efectivo' | 'mercadopago' | 'banco' | 'socios'
 export type FinanceCategoryAppliesTo = 'ingreso' | 'egreso' | 'ambos'
 
 export interface FinancePartner {
@@ -769,6 +770,8 @@ export interface FinanceMovement {
   salePaymentId: number | null
   /** Solo en devoluciones: el préstamo/aporte original que cancela (total o parcialmente). */
   relatedMovementId: number | null
+  /** Solo en operaciones de socios fuera de Pandora: la otra mitad del par (se borran juntas). */
+  pairMovementId: number | null
   createdAt: string
 }
 
@@ -874,6 +877,30 @@ export interface FinancePartnerEquity {
 export type FinancePartnerLoanKind = 'prestamo' | 'aporte'
 
 /** Un préstamo a socio o aporte de socio con lo devuelto hasta ahora (saldo 0 = cancelado). */
+/** Un socio paga de su bolsillo un gasto del negocio (típicamente un proveedor). */
+export interface CreatePartnerDirectPaymentInput {
+  partnerId: number
+  categoriaId: number
+  supplierId?: number | null
+  monto: number
+  descripcion: string
+  fecha?: string
+}
+
+/** Un socio le paga a otro, por fuera de Pandora, parte de un aporte pendiente. */
+export interface CreatePartnerCompensationInput {
+  aporteMovementId: number
+  toPartnerId: number
+  monto: number
+  descripcion?: string
+  fecha?: string
+}
+
+export interface FinancePartnerOperationResult {
+  ingreso: FinanceMovement
+  egreso: FinanceMovement
+}
+
 export interface FinancePartnerLoan {
   movementId: number
   kind: FinancePartnerLoanKind

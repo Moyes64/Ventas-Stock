@@ -13,6 +13,8 @@ import type {
   FeePaymentMethod,
   CreateMpFeeRateInput,
   SaveMpReconciliationInput,
+  CreatePartnerDirectPaymentInput,
+  CreatePartnerCompensationInput,
 } from '../modules/finance/types'
 
 export function registerFinanceHandlers(db: Database): void {
@@ -95,6 +97,14 @@ export function registerFinanceHandlers(db: Database): void {
 
   ipcMain.handle('finance:listPartnerLoans', (_event, onlyPending?: boolean) => {
     return financeService.listPartnerLoans(onlyPending)
+  })
+
+  ipcMain.handle('finance:createPartnerDirectPayment', (_event, input: CreatePartnerDirectPaymentInput) => {
+    return financeService.createPartnerDirectPayment(input)
+  })
+
+  ipcMain.handle('finance:createPartnerCompensation', (_event, input: CreatePartnerCompensationInput) => {
+    return financeService.createPartnerCompensation(input)
   })
 
   // Comisiones de Mercado Pago y FISERV (tasas versionadas)

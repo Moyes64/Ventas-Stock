@@ -62,6 +62,7 @@ interface MovementRow {
   sale_id: number | null
   sale_payment_id: number | null
   related_movement_id: number | null
+  pair_movement_id: number | null
   created_at: string
 }
 
@@ -117,6 +118,11 @@ interface MpReconciliationSaleRow {
 export class FinanceRepository {
   constructor(private readonly db: Database) {}
 
+  /** Ejecuta fn dentro de una transacción (todo o nada). */
+  transaction<T>(fn: () => T): T {
+    return this.db.transaction(fn)()
+  }
+
   // ── Catálogos ─────────────────────────────────────────────────────────────
 
   listPartners(): FinancePartner[] {
@@ -146,6 +152,14 @@ export class FinanceRepository {
     const row = this.db
       .prepare('SELECT * FROM finance_accounts WHERE id = ?')
       .get(id) as AccountRow | undefined
+    return row ? this.mapAccount(row) : undefined
+  }
+
+  /** La cuenta especial para operaciones de socios fuera de Pandora (migración 039). */
+  findSociosAccount(): FinanceAccount | undefined {
+    const row = this.db
+      .prepare("SELECT * FROM finance_accounts WHERE type = 'socios' AND active = 1 ORDER BY id ASC LIMIT 1")
+      .get() as AccountRow | undefined
     return row ? this.mapAccount(row) : undefined
   }
 
@@ -334,6 +348,13 @@ export class FinanceRepository {
 
   deleteMovement(id: number): void {
     this.db.prepare('DELETE FROM finance_movements WHERE id = ?').run(id)
+  }
+
+  /** Une las dos mitades de una operación de socios (cada una apunta a la otra). */
+  linkMovementPair(aId: number, bId: number): void {
+    const stmt = this.db.prepare('UPDATE finance_movements SET pair_movement_id = ? WHERE id = ?')
+    stmt.run(bId, aId)
+    stmt.run(aId, bId)
   }
 
   /** Cantidad de movimientos (devoluciones) vinculados a un movimiento original. */
@@ -896,6 +917,7 @@ export class FinanceRepository {
       saleId: row.sale_id,
       salePaymentId: row.sale_payment_id,
       relatedMovementId: row.related_movement_id,
+      pairMovementId: row.pair_movement_id,
       createdAt: row.created_at,
     }
   }
