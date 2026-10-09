@@ -290,6 +290,11 @@ const electronAPI = {
     listMpFeeRates: (paymentMethod?: string) => invoke('finance:listMpFeeRates', paymentMethod),
     createMpFeeRate: (input: unknown) => invoke('finance:createMpFeeRate', input),
     deleteMpFeeRate: (id: number) => invoke('finance:deleteMpFeeRate', id),
+    listHolidays: () => invoke('finance:listHolidays'),
+    createHoliday: (input: unknown) => invoke('finance:createHoliday', input),
+    deleteHoliday: (id: number) => invoke('finance:deleteHoliday', id),
+    getAccreditationsOnNonBusinessDays: () => invoke('finance:getAccreditationsOnNonBusinessDays'),
+    shiftAccreditationsToBusinessDays: () => invoke('finance:shiftAccreditationsToBusinessDays'),
     getMpReconciliationRows: (fecha: string, paymentMethod?: string) =>
       invoke('finance:getMpReconciliationRows', fecha, paymentMethod),
     listMpReconciliations: (dateFrom?: string, dateTo?: string) =>

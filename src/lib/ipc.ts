@@ -62,6 +62,9 @@ import type {
   MpFeePaymentMethod,
   FeePaymentMethod,
   FinanceMpFeeRate,
+  FinanceHoliday,
+  CreateHolidayInput,
+  FinanceAccreditationShift,
   CreateMpFeeRateInput,
   FinanceMpReconciliation,
   SaveMpReconciliationInput,
@@ -495,6 +498,13 @@ export const finance = {
   createMpFeeRate: (input: CreateMpFeeRateInput) =>
     electron.finance.createMpFeeRate(input) as Promise<FinanceMpFeeRate>,
   deleteMpFeeRate: (id: number) => electron.finance.deleteMpFeeRate(id) as Promise<void>,
+  listHolidays: () => electron.finance.listHolidays() as Promise<FinanceHoliday[]>,
+  createHoliday: (input: CreateHolidayInput) => electron.finance.createHoliday(input) as Promise<FinanceHoliday>,
+  deleteHoliday: (id: number) => electron.finance.deleteHoliday(id) as Promise<void>,
+  getAccreditationsOnNonBusinessDays: () =>
+    electron.finance.getAccreditationsOnNonBusinessDays() as Promise<FinanceAccreditationShift[]>,
+  shiftAccreditationsToBusinessDays: () =>
+    electron.finance.shiftAccreditationsToBusinessDays() as Promise<FinanceAccreditationShift[]>,
   getMpReconciliationRows: (fecha: string, paymentMethod?: MpFeePaymentMethod) =>
     electron.finance.getMpReconciliationRows(fecha, paymentMethod) as Promise<MpReconciliationRow[]>,
   listMpReconciliations: (dateFrom?: string, dateTo?: string) =>

@@ -37,6 +37,12 @@ export default function FinanceLayout() {
         >
           🔍 Conciliación MP
         </NavLink>
+        <NavLink
+          to="/finance/feriados"
+          className={({ isActive }) => `sub-nav-item ${isActive ? 'active' : ''}`}
+        >
+          📅 Feriados
+        </NavLink>
       </nav>
       <div className="sub-page">
         <Outlet />

@@ -800,6 +800,22 @@ export interface FinancePendingAccreditation {
   descripcion: string
 }
 
+export interface FinanceHoliday {
+  id: number
+  fecha: string
+  descripcion: string
+}
+
+export interface CreateHolidayInput {
+  fecha: string
+  descripcion?: string
+}
+
+/** Acreditación pendiente que cae en un día no hábil, con la fecha hábil a la que se corre. */
+export interface FinanceAccreditationShift extends FinancePendingAccreditation {
+  nuevaFechaAcreditacion: string
+}
+
 export interface FinanceTransfer {
   id: number
   fromAccountId: number

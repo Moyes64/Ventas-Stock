@@ -12,6 +12,7 @@ import type {
   MpFeePaymentMethod,
   FeePaymentMethod,
   CreateMpFeeRateInput,
+  CreateHolidayInput,
   SaveMpReconciliationInput,
   CreatePartnerDirectPaymentInput,
   CreatePartnerCompensationInput,
@@ -118,6 +119,27 @@ export function registerFinanceHandlers(db: Database): void {
 
   ipcMain.handle('finance:deleteMpFeeRate', (_event, id: number) => {
     return financeService.deleteMpFeeRate(id)
+  })
+
+  // Feriados (días no hábiles para el cálculo de acreditaciones)
+  ipcMain.handle('finance:listHolidays', () => {
+    return financeService.listHolidays()
+  })
+
+  ipcMain.handle('finance:createHoliday', (_event, input: CreateHolidayInput) => {
+    return financeService.createHoliday(input)
+  })
+
+  ipcMain.handle('finance:deleteHoliday', (_event, id: number) => {
+    return financeService.deleteHoliday(id)
+  })
+
+  ipcMain.handle('finance:getAccreditationsOnNonBusinessDays', () => {
+    return financeService.getAccreditationsOnNonBusinessDays()
+  })
+
+  ipcMain.handle('finance:shiftAccreditationsToBusinessDays', () => {
+    return financeService.shiftAccreditationsToBusinessDays()
   })
 
   // Conciliación venta por venta con el resumen de Mercado Pago

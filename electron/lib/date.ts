@@ -46,15 +46,32 @@ export function formatDate(value: string | Date): string {
   return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
 }
 
+function toYmd(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+function isNonBusinessDay(date: Date, holidays: ReadonlySet<string>): boolean {
+  return date.getDay() === 0 || date.getDay() === 6 || holidays.has(toYmd(date))
+}
+
 /**
- * Día hábil siguiente a una fecha YYYY-MM-DD (saltea sábados y domingos; no
- * contempla feriados). Ej: viernes -> lunes, sábado -> lunes, lunes -> martes.
+ * Día hábil siguiente a una fecha YYYY-MM-DD (saltea sábados, domingos y los
+ * feriados recibidos en `holidays`, como fechas YYYY-MM-DD). Ej: viernes -> lunes,
+ * sábado -> lunes, lunes -> martes; viernes antes de un lunes feriado -> martes.
  */
-export function nextBusinessDay(dateStr: string): string {
+export function nextBusinessDay(dateStr: string, holidays: ReadonlySet<string> = new Set()): string {
   const [y, m, d] = dateStr.split('-').map(Number)
   const date = new Date(y, m - 1, d)
   do {
     date.setDate(date.getDate() + 1)
-  } while (date.getDay() === 0 || date.getDay() === 6)
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  } while (isNonBusinessDay(date, holidays))
+  return toYmd(date)
+}
+
+/** La misma fecha si es hábil, o si no el primer día hábil posterior. */
+export function sameOrNextBusinessDay(dateStr: string, holidays: ReadonlySet<string> = new Set()): string {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const date = new Date(y, m - 1, d)
+  while (isNonBusinessDay(date, holidays)) date.setDate(date.getDate() + 1)
+  return toYmd(date)
 }

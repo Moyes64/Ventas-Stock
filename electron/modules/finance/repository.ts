@@ -23,6 +23,7 @@ import type {
   MpReconciliationStatus,
   PartnerLoan,
   PartnerLoanKind,
+  FinanceHoliday,
 } from './types'
 
 interface PartnerRow {
@@ -445,6 +446,36 @@ export class FinanceRepository {
       )
       .all(params) as PendingAccreditation[]
     return rows
+  }
+
+  // ── Feriados ──────────────────────────────────────────────────────────────
+
+  listHolidays(): FinanceHoliday[] {
+    return this.db
+      .prepare('SELECT id, fecha, descripcion FROM finance_holidays ORDER BY fecha DESC')
+      .all() as FinanceHoliday[]
+  }
+
+  listHolidayDates(): Set<string> {
+    const rows = this.db.prepare('SELECT fecha FROM finance_holidays').all() as { fecha: string }[]
+    return new Set(rows.map(r => r.fecha))
+  }
+
+  findHolidayById(id: number): FinanceHoliday | undefined {
+    return this.db
+      .prepare('SELECT id, fecha, descripcion FROM finance_holidays WHERE id = ?')
+      .get(id) as FinanceHoliday | undefined
+  }
+
+  createHoliday(fecha: string, descripcion: string): number {
+    const result = this.db
+      .prepare('INSERT INTO finance_holidays (fecha, descripcion) VALUES (?, ?)')
+      .run(fecha, descripcion)
+    return result.lastInsertRowid as number
+  }
+
+  deleteHoliday(id: number): void {
+    this.db.prepare('DELETE FROM finance_holidays WHERE id = ?').run(id)
   }
 
   /** Actualiza la fecha de acreditación de un movimiento (acreditación manual anticipada). */

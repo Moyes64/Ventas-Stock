@@ -1,5 +1,5 @@
 import type { Database } from 'better-sqlite3'
-import { localToday, nextBusinessDay } from '../../lib/date'
+import { localToday, nextBusinessDay, sameOrNextBusinessDay } from '../../lib/date'
 import { FinanceRepository } from './repository'
 import type {
   FinancePartner,
@@ -15,6 +15,9 @@ import type {
   CategoryExpense,
   PartnerEquity,
   PendingAccreditation,
+  FinanceHoliday,
+  CreateHolidayInput,
+  AccreditationShift,
   FinanceTransfer,
   CreateTransferInput,
   TransferFilters,
@@ -94,8 +97,8 @@ function feeLabels(paymentMethod: FeePaymentMethod): { categoria: string; prefij
 }
 
 /** FISERV acredita (vía transferencia manual) al día hábil siguiente; el resto, en el momento. */
-function accreditationDate(paymentMethod: string, fecha: string): string | null {
-  return FISERV_PAYMENT_METHODS.has(paymentMethod) ? nextBusinessDay(fecha) : null
+function accreditationDate(paymentMethod: string, fecha: string, holidays: ReadonlySet<string>): string | null {
+  return FISERV_PAYMENT_METHODS.has(paymentMethod) ? nextBusinessDay(fecha, holidays) : null
 }
 
 function round2(n: number): number {
@@ -452,6 +455,42 @@ export class FinanceService {
     return updated
   }
 
+  // ── Feriados ──────────────────────────────────────────────────────────────
+
+  listHolidays(): FinanceHoliday[] {
+    return this.repo.listHolidays()
+  }
+
+  createHoliday(input: CreateHolidayInput): FinanceHoliday {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(input.fecha ?? '')) throw new Error('Fecha inválida')
+    if (this.repo.listHolidayDates().has(input.fecha)) throw new Error('Esa fecha ya está cargada como feriado')
+    const id = this.repo.createHoliday(input.fecha, (input.descripcion ?? '').trim())
+    const created = this.repo.findHolidayById(id)
+    if (!created) throw new Error('Error al recuperar el feriado guardado')
+    return created
+  }
+
+  deleteHoliday(id: number): void {
+    this.repo.deleteHoliday(id)
+  }
+
+  /** Acreditaciones pendientes que hoy caen en un día no hábil (feriado o fin de
+   *  semana), con la fecha hábil a la que corresponde correrlas. */
+  getAccreditationsOnNonBusinessDays(): AccreditationShift[] {
+    const holidays = this.repo.listHolidayDates()
+    return this.repo
+      .listPendingAccreditations(localToday())
+      .map(p => ({ ...p, nuevaFechaAcreditacion: sameOrNextBusinessDay(p.fechaAcreditacion, holidays) }))
+      .filter(p => p.nuevaFechaAcreditacion !== p.fechaAcreditacion)
+  }
+
+  /** Corre al día hábil siguiente las acreditaciones pendientes que caen en un día no hábil. */
+  shiftAccreditationsToBusinessDays(): AccreditationShift[] {
+    const shifts = this.getAccreditationsOnNonBusinessDays()
+    for (const s of shifts) this.repo.accreditMovement(s.movementId, s.nuevaFechaAcreditacion)
+    return shifts
+  }
+
   // ── Transferencias entre cuentas ─────────────────────────────────────────
 
   listTransfers(filters?: TransferFilters): FinanceTransfer[] {
@@ -541,7 +580,7 @@ export class FinanceService {
       monto: input.monto,
       descripcion: `Venta #${input.saleId}`,
       fecha: input.fecha,
-      fechaAcreditacion: accreditationDate(input.paymentMethod, input.fecha),
+      fechaAcreditacion: accreditationDate(input.paymentMethod, input.fecha, this.repo.listHolidayDates()),
       saleId: input.saleId,
       salePaymentId: input.salePaymentId ?? null,
     })
@@ -587,7 +626,7 @@ export class FinanceService {
       monto: input.monto,
       descripcion,
       fecha: input.fecha,
-      fechaAcreditacion: accreditationDate(input.paymentMethod, input.fecha),
+      fechaAcreditacion: accreditationDate(input.paymentMethod, input.fecha, this.repo.listHolidayDates()),
     })
 
     if (FEE_PAYMENT_METHODS.has(input.paymentMethod)) {
