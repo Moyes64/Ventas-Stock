@@ -32,7 +32,7 @@ export class StockRepository {
   getStockItems(): StockItem[] {
     const rows = this.db
       .prepare(
-        `SELECT p.id AS productId, p.name AS productName, p.sku, p.barcode,
+        `SELECT p.id AS productId, p.name AS productName, p.sku, p.barcode, p.supplier_id AS supplierId,
                 p.stock_quantity AS currentStock, p.stock_min AS stockMin
          FROM products p
          WHERE p.active = 1
@@ -43,6 +43,7 @@ export class StockRepository {
         productName: string
         sku: string
         barcode: string | null
+        supplierId: number | null
         currentStock: number
         stockMin: number
       }[]

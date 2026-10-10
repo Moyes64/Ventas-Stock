@@ -17,7 +17,7 @@ function sep(char = '-'): Buffer {
   return Buffer.concat([txt(char.repeat(W)), lf(1)])
 }
 
-export function buildStockReportBuffer(items: StockItem[]): Buffer {
+export function buildStockReportBuffer(items: StockItem[], supplierName?: string): Buffer {
   const parts: Buffer[] = []
   const p = (...bufs: Buffer[]) => parts.push(...bufs)
 
@@ -30,6 +30,7 @@ export function buildStockReportBuffer(items: StockItem[]): Buffer {
   p(cmdAlign('center'), cmdBold(true))
   p(txt('LISTADO DE STOCK'), lf(1))
   p(cmdBold(false))
+  if (supplierName) p(txt(`Proveedor: ${supplierName.slice(0, W - 11)}`), lf(1))
   p(txt(`Fecha: ${fecha} ${hora}`), lf(1))
   p(txt(`Total articulos: ${items.length}`), lf(1))
   p(sep())

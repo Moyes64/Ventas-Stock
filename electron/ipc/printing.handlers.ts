@@ -162,8 +162,9 @@ export function registerPrintingHandlers(db: Database): void {
     }
   })
 
-  // Listado completo de stock (para control físico manual)
-  ipcMain.handle('printing:printStockReport', async () => {
+  // Listado de stock (para control físico manual).
+  // Si se pasa supplierId, se filtra a solo los productos de ese proveedor.
+  ipcMain.handle('printing:printStockReport', async (_event, supplierId?: number) => {
     try {
       const printerCfg = new PrinterConfigService().get()
       const isReady = printerCfg.connectionType === 'usb'
@@ -173,11 +174,89 @@ export function registerPrintingHandlers(db: Database): void {
         return { success: false, error: 'La impresora térmica no está configurada. Revisá Configuración → Impresora.' }
       }
 
-      const stockService = new StockService(db)
-      const items = stockService.getStockItems()
-      const buffer = buildStockReportBuffer(items)
+      const allItems = new StockService(db).getStockItems()
+      const items = supplierId
+        ? allItems.filter(i => i.supplierId === supplierId)
+        : allItems
+
+      if (supplierId && items.length === 0) {
+        return { success: false, error: 'El proveedor seleccionado no tiene productos activos cargados.' }
+      }
+
+      const supplierName = supplierId
+        ? new SupplierService(db).getById(supplierId)?.name
+        : undefined
+
+      const buffer = buildStockReportBuffer(items, supplierName)
       await sendEscPos(printerCfg, buffer)
       return { success: true, count: items.length }
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  // Mismo listado de stock exportado a .xlsx (por defecto) o .csv, con la
+  // columna "Stock real" vacía para completar el conteo a mano o en Excel.
+  ipcMain.handle('printing:exportStockReport', async (_event, supplierId?: number) => {
+    try {
+      const allItems = new StockService(db).getStockItems()
+      const items = (supplierId
+        ? allItems.filter(i => i.supplierId === supplierId)
+        : allItems
+      ).sort((a, b) => a.productName.localeCompare(b.productName, 'es'))
+
+      if (items.length === 0) {
+        return {
+          success: false,
+          error: supplierId
+            ? 'El proveedor seleccionado no tiene productos activos cargados.'
+            : 'No hay productos activos para exportar.',
+        }
+      }
+
+      const supplierNames = new Map(new SupplierService(db).list(false).map(s => [s.id, s.name]))
+      const supplierName = supplierId ? supplierNames.get(supplierId) : undefined
+
+      const baseName = `Listado_stock${supplierName ? `_${supplierName}` : ''}_${new Date().toISOString().slice(0, 10)}`
+        .replace(/[\\/:*?"<>|]/g, '')
+      const { filePath, canceled } = await dialog.showSaveDialog({
+        title: 'Exportar listado de stock a Excel',
+        defaultPath: `${baseName}.xlsx`,
+        filters: [
+          { name: 'Excel', extensions: ['xlsx'] },
+          { name: 'CSV (Excel)', extensions: ['csv'] },
+        ],
+      })
+      if (canceled || !filePath) return { success: false, canceled: true }
+
+      const headers = ['SKU', 'Código de barras', 'Producto', 'Proveedor', 'Stock sistema', 'Stock real']
+      const rows = items.map(i => [
+        i.sku,
+        i.barcode ?? '',
+        i.productName,
+        i.supplierId ? supplierNames.get(i.supplierId) ?? '' : '',
+        i.currentStock,
+        '',
+      ])
+
+      if (path.extname(filePath).toLowerCase() === '.csv') {
+        // Formato regional AR: separador ';', con BOM para que Excel lo abra
+        // como UTF-8 (acentos).
+        const cell = (v: string | number) => {
+          const s = String(v)
+          return /[";\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+        }
+        const lines = [headers, ...rows].map(r => r.map(cell).join(';'))
+        fs.writeFileSync(filePath, String.fromCharCode(0xfeff) + lines.join('\r\n'), 'utf-8')
+      } else {
+        const sheet = XLSX.utils.aoa_to_sheet([headers, ...rows])
+        sheet['!cols'] = [{ wch: 14 }, { wch: 16 }, { wch: 45 }, { wch: 22 }, { wch: 13 }, { wch: 12 }]
+        const book = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(book, sheet, 'Listado de stock')
+        fs.writeFileSync(filePath, XLSX.write(book, { type: 'buffer', bookType: 'xlsx' }) as Buffer)
+      }
+
+      return { success: true, count: items.length, filePath }
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : String(err) }
     }

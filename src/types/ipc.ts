@@ -134,6 +134,7 @@ export interface StockItem {
   productName: string
   sku: string
   barcode: string | null
+  supplierId: number | null
   currentStock: number
   stockMin: number
   isLow: boolean

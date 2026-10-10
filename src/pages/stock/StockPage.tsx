@@ -431,6 +431,8 @@ export default function StockPage() {
   const [filterSearch, setFilterSearch] = useState('')
   const [showEntryForm, setShowEntryForm] = useState(false)
   const [printingReport, setPrintingReport] = useState(false)
+  const [exportingReport, setExportingReport] = useState(false)
+  const [reportSupplierId, setReportSupplierId] = useState<number | ''>('')
 
   // Movements filter state
   const [suppliersList, setSuppliersList] = useState<Supplier[]>([])
@@ -624,9 +626,12 @@ export default function StockPage() {
   async function handlePrintStockReport() {
     setPrintingReport(true)
     try {
-      const result = await printingApi.printStockReport()
+      const result = await printingApi.printStockReport(reportSupplierId || undefined)
+      const supplierLabel = reportSupplierId
+        ? ` — ${suppliersList.find(s => s.id === reportSupplierId)?.name ?? ''}`
+        : ''
       if (result.success) {
-        setToast({ type: 'success', text: `Listado enviado a la impresora (${result.count ?? stockItems.length} artículos)` })
+        setToast({ type: 'success', text: `Listado enviado a la impresora${supplierLabel} (${result.count ?? stockItems.length} artículos)` })
       } else {
         setToast({ type: 'error', text: result.error ?? 'Error al imprimir el listado' })
       }
@@ -636,6 +641,25 @@ export default function StockPage() {
       setPrintingReport(false)
       if (toastTimerRef.current !== null) clearTimeout(toastTimerRef.current)
       toastTimerRef.current = setTimeout(() => setToast(null), 4000)
+    }
+  }
+
+  async function handleExportStockReport() {
+    setExportingReport(true)
+    try {
+      const result = await printingApi.exportStockReport(reportSupplierId || undefined)
+      if (result.canceled) return
+      if (result.success) {
+        setToast({ type: 'success', text: `Listado exportado (${result.count ?? 0} artículos): ${result.filePath ?? ''}` })
+      } else {
+        setToast({ type: 'error', text: result.error ?? 'Error al exportar el listado' })
+      }
+    } catch (err) {
+      setToast({ type: 'error', text: err instanceof Error ? err.message : 'Error al exportar el listado' })
+    } finally {
+      setExportingReport(false)
+      if (toastTimerRef.current !== null) clearTimeout(toastTimerRef.current)
+      toastTimerRef.current = setTimeout(() => setToast(null), 6000)
     }
   }
 
@@ -658,8 +682,28 @@ export default function StockPage() {
         <div className="page-header-actions">
           <button className="btn btn-primary" onClick={() => setShowEntryForm(true)}>+ Ingresar Stock</button>
           <button className="btn btn-secondary" onClick={() => void loadData()}>↺ Actualizar</button>
+          <select
+            className="input"
+            style={{ maxWidth: 220 }}
+            value={reportSupplierId}
+            onChange={e => setReportSupplierId(e.target.value === '' ? '' : Number(e.target.value))}
+            title="Filtrar el listado de stock (impresión o Excel) por proveedor"
+          >
+            <option value="">Listado: todos los proveedores</option>
+            {suppliersList.map(s => (
+              <option key={s.id} value={s.id}>Listado: {s.name}</option>
+            ))}
+          </select>
           <button className="btn btn-secondary" disabled={printingReport} onClick={() => void handlePrintStockReport()}>
             🖨️ {printingReport ? 'Imprimiendo…' : 'Imprimir listado'}
+          </button>
+          <button
+            className="btn btn-secondary"
+            disabled={exportingReport}
+            onClick={() => void handleExportStockReport()}
+            title="Exportar el listado de stock a Excel (.xlsx) o CSV"
+          >
+            📊 {exportingReport ? 'Exportando…' : 'Exportar a Excel'}
           </button>
         </div>
       </div>

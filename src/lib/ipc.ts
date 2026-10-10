@@ -230,8 +230,10 @@ export const printing = {
   }) => electron.printing.listForReprint(filters) as Promise<Sale[]>,
   printChangeTicket: (saleId: number) =>
     electron.printing.printChangeTicket(saleId) as Promise<{ success: boolean; error?: string }>,
-  printStockReport: () =>
-    electron.printing.printStockReport() as Promise<{ success: boolean; error?: string; count?: number }>,
+  printStockReport: (supplierId?: number) =>
+    electron.printing.printStockReport(supplierId) as Promise<{ success: boolean; error?: string; count?: number }>,
+  exportStockReport: (supplierId?: number) =>
+    electron.printing.exportStockReport(supplierId) as Promise<{ success: boolean; canceled?: boolean; error?: string; count?: number; filePath?: string }>,
   printPriceReport: (supplierId?: number) =>
     electron.printing.printPriceReport(supplierId) as Promise<{ success: boolean; error?: string; count?: number }>,
   exportPriceReport: (supplierId?: number) =>
