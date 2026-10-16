@@ -169,6 +169,21 @@ $finance    = $payload['finance']    ?? [];
 $empresa    = htmlspecialchars($payload['empresa'] ?? 'Ventas-Stock');
 $timestamp  = $payload['timestamp']  ?? '';
 $lowStock   = array_filter($stock, fn($p) => $p['isLow'] ?? false);
+
+// ── Movimientos MP Ariel (el snapshot trae el historial completo; acá se filtra) ──
+$mpStatement = $finance['mpArielStatement'] ?? null;
+$mpFrom      = $_GET['mpFrom'] ?? date('Y-m-01');
+$mpTo        = $_GET['mpTo']   ?? date('Y-m-d');
+$mpMovements = array_values(array_filter(
+    $mpStatement['movements'] ?? [],
+    fn($m) => substr($m['fecha'] ?? '', 0, 10) >= $mpFrom && substr($m['fecha'] ?? '', 0, 10) <= $mpTo
+));
+$mpIngresos = 0.0;
+$mpEgresos  = 0.0;
+foreach ($mpMovements as $m) {
+    $monto = (float)($m['monto'] ?? 0);
+    if ($monto >= 0) $mpIngresos += $monto; else $mpEgresos += -$monto;
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -286,6 +301,10 @@ $lowStock   = array_filter($stock, fn($p) => $p['isLow'] ?? false);
       <label for="to">Hasta</label>
       <input type="date" id="to" name="to" class="range-input" value="<?= htmlspecialchars($rangeTo) ?>">
     </div>
+    <?php if (isset($_GET['mpFrom'])): ?>
+    <input type="hidden" name="mpFrom" value="<?= htmlspecialchars($mpFrom) ?>">
+    <input type="hidden" name="mpTo" value="<?= htmlspecialchars($mpTo) ?>">
+    <?php endif; ?>
     <button type="submit" class="range-btn">Filtrar</button>
   </form>
 
@@ -503,13 +522,72 @@ $lowStock   = array_filter($stock, fn($p) => $p['isLow'] ?? false);
   <?php endif; ?>
 </section>
 
+<!-- ═══════════════════ MOVIMIENTOS MP ARIEL ═══════════════════ -->
+<?php if ($mpStatement): ?>
+<section class="section" id="mp-ariel">
+  <h2 class="section-title">📲 Movimientos <?= htmlspecialchars($mpStatement['accountName'] ?? 'MP Ariel') ?></h2>
+
+  <form method="get" action="#mp-ariel" class="range-form">
+    <div class="range-field">
+      <label for="mpFrom">Desde</label>
+      <input type="date" id="mpFrom" name="mpFrom" class="range-input" value="<?= htmlspecialchars($mpFrom) ?>">
+    </div>
+    <div class="range-field">
+      <label for="mpTo">Hasta</label>
+      <input type="date" id="mpTo" name="mpTo" class="range-input" value="<?= htmlspecialchars($mpTo) ?>">
+    </div>
+    <?php if (isset($_GET['from'])): ?>
+    <input type="hidden" name="from" value="<?= htmlspecialchars($rangeFrom) ?>">
+    <input type="hidden" name="to" value="<?= htmlspecialchars($rangeTo) ?>">
+    <?php endif; ?>
+    <button type="submit" class="range-btn">Filtrar</button>
+  </form>
+
+  <div class="caja-grid">
+    <div class="caja-row">
+      <span class="caja-lbl">Ingresos</span>
+      <span class="caja-val"><?= fmt($mpIngresos) ?></span>
+    </div>
+    <div class="caja-row">
+      <span class="caja-lbl">Egresos</span>
+      <span class="caja-val caja-val--neg">- <?= fmt($mpEgresos) ?></span>
+    </div>
+    <div class="caja-row caja-row--total">
+      <span class="caja-lbl">Neto del período</span>
+      <span class="caja-val <?= ($mpIngresos - $mpEgresos) < 0 ? 'caja-val--neg' : '' ?>"><?= fmt($mpIngresos - $mpEgresos) ?></span>
+    </div>
+  </div>
+
+  <?php if (empty($mpMovements)): ?>
+    <p class="muted">Sin movimientos en el rango seleccionado.</p>
+  <?php else: ?>
+  <table class="mini-table">
+    <thead><tr><th>Fecha</th><th>Concepto</th><th>Monto</th></tr></thead>
+    <tbody>
+      <?php foreach ($mpMovements as $m): $monto = (float)($m['monto'] ?? 0); ?>
+      <tr>
+        <td><?= fmtDate($m['fecha'] ?? '') ?></td>
+        <td>
+          <?= htmlspecialchars($m['concepto'] ?? '') ?>
+          <?php if (!empty($m['descripcion'])): ?><br><span class="muted"><?= htmlspecialchars($m['descripcion']) ?></span><?php endif; ?>
+          <?php if (!empty($m['fechaAcreditacion'])): ?><br><span class="text-warn">🕓 acredita <?= fmtDate($m['fechaAcreditacion']) ?></span><?php endif; ?>
+        </td>
+        <td class="text-right <?= $monto < 0 ? 'text-danger' : 'text-ok' ?>"><?= $monto < 0 ? '- ' : '+ ' ?><?= fmt(abs($monto)) ?></td>
+      </tr>
+      <?php endforeach; ?>
+    </tbody>
+  </table>
+  <?php endif; ?>
+</section>
+<?php endif; ?>
+
 <!-- ═══════════════════ STOCK ═══════════════════ -->
 <section class="section">
   <h2 class="section-title">📦 Stock</h2>
 
   <?php if (!empty($lowStock)): ?>
-  <div class="alert-box">
-    <strong>⚠️ <?= count($lowStock) ?> producto(s) con stock bajo</strong>
+  <details class="collapsible">
+    <summary>⚠️ Stock bajo (<?= count($lowStock) ?>)</summary>
     <ul class="low-stock-list">
       <?php foreach ($lowStock as $p): ?>
       <li>
@@ -520,7 +598,7 @@ $lowStock   = array_filter($stock, fn($p) => $p['isLow'] ?? false);
       </li>
       <?php endforeach; ?>
     </ul>
-  </div>
+  </details>
   <?php endif; ?>
 
   <details class="collapsible">

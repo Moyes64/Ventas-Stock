@@ -145,6 +145,23 @@ export interface SyncFinanceTransfer {
   descripcion: string | null
 }
 
+/** Un renglón del extracto de una cuenta: movimiento propio o transferencia
+ *  desde/hacia otra cuenta. monto con signo (+ entra, − sale). */
+export interface SyncFinanceAccountMovement {
+  fecha: string
+  kind: 'ingreso' | 'egreso' | 'transferencia'
+  concepto: string
+  descripcion: string | null
+  monto: number
+  /** Solo si todavía no se acreditó (fecha de acreditación futura). */
+  fechaAcreditacion: string | null
+}
+
+export interface SyncFinanceAccountStatement {
+  accountName: string
+  movements: SyncFinanceAccountMovement[]
+}
+
 export interface SyncFinanceCashFlow {
   ingresos: number
   egresos: number
@@ -173,6 +190,8 @@ export interface SyncFinance {
   partnersEquity: SyncFinancePartnerEquity[]
   pendingAccreditations: SyncFinancePendingAccreditation[]
   recentTransfers: SyncFinanceTransfer[]
+  /** Historial completo de la cuenta MP de Ariel (el dashboard filtra por fecha). */
+  mpArielStatement?: SyncFinanceAccountStatement | null
 }
 
 export interface SyncPayload {

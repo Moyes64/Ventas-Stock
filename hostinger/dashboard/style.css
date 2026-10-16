@@ -227,6 +227,7 @@ a:hover { text-decoration: underline; }
 .text-right  { text-align: right; }
 .text-danger { color: var(--danger); font-weight: 700; }
 .text-warn   { color: var(--warn); font-weight: 600; }
+.text-ok     { color: var(--success); font-weight: 700; }
 
 /* ── Utilities ── */
 .muted { color: var(--muted); }

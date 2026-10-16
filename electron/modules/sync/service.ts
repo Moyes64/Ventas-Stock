@@ -11,7 +11,9 @@ import { localToday, utcToLocalDate } from '../../lib/date'
 import type {
   SyncConfig, SyncPayload, SyncResult, SyncStockItem, SyncVentasHoy, SyncSaleHistory, SyncCaja,
   SyncWebCategory, SyncWebProduct, SyncWebImage, WebOrder, PullResult, SyncFinance,
+  SyncFinanceAccountStatement, SyncFinanceAccountMovement,
 } from './types'
+import type { FinanceAccount } from '../finance/types'
 import { SystemParamsService } from '../system-params/service'
 import { FinanceService } from '../finance/service'
 
@@ -193,7 +195,46 @@ export class SyncService {
         monto: t.monto,
         descripcion: t.descripcion,
       })),
+      mpArielStatement: this.buildAccountStatement(
+        accounts.find(a => a.type === 'mercadopago' && /ariel/i.test(a.name)),
+        today,
+      ),
     }
+  }
+
+  /** Movimientos + transferencias de una cuenta, desde el inicio de Finanzas, más nuevos primero. */
+  private buildAccountStatement(account: FinanceAccount | undefined, today: string): SyncFinanceAccountStatement | null {
+    if (!account) return null
+    const accounts = this.financeService.listAccounts()
+    const accountName = (id: number) => accounts.find(a => a.id === id)?.name ?? '—'
+    const categories = this.financeService.listCategories()
+    const categoryName = (id: number | null) => categories.find(c => c.id === id)?.name ?? null
+
+    const movements: SyncFinanceAccountMovement[] = this.financeService
+      .listMovements({ accountId: account.id })
+      .map(m => ({
+        fecha: m.fecha,
+        kind: m.tipo,
+        concepto: categoryName(m.categoriaId) ?? (m.tipo === 'ingreso' ? 'Ingreso' : 'Egreso'),
+        descripcion: m.descripcion || null,
+        monto: m.tipo === 'ingreso' ? m.monto : -m.monto,
+        fechaAcreditacion: m.fechaAcreditacion && m.fechaAcreditacion > today ? m.fechaAcreditacion : null,
+      }))
+
+    for (const t of this.financeService.listTransfers({ accountId: account.id })) {
+      const isOut = t.fromAccountId === account.id
+      movements.push({
+        fecha: t.fecha,
+        kind: 'transferencia',
+        concepto: isOut ? `Transferencia a ${accountName(t.toAccountId)}` : `Transferencia de ${accountName(t.fromAccountId)}`,
+        descripcion: t.descripcion,
+        monto: isOut ? -t.monto : t.monto,
+        fechaAcreditacion: null,
+      })
+    }
+
+    movements.sort((a, b) => b.fecha.localeCompare(a.fecha))
+    return { accountName: account.name, movements }
   }
 
   // ── Web catalog builders ──────────────────────────────────────────────────
