@@ -24,6 +24,7 @@ import RemitoScannerPage from './pages/stock/RemitoScannerPage'
 import PriceUpdatePage from './pages/stock/PriceUpdatePage'
 import StockCountPage from './pages/stock/StockCountPage'
 import StockCountReconcilePage from './pages/stock/StockCountReconcilePage'
+import ProductMovementsReportPage from './pages/stock/ProductMovementsReportPage'
 import PrinterSettingsPage from './pages/printer/PrinterSettingsPage'
 import LabelsPage from './pages/labels/LabelsPage'
 import WebCatalogPage from './pages/web-catalog/WebCatalogPage'
@@ -72,6 +73,7 @@ export default function App() {
             <Route path="stock/pedido" element={<PedidoReposicionPage />} />
             <Route path="stock/remito-scanner" element={<RemitoScannerPage />} />
             <Route path="stock/precios" element={<PriceUpdatePage />} />
+            <Route path="stock/movimientos-producto" element={<ProductMovementsReportPage />} />
             <Route path="stock/conteo" element={<StockCountPage />} />
             <Route path="stock/conteo/:sessionId" element={<StockCountReconcilePage />} />
             <Route path="printer-settings" element={<PrinterSettingsPage />} />

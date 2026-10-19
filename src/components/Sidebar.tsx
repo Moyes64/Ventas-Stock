@@ -60,6 +60,7 @@ const navEntries: NavEntry[] = [
       { to: '/stock/pedido',         label: 'Pedido de reposición', icon: '📋' },
       { to: '/stock/remito-scanner', label: 'Escáner de Remitos',   icon: '🤖' },
       { to: '/stock/precios',        label: 'Actualizar precios',   icon: '💲' },
+      { to: '/stock/movimientos-producto', label: 'Movimientos por producto', icon: '🔎' },
       { to: '/stock/conteo',         label: 'Conteo de stock',      icon: '📱' },
     ],
   },
