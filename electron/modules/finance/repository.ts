@@ -478,9 +478,29 @@ export class FinanceRepository {
     this.db.prepare('DELETE FROM finance_holidays WHERE id = ?').run(id)
   }
 
-  /** Actualiza la fecha de acreditación de un movimiento (acreditación manual anticipada). */
+  /**
+   * Actualiza la fecha de acreditación de un ingreso (acreditación manual anticipada
+   * o corrimiento a día hábil) y la de su comisión (FISERV), que impacta el mismo día.
+   * La comisión se identifica igual que en la migración 041: misma pierna de pago,
+   * misma venta, o -- en una diferencia de cambio -- descripción "<prefijo> - <ingreso>".
+   */
   accreditMovement(id: number, fecha: string): void {
-    this.db.prepare('UPDATE finance_movements SET fecha_acreditacion = @fecha WHERE id = @id').run({ id, fecha })
+    this.transaction(() => {
+      this.db.prepare(
+        `UPDATE finance_movements AS fee SET fecha_acreditacion = @fecha
+         WHERE fee.tipo = 'egreso' AND fee.fecha_acreditacion IS NOT NULL
+           AND EXISTS (
+             SELECT 1 FROM finance_movements inc
+             WHERE inc.id = @id AND inc.tipo = 'ingreso' AND inc.account_id = fee.account_id
+               AND (
+                 (fee.sale_payment_id IS NOT NULL AND inc.sale_payment_id = fee.sale_payment_id)
+                 OR (fee.sale_payment_id IS NULL AND fee.sale_id IS NOT NULL AND inc.sale_id = fee.sale_id)
+                 OR (fee.sale_id IS NULL AND inc.sale_id IS NULL AND fee.descripcion LIKE '% - ' || inc.descripcion)
+               )
+           )`
+      ).run({ id, fecha })
+      this.db.prepare('UPDATE finance_movements SET fecha_acreditacion = @fecha WHERE id = @id').run({ id, fecha })
+    })
   }
 
   /** Total pendiente y próxima fecha de acreditación de una cuenta puntual (asOfDate por defecto: hoy). */
@@ -567,15 +587,16 @@ export class FinanceRepository {
   // ── Agregados: finance_movements ──────────────────────────────────────────
 
   /**
-   * Neto de movimientos (ingresos - egresos). Si se pasa asOfDate, los ingresos cuya
+   * Neto de movimientos (ingresos - egresos). Si se pasa asOfDate, los movimientos cuya
    * fecha_acreditacion todavía no llegó a esa fecha se excluyen del neto — todavía no
-   * son saldo disponible, aunque ya estén registrados como movimiento.
+   * impactan el saldo, aunque ya estén registrados (ingresos pendientes y la comisión
+   * FISERV, que se descuenta recién cuando se acredita su cobro).
    */
   sumFinanceMovementsNet(accountId?: number, dateFrom?: string, dateTo?: string, asOfDate?: string): number {
     const { where, params } = this.buildDateAccountFilter(accountId, dateFrom, dateTo)
     const conditions = where ? [where.replace(/^WHERE /, '')] : []
     if (asOfDate !== undefined) {
-      conditions.push("(tipo = 'egreso' OR fecha_acreditacion IS NULL OR fecha_acreditacion <= @asOfDate)")
+      conditions.push('(fecha_acreditacion IS NULL OR fecha_acreditacion <= @asOfDate)')
       params.asOfDate = asOfDate
     }
     const finalWhere = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''

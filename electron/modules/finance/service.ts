@@ -573,6 +573,7 @@ export class FinanceService {
     if (!account) return null
     const categoria = this.repo.findCategoryByName(VENTA_CATEGORIA)
 
+    const fechaAcreditacion = accreditationDate(input.paymentMethod, input.fecha, this.repo.listHolidayDates())
     const id = this.repo.createMovement({
       accountId: account.id,
       tipo: 'ingreso',
@@ -580,7 +581,7 @@ export class FinanceService {
       monto: input.monto,
       descripcion: `Venta #${input.saleId}`,
       fecha: input.fecha,
-      fechaAcreditacion: accreditationDate(input.paymentMethod, input.fecha, this.repo.listHolidayDates()),
+      fechaAcreditacion,
       saleId: input.saleId,
       salePaymentId: input.salePaymentId ?? null,
     })
@@ -592,6 +593,7 @@ export class FinanceService {
         input.paymentMethod as FeePaymentMethod,
         input.monto,
         input.fecha,
+        fechaAcreditacion,
         account.id
       )
     }
@@ -618,6 +620,7 @@ export class FinanceService {
     if (!account) return null
     const categoria = this.repo.findCategoryByName(VENTA_CATEGORIA)
     const descripcion = `Diferencia cambio ${input.sourceLabel} #${input.exchangeId}`
+    const fechaAcreditacion = accreditationDate(input.paymentMethod, input.fecha, this.repo.listHolidayDates())
 
     const id = this.repo.createMovement({
       accountId: account.id,
@@ -626,7 +629,7 @@ export class FinanceService {
       monto: input.monto,
       descripcion,
       fecha: input.fecha,
-      fechaAcreditacion: accreditationDate(input.paymentMethod, input.fecha, this.repo.listHolidayDates()),
+      fechaAcreditacion,
     })
 
     if (FEE_PAYMENT_METHODS.has(input.paymentMethod)) {
@@ -642,6 +645,7 @@ export class FinanceService {
           monto: comision,
           descripcion: `${prefijo} - ${descripcion}`,
           fecha: input.fecha,
+          fechaAcreditacion,
         })
       }
     }
@@ -665,6 +669,8 @@ export class FinanceService {
     paymentMethod: FeePaymentMethod,
     monto: number,
     fecha: string,
+    /** La comisión impacta el mismo día que se acredita su cobro (FISERV: día hábil siguiente). */
+    fechaAcreditacion: string | null,
     accountId: number
   ): void {
     const comision = this.calcMpFee(paymentMethod, monto, fecha)
@@ -679,6 +685,7 @@ export class FinanceService {
       monto: comision,
       descripcion: `${labels.prefijo} - Venta #${saleId}`,
       fecha,
+      fechaAcreditacion,
       saleId,
       salePaymentId,
     })
@@ -758,7 +765,7 @@ export class FinanceService {
       .map(name => this.repo.findCategoryByName(name)?.id)
       .filter((id): id is number => id !== undefined)
     const totalIngresos = this.repo.sumFinanceMovementsByTipo('ingreso', undefined, foundingDate, undefined, socioCategoriaIds, asOfDate)
-    const totalEgresos = this.repo.sumFinanceMovementsByTipo('egreso', undefined, foundingDate, undefined, socioCategoriaIds)
+    const totalEgresos = this.repo.sumFinanceMovementsByTipo('egreso', undefined, foundingDate, undefined, socioCategoriaIds, asOfDate)
 
     const utilidadNetaTotal = totalIngresos - totalEgresos
     const loans = this.listPartnerLoans()
