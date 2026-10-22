@@ -48,16 +48,19 @@ function IncompleteEntriesTable({
   const [rowError, setRowError] = useState<Record<number, string>>({})
 
   useEffect(() => {
-    const initial: Record<number, EntryDraft> = {}
-    for (const e of entries) {
-      initial[e.movementId] = {
-        voucherType: e.voucherType ?? 'Remito',
-        voucherNumber: e.voucherNumber ?? '',
-        voucherDate: e.voucherDate ?? '',
-        supplierId: e.supplierId ?? '',
+    // Conserva lo que el usuario ya editó (sin guardar) en las filas que siguen en la lista
+    setDrafts(prev => {
+      const initial: Record<number, EntryDraft> = {}
+      for (const e of entries) {
+        initial[e.movementId] = prev[e.movementId] ?? {
+          voucherType: e.voucherType ?? 'Remito',
+          voucherNumber: e.voucherNumber ?? '',
+          voucherDate: e.voucherDate ?? '',
+          supplierId: e.supplierId ?? '',
+        }
       }
-    }
-    setDrafts(initial)
+      return initial
+    })
   }, [entries])
 
   function updateDraft(id: number, patch: Partial<EntryDraft>) {
@@ -237,8 +240,10 @@ export default function ReportingPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeReport])
 
-  async function loadPurchases() {
-    setPurchasesLoading(true)
+  // silent: refresca sin mostrar "Cargando..." (que desmonta el contenido y
+  // hace que la página salte arriba de todo), para usar después de guardar una fila
+  async function loadPurchases(silent = false) {
+    if (!silent) setPurchasesLoading(true)
     setPurchasesError(null)
     try {
       const [report, incomplete] = await Promise.all([
@@ -725,7 +730,7 @@ export default function ReportingPage() {
               <IncompleteEntriesTable
                 entries={incompleteEntries}
                 suppliersList={suppliersList}
-                onSaved={() => { void loadPurchases() }}
+                onSaved={() => { void loadPurchases(true) }}
               />
             </div>
           )}
