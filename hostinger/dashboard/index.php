@@ -1,7 +1,7 @@
 <?php
 /**
  * Dashboard mobile-friendly para Ventas-Stock.
- * Subir a: /public_html/ventasstock/dashboard/index.php  (URL: /ventasstock/dashboard/)
+ * Subir a: /public_html/pandorabox/dashboard/index.php  (URL: /pandorabox/dashboard/)
  *
  * Protección básica con password (cambiar DASHBOARD_PASSWORD).
  */

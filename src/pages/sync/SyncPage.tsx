@@ -149,7 +149,7 @@ export default function SyncPage() {
                 value={config.apiUrl}
                 onChange={e => setConfig({ ...config, apiUrl: e.target.value })}
                 className="input"
-                placeholder="https://tudominio.com/ventasstock/api/sync.php"
+                placeholder="https://tudominio.com/pandorabox/api/sync.php"
               />
               <span className="field-hint">URL completa del archivo sync.php en Hostinger</span>
             </div>
