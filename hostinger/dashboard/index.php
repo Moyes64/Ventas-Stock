@@ -241,6 +241,7 @@ foreach ($mpMovements as $m) {
       'fiserv_credito_1' => ['💳','FISERV Crédito'],
       'fiserv_debito'    => ['💳','FISERV Débito'],
       'fiserv_qr'        => ['📱','FISERV QR'],
+      'mp_ariel'         => ['🛍️','Mercado Libre'],
     ]; ?>
     <?php foreach ($pmLabels as $key => [$icon, $label]): ?>
       <?php $val = (float)($pm[$key] ?? 0); if ($val <= 0) continue; ?>

@@ -4,6 +4,7 @@ import { catalog, customers, sales, printing, parameters as parametersApi, caja 
 import type { Product, Customer, Sale, Parameter, PaymentMethod } from '../../types/ipc'
 import { useHiddenOptions } from '../../context/HiddenOptionsContext'
 import { FISERV_OPTIONS } from '../../lib/fiserv'
+import { localToday } from '../../lib/date'
 
 interface CartItem {
   product: Product
@@ -45,6 +46,8 @@ export default function NewSalePage() {
   const [isBlackSale, setIsBlackSale] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('contado_efectivo')
   const [montoEntregado, setMontoEntregado] = useState('')
+  // Mercado Libre (MP Ariel): fecha en que MP acredita el cobro en la cuenta de Ariel.
+  const [fechaAcreditacionMl, setFechaAcreditacionMl] = useState('')
   // Pago combinado: dos medios de pago, cada uno con su propio monto (deben
   // sumar el total de la venta).
   const [isSplitPayment, setIsSplitPayment] = useState(false)
@@ -100,6 +103,24 @@ export default function NewSalePage() {
         : prev
     )
   }, [isBlackSale])
+
+  // Mercado Libre (MP Ariel) es solo para Venta N y sin pago combinado.
+  useEffect(() => {
+    if (paymentMethod === 'mp_ariel' && (!isBlackSale || isSplitPayment)) setPaymentMethod('contado_efectivo')
+  }, [isBlackSale, isSplitPayment, paymentMethod])
+
+  // Al elegir Mercado Libre, si no hay cliente elegido, se propone MeliPandora.
+  useEffect(() => {
+    if (paymentMethod !== 'mp_ariel') {
+      setFechaAcreditacionMl('')
+      return
+    }
+    if (selectedCustomerId === null) {
+      const meli = customerList.find(c => c.name.trim().toLowerCase() === 'melipandora')
+      if (meli) setSelectedCustomerId(meli.id)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paymentMethod])
 
   // Reset monto entregado when no leg (simple o combinada) es efectivo
   useEffect(() => {
@@ -323,6 +344,10 @@ export default function NewSalePage() {
         return
       }
     }
+    if (!isSplitPayment && paymentMethod === 'mp_ariel' && !fechaAcreditacionMl) {
+      setError('Cargá la fecha de acreditación que indica Mercado Pago')
+      return
+    }
     if (cashLegAmount !== null && montoEntregadoNum > 0 && montoEntregadoNum < cashLegAmount) {
       setError('El monto entregado es menor a lo que corresponde cobrar en efectivo')
       return
@@ -360,6 +385,7 @@ export default function NewSalePage() {
               { paymentMethod: splitMethod2, amount: Math.round(splitAmount2Num * 100) / 100 },
             ] }
           : { paymentMethod }),
+        ...(!isSplitPayment && paymentMethod === 'mp_ariel' ? { fechaAcreditacion: fechaAcreditacionMl } : {}),
         parameterIds: selectedParameters.map(p => p.id),
         items: itemsForCheckout.map(item => ({
           productId: item.product.id,
@@ -378,6 +404,7 @@ export default function NewSalePage() {
       setVueltoResult(vuelto !== null && vuelto > 0 ? vuelto : null)
       setCart([])
       setMontoEntregado('')
+      setFechaAcreditacionMl('')
       setSplitAmount1('')
       setSplitAmount2('')
       setSplitAmount2Touched(false)
@@ -576,6 +603,9 @@ export default function NewSalePage() {
     { value: 'debito', label: '💳 Débito' },
     { value: 'credito', label: '💳 Crédito' },
     ...FISERV_OPTIONS,
+    ...(isBlackSale && !isSplitPayment
+      ? [{ value: 'mp_ariel' as PaymentMethod, label: '🛍️ Mercado Libre (MP Ariel)' }]
+      : []),
     ...(selectedCustomerId && creditBalance !== null && creditBalance > 0
       ? [{ value: 'credito_cliente' as PaymentMethod, label: `🎁 Crédito del cliente (${currency(creditBalance)})` }]
       : []),
@@ -648,15 +678,32 @@ export default function NewSalePage() {
             </label>
 
             {!isSplitPayment ? (
-              <select
-                value={paymentMethod}
-                onChange={e => setPaymentMethod(e.target.value as PaymentMethod)}
-                className="select"
-              >
-                {paymentMethodOptions.map(o => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
+              <>
+                <select
+                  value={paymentMethod}
+                  onChange={e => setPaymentMethod(e.target.value as PaymentMethod)}
+                  className="select"
+                >
+                  {paymentMethodOptions.map(o => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+                {paymentMethod === 'mp_ariel' && (
+                  <div style={{ marginTop: 8 }}>
+                    <label className="label">Fecha de acreditación (según MP)</label>
+                    <input
+                      type="date"
+                      value={fechaAcreditacionMl}
+                      min={localToday()}
+                      onChange={e => setFechaAcreditacionMl(e.target.value)}
+                      className="input"
+                    />
+                    <p className="text-muted" style={{ fontSize: 12, margin: '4px 0 0' }}>
+                      Cargá como precio el neto que liquida MP. El ingreso queda pendiente en MP Ariel hasta esa fecha.
+                    </p>
+                  </div>
+                )}
+              </>
             ) : (
               <div className="split-payment-panel">
                 <div className="split-payment-row" style={{ display: 'flex', gap: 8, marginBottom: 8 }}>

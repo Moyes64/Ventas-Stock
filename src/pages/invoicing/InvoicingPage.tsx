@@ -13,6 +13,7 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
   credito: '💳 Crédito',
   credito_cliente: '🎁 Crédito del cliente',
   mercadopago: '🛒 Mercado Pago (Web)',
+  mp_ariel: '🛍️ Mercado Libre (MP Ariel)',
   ...FISERV_LABELS,
 }
 
@@ -422,6 +423,9 @@ export default function InvoicingPage() {
                       >
                         {inv.paymentMethod === 'credito_cliente' && (
                           <option value="credito_cliente">{PAYMENT_METHOD_LABELS.credito_cliente}</option>
+                        )}
+                        {inv.paymentMethod === 'mp_ariel' && (
+                          <option value="mp_ariel">{PAYMENT_METHOD_LABELS.mp_ariel}</option>
                         )}
                         {EDITABLE_PAYMENT_METHODS.map(pm => (
                           <option key={pm} value={pm}>{PAYMENT_METHOD_LABELS[pm]}</option>

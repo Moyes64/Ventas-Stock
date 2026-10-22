@@ -23,6 +23,7 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
   debito: '💳 Débito',
   credito: '💳 Crédito',
   mercadopago: '🛒 Mercado Pago',
+  mp_ariel: '🛍️ Mercado Libre (MP Ariel)',
   ...FISERV_LABELS,
 }
 

@@ -54,7 +54,12 @@ export class SaleService {
     // comisión en vez de sin nada. Borrar + recrear usa el mismo ruteo de cuenta
     // que la creación original, así que siempre termina en la cuenta correcta.
     // No bloquea el cambio si falla.
+    // La fecha de acreditación de MP Ariel se cargó a mano: se conserva si la
+    // venta ya era de MP Ariel (si no, queda acreditada en el momento).
     try {
+      const fechaAcreditacion = current.paymentMethod === 'mp_ariel'
+        ? this.financeService.findSaleIncomeAccreditationDate(sale.id)
+        : null
       this.financeService.reverseSaleIncome(sale.id)
       this.financeService.registerSaleIncome({
         saleId: sale.id,
@@ -62,6 +67,7 @@ export class SaleService {
         paymentMethod: sale.paymentMethod,
         monto: sale.total,
         fecha: sale.saleDate,
+        fechaAcreditacion,
       })
     } catch (err) {
       console.error('[sales] Error resincronizando finanzas tras cambio de medio de pago:', err)
@@ -86,6 +92,15 @@ export class SaleService {
    * 7. Return the final sale state
    */
   async createSale(input: CreateSaleInput): Promise<Sale> {
+    // Las ventas por Mercado Libre (MP Ariel) van solo como Venta N y con un único
+    // medio: el ingreso entero queda pendiente en la cuenta de Ariel.
+    if (input.payments?.some(p => p.paymentMethod === 'mp_ariel')) {
+      throw new Error('Mercado Libre (MP Ariel) no se puede combinar con otro medio de pago')
+    }
+    if (input.paymentMethod === 'mp_ariel' && !input.isBlackSale) {
+      throw new Error('Las ventas por Mercado Libre (MP Ariel) se cargan como Venta N')
+    }
+
     // Step 1: Validate stock
     this.stockService.validateAvailability(
       input.items.map(i => ({ productId: i.productId, quantity: i.quantity }))
@@ -199,6 +214,7 @@ export class SaleService {
           paymentMethod: leg.paymentMethod,
           monto: leg.amount,
           fecha: finalSale.saleDate,
+          fechaAcreditacion: input.fechaAcreditacion,
         })
       }
     } catch (err) {

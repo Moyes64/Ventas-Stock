@@ -62,6 +62,11 @@ const COMISION_MP_CATEGORIA = 'Comisión Mercado Pago'
 const COMISION_FISERV_CATEGORIA = 'Comisión FISERV'
 const AJUSTE_CONCILIACION_CATEGORIA = 'Ajuste Conciliación MP'
 const MP_ANABELLA_ACCOUNT_NAME = 'Mercado Pago - Anabella'
+const MP_ARIEL_ACCOUNT_NAME = 'Mercado Pago - Ariel'
+/** Ventas por Mercado Libre (cajas de escape propias), cobradas en la cuenta MP de
+ *  Ariel. Se registran por el neto que liquida MP (sin egreso de comisión) y el
+ *  ingreso queda pendiente hasta la fecha de acreditación que indica MP. */
+const MP_ARIEL_PAYMENT_METHOD = 'mp_ariel'
 /** Medios de pago a los que Mercado Pago les cobra comisión: posnet físico (QR/tarjeta) + tienda web. */
 const MP_FEE_METHODS: MpFeePaymentMethod[] = ['qr', 'debito', 'credito', 'mercadopago']
 /** Medios del posnet FISERV: el cobro queda en FISERV y se transfiere a mano a
@@ -548,11 +553,15 @@ export class FinanceService {
    * tasa vigente a la fecha de la venta — ver `registerMpFeeForSale`.
    */
   /** Resuelve la cuenta destino del ingreso según el medio de pago: Caja para efectivo,
-   *  MP-Anabella para posnet/transferencia/web. `undefined` para cualquier otro medio
-   *  no mapeado (ej: crédito de cliente, que no es dinero nuevo). */
+   *  MP-Ariel para Mercado Libre, MP-Anabella para posnet/transferencia/web.
+   *  `undefined` para cualquier otro medio no mapeado (ej: crédito de cliente, que
+   *  no es dinero nuevo). */
   private resolveIncomeAccount(paymentMethod: string): FinanceAccount | undefined {
     if (paymentMethod === 'contado_efectivo') {
       return this.repo.findCashAccount()
+    }
+    if (paymentMethod === MP_ARIEL_PAYMENT_METHOD) {
+      return this.repo.findAccountByName(MP_ARIEL_ACCOUNT_NAME)
     }
     if (MP_ANABELLA_PAYMENT_METHODS.has(paymentMethod)) {
       return this.repo.findAccountByName(MP_ANABELLA_ACCOUNT_NAME)
@@ -568,12 +577,17 @@ export class FinanceService {
     paymentMethod: string
     monto: number
     fecha: string
+    /** Fecha de acreditación indicada a mano (MP Ariel: la que informa MP). Para
+     *  el resto de los medios se calcula sola y esto se ignora. */
+    fechaAcreditacion?: string | null
   }): FinanceMovement | null {
     const account = this.resolveIncomeAccount(input.paymentMethod)
     if (!account) return null
     const categoria = this.repo.findCategoryByName(VENTA_CATEGORIA)
 
-    const fechaAcreditacion = accreditationDate(input.paymentMethod, input.fecha, this.repo.listHolidayDates())
+    const fechaAcreditacion = input.paymentMethod === MP_ARIEL_PAYMENT_METHOD
+      ? (input.fechaAcreditacion && input.fechaAcreditacion > input.fecha ? input.fechaAcreditacion : null)
+      : accreditationDate(input.paymentMethod, input.fecha, this.repo.listHolidayDates())
     const id = this.repo.createMovement({
       accountId: account.id,
       tipo: 'ingreso',
@@ -689,6 +703,12 @@ export class FinanceService {
       saleId,
       salePaymentId,
     })
+  }
+
+  /** Fecha de acreditación pendiente del ingreso de una venta (null si ya está acreditado o no hay ingreso). */
+  findSaleIncomeAccreditationDate(saleId: number): string | null {
+    const ingreso = this.repo.listMovementsBySaleId(saleId).find(m => m.tipo === 'ingreso')
+    return ingreso?.fechaAcreditacion ?? null
   }
 
   /** Revierte (elimina) el ingreso y la comisión MP auto-generados por una venta, si existen. */

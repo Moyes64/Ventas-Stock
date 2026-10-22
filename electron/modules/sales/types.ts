@@ -21,6 +21,7 @@ export type PaymentMethod =
   | 'fiserv_credito_1'
   | 'fiserv_credito_2'
   | 'fiserv_credito_3'
+  | 'mp_ariel'
 
 export interface SalePayment {
   id: number
@@ -94,6 +95,9 @@ export interface CreateSaleInput {
     paymentMethod: PaymentMethod
     amount: number
   }>
+  /** Solo para 'mp_ariel': fecha en que MP acredita el cobro en la cuenta de
+   *  Ariel (hasta entonces el ingreso queda pendiente). */
+  fechaAcreditacion?: string
   parameterIds?: number[]
   items: Array<{
     productId: number

@@ -181,6 +181,7 @@ export type PaymentMethod =
   | 'fiserv_credito_1'
   | 'fiserv_credito_2'
   | 'fiserv_credito_3'
+  | 'mp_ariel'
 
 export interface SalePayment {
   id: number
