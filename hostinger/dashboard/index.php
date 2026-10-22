@@ -115,19 +115,48 @@ try {
 // ── Ventas por rango de fechas ──────────────────────────────────────────────
 $rangeFrom  = $_GET['from'] ?? date('Y-m-d', strtotime('-7 days'));
 $rangeTo    = $_GET['to']   ?? date('Y-m-d');
+$rangeMethod = $_GET['method'] ?? '';   // '' = todos los métodos
 $rangeSales = [];
 $rangeTotal = 0.0;
+$rangeByMethod = [];                    // método => ['count' => n, 'total' => $]
+$rangeMethods = [];                     // métodos con ventas, para el desplegable
 $rangeError = '';
+
+$methodNames = [
+    'contado_efectivo' => 'Efectivo',
+    'transferencia'    => 'Transferencia',
+    'debito'           => 'Débito',
+    'credito'          => 'Crédito',
+    'qr'               => 'QR',
+    'mercadopago'      => 'Mercado Pago (web)',
+    'credito_cliente'  => 'Crédito del cliente',
+    'mixto'            => 'Pago combinado',
+    'fiserv_credito_3' => 'FISERV 3 cuotas',
+    'fiserv_credito_2' => 'FISERV 2 cuotas',
+    'fiserv_credito_1' => 'FISERV Crédito',
+    'fiserv_debito'    => 'FISERV Débito',
+    'fiserv_qr'        => 'FISERV QR',
+    'mp_ariel'         => 'Mercado Libre (MP Ariel)',
+];
+$methodName = fn(string $m): string => $methodNames[$m] ?? $m;
 
 try {
     $pdo = getConnection();
-    $stmt = $pdo->prepare(
-        'SELECT id, sale_date, sale_time, total, payment_method, status
-         FROM synced_sales
-         WHERE sale_date BETWEEN ? AND ? AND status != "CANCELLED"
-         ORDER BY sale_date DESC, sale_time DESC'
-    );
-    $stmt->execute([$rangeFrom, $rangeTo]);
+    $rangeMethods = $pdo->query(
+        'SELECT DISTINCT payment_method FROM synced_sales WHERE status != "CANCELLED" ORDER BY payment_method'
+    )->fetchAll(PDO::FETCH_COLUMN);
+    if (!in_array($rangeMethod, $rangeMethods, true)) $rangeMethod = '';
+
+    $sql = 'SELECT id, sale_date, sale_time, total, payment_method, status
+            FROM synced_sales
+            WHERE sale_date BETWEEN ? AND ? AND status != "CANCELLED"';
+    $params = [$rangeFrom, $rangeTo];
+    if ($rangeMethod !== '') {
+        $sql .= ' AND payment_method = ?';
+        $params[] = $rangeMethod;
+    }
+    $stmt = $pdo->prepare($sql . ' ORDER BY sale_date DESC, sale_time DESC');
+    $stmt->execute($params);
     $rangeSales = $stmt->fetchAll();
 
     if ($rangeSales) {
@@ -143,7 +172,11 @@ try {
         }
         foreach ($rangeSales as $s) {
             $rangeTotal += (float)$s['total'];
+            $m = $s['payment_method'];
+            $rangeByMethod[$m]['count'] = ($rangeByMethod[$m]['count'] ?? 0) + 1;
+            $rangeByMethod[$m]['total'] = ($rangeByMethod[$m]['total'] ?? 0) + (float)$s['total'];
         }
+        uasort($rangeByMethod, fn($a, $b) => $b['total'] <=> $a['total']);
     }
 } catch (Exception $e) {
     $rangeError = $e->getMessage();
@@ -302,6 +335,15 @@ foreach ($mpMovements as $m) {
       <label for="to">Hasta</label>
       <input type="date" id="to" name="to" class="range-input" value="<?= htmlspecialchars($rangeTo) ?>">
     </div>
+    <div class="range-field">
+      <label for="method">Método</label>
+      <select id="method" name="method" class="range-input">
+        <option value="">Todos</option>
+        <?php foreach ($rangeMethods as $m): ?>
+          <option value="<?= htmlspecialchars($m) ?>" <?= $m === $rangeMethod ? 'selected' : '' ?>><?= htmlspecialchars($methodName($m)) ?></option>
+        <?php endforeach; ?>
+      </select>
+    </div>
     <?php if (isset($_GET['mpFrom'])): ?>
     <input type="hidden" name="mpFrom" value="<?= htmlspecialchars($mpFrom) ?>">
     <input type="hidden" name="mpTo" value="<?= htmlspecialchars($mpTo) ?>">
@@ -313,9 +355,24 @@ foreach ($mpMovements as $m) {
     <p class="muted">No se pudo consultar el historial (<?= htmlspecialchars($rangeError) ?>).</p>
   <?php else: ?>
     <div class="range-summary">
-      <span class="muted"><?= count($rangeSales) ?> venta(s)</span>
+      <span class="muted"><?= count($rangeSales) ?> venta(s)<?= $rangeMethod !== '' ? ' · ' . htmlspecialchars($methodName($rangeMethod)) : '' ?></span>
       <strong><?= fmt($rangeTotal) ?></strong>
     </div>
+
+    <?php if ($rangeMethod === '' && count($rangeByMethod) > 1): ?>
+    <table class="mini-table">
+      <thead><tr><th>Método</th><th>Ventas</th><th>Total</th></tr></thead>
+      <tbody>
+        <?php foreach ($rangeByMethod as $m => $agg): ?>
+        <tr>
+          <td><?= htmlspecialchars($methodName($m)) ?></td>
+          <td><?= (int)$agg['count'] ?></td>
+          <td><?= fmt($agg['total']) ?></td>
+        </tr>
+        <?php endforeach; ?>
+      </tbody>
+    </table>
+    <?php endif; ?>
 
     <?php if (empty($rangeSales)): ?>
       <p class="muted">Sin ventas en el rango seleccionado.</p>
@@ -327,7 +384,7 @@ foreach ($mpMovements as $m) {
         <tr>
           <td><?= fmtDate($s['sale_date']) ?></td>
           <td><?= htmlspecialchars($s['sale_time']) ?></td>
-          <td><?= htmlspecialchars($s['payment_method']) ?></td>
+          <td><?= htmlspecialchars($methodName($s['payment_method'])) ?></td>
           <td><?= fmt((float)$s['total']) ?></td>
         </tr>
         <tr class="sale-products-row">
@@ -540,6 +597,9 @@ foreach ($mpMovements as $m) {
     <?php if (isset($_GET['from'])): ?>
     <input type="hidden" name="from" value="<?= htmlspecialchars($rangeFrom) ?>">
     <input type="hidden" name="to" value="<?= htmlspecialchars($rangeTo) ?>">
+    <?php if ($rangeMethod !== ''): ?>
+    <input type="hidden" name="method" value="<?= htmlspecialchars($rangeMethod) ?>">
+    <?php endif; ?>
     <?php endif; ?>
     <button type="submit" class="range-btn">Filtrar</button>
   </form>
