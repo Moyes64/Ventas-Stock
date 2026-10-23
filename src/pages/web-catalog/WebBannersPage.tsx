@@ -239,6 +239,7 @@ export default function WebBannersPage() {
   }
 
   const hasLink = form.linkType !== 'none'
+  const previewTextOnly = !(editing && imageUrl) && !(hasLink && form.showButton && form.buttonText)
   const theme = THEME_STYLES[form.theme]
 
   return (
@@ -329,7 +330,8 @@ export default function WebBannersPage() {
                 {editing && imageUrl && (
                   <img src={imageUrl} alt="" style={{ width: 120, height: 120, objectFit: 'cover', borderRadius: 12, flexShrink: 0 }} />
                 )}
-                <div style={{ flex: 1 }}>
+                {/* Solo texto (sin imagen ni botón): centrado, igual que en la web */}
+                <div style={{ flex: 1, textAlign: previewTextOnly ? 'center' : 'left' }}>
                   {form.badge && (
                     <span style={{ display: 'inline-block', fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase',
                       padding: '2px 8px', borderRadius: 999, background: theme.accent, color: theme.accentText, marginBottom: 6 }}>
@@ -342,7 +344,7 @@ export default function WebBannersPage() {
                     const now = parseFloat(form.offerWebPrice) || selectedProduct.productPrice
                     const before = parseFloat(form.offerCompareAt)
                     return (
-                      <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'baseline' }}>
+                      <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'baseline', justifyContent: previewTextOnly ? 'center' : 'flex-start' }}>
                         <span style={{ fontSize: 18, fontWeight: 700 }}>{money(now)}</span>
                         {before > now && <s style={{ fontSize: 13, opacity: 0.6 }}>{money(before)}</s>}
                       </div>
