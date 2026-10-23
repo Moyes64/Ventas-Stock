@@ -63,6 +63,43 @@ function productImageUrl(string $filename): string {
     return $mtime ? $url . '?v=' . $mtime : $url;
 }
 
+/**
+ * Precio que se muestra y se cobra según la oferta vigente HOY (hora Argentina).
+ * Recibe una fila de web_products con price (precio web normal), compare_at_price,
+ * offer_price, offer_from, offer_to y devuelve la misma fila con price y
+ * compare_at_price ya resueltos (sin las columnas offer_*).
+ *  - Oferta vigente: price = offer_price (o el normal si no hay), tachado =
+ *    compare_at_price o, si no hay, el precio normal.
+ *  - Fuera de vigencia: precio normal y sin tachado.
+ * Única regla para products.php, orders.php, banners.php y roku.php: así la
+ * oferta vence aunque la notebook esté apagada y no se cobra distinto de lo que
+ * se muestra.
+ */
+function applyOffer(array $p): array {
+    static $today = null;
+    if ($today === null) $today = substr(argentinaNow(), 0, 10);
+
+    $regular = (float)$p['price'];
+    $offer   = isset($p['offer_price']) && $p['offer_price'] !== null ? (float)$p['offer_price'] : null;
+    $before  = isset($p['compare_at_price']) && $p['compare_at_price'] !== null ? (float)$p['compare_at_price'] : null;
+    $from    = $p['offer_from'] ?? null;
+    $to      = $p['offer_to'] ?? null;
+    $inDates = (!$from || $from <= $today) && (!$to || $to >= $today);
+
+    if ($inDates && ($offer !== null || $before !== null)) {
+        $price  = $offer ?? $regular;
+        $before = $before ?? ($offer !== null ? $regular : null);
+    } else {
+        $price  = $regular;
+        $before = null;
+    }
+
+    $p['price'] = $price;
+    $p['compare_at_price'] = ($before !== null && $before > $price) ? $before : null;
+    unset($p['offer_price'], $p['offer_from'], $p['offer_to']);
+    return $p;
+}
+
 function getConnection(): PDO {
     static $pdo = null;
     if ($pdo === null) {
@@ -458,6 +495,11 @@ function initSchema(): void {
 
     // Precio "antes" que la web muestra tachado (oferta) — no destructiva
     try { $pdo->exec("ALTER TABLE web_products ADD COLUMN compare_at_price DECIMAL(10,2) NULL"); } catch (\Exception $e) {}
+
+    // Oferta con vencimiento (ver applyOffer()) — no destructiva
+    try { $pdo->exec("ALTER TABLE web_products ADD COLUMN offer_price DECIMAL(10,2) NULL"); } catch (\Exception $e) {}
+    try { $pdo->exec("ALTER TABLE web_products ADD COLUMN offer_from DATE NULL"); } catch (\Exception $e) {}
+    try { $pdo->exec("ALTER TABLE web_products ADD COLUMN offer_to DATE NULL"); } catch (\Exception $e) {}
 
     // Banners promocionales de la home. Se reemplazan completos en cada sync
     // (solo llegan los activos); el rango de fechas lo filtra banners.php.

@@ -32,6 +32,7 @@ interface WebBannerRow {
   link_product_visible: number | null
   link_product_price: number | null
   link_product_web_price: number | null
+  link_product_offer_price: number | null
   link_product_compare_at_price: number | null
   link_product_image: string | null
   link_category_name: string | null
@@ -61,6 +62,7 @@ function mapBanner(r: WebBannerRow): WebBanner {
     linkProductUnavailable: r.link_type === 'product' && r.link_product_visible !== 1,
     linkProductPrice: r.link_product_price,
     linkProductWebPrice: r.link_product_web_price,
+    linkProductOfferPrice: r.link_product_offer_price,
     linkProductCompareAtPrice: r.link_product_compare_at_price,
     linkProductImageFilename: r.link_type === 'product' ? r.link_product_image : null,
     linkCategoryName: r.link_category_name,
@@ -71,6 +73,7 @@ const SELECT_BANNERS = `
   SELECT b.*,
          p.name AS link_product_name, wp.visible AS link_product_visible,
          p.price AS link_product_price, wp.web_price AS link_product_web_price,
+         wp.offer_price AS link_product_offer_price,
          wp.compare_at_price AS link_product_compare_at_price,
          (SELECT filename FROM web_product_images
            WHERE product_id = b.link_product_id ORDER BY sort_order ASC LIMIT 1) AS link_product_image,
@@ -141,19 +144,25 @@ export class WebBannersService {
 
     const offer = input.linkType === 'product' && input.linkProductId ? input.productOffer : undefined
     if (offer && offer.compareAtPrice !== null) {
-      const now = offer.webPrice ?? (this.db.prepare('SELECT price FROM products WHERE id=?')
-        .get(input.linkProductId) as { price: number } | undefined)?.price ?? 0
+      // Contra el precio de oferta, o el precio web normal si no hay oferta
+      const row = this.db.prepare(`
+        SELECT COALESCE(wp.web_price, p.price) AS regular FROM products p
+        LEFT JOIN web_products wp ON wp.product_id = p.id WHERE p.id=?
+      `).get(input.linkProductId) as { regular: number } | undefined
+      const now = offer.offerPrice ?? row?.regular ?? 0
       if (offer.compareAtPrice <= now) {
-        throw new Error(`El precio anterior tiene que ser mayor al precio de oferta ($ ${now.toFixed(2)}).`)
+        throw new Error(`El precio anterior tiene que ser mayor al precio de oferta ($ ${Math.round(now).toLocaleString('es-AR')}).`)
       }
     }
 
     return this.db.transaction(() => {
       if (offer) {
+        // La oferta vence junto con el banner: se copia su vigencia al producto.
         this.db.prepare(`
-          UPDATE web_products SET web_price=?, compare_at_price=?, updated_at=datetime('now','localtime')
+          UPDATE web_products SET offer_price=?, compare_at_price=?, offer_from=?, offer_to=?,
+            updated_at=datetime('now','localtime')
           WHERE product_id=?
-        `).run(offer.webPrice, offer.compareAtPrice, input.linkProductId)
+        `).run(offer.offerPrice, offer.compareAtPrice, input.dateFrom || null, input.dateTo || null, input.linkProductId)
       }
       return this.saveRow(id, values)
     })()

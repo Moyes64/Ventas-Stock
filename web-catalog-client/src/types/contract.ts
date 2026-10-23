@@ -37,6 +37,10 @@ export interface WebProduct {
   webPrice: number | null
   /** Precio "antes", tachado en la web (solo si es mayor al precio web efectivo) */
   compareAtPrice: number | null
+  /** Oferta con vencimiento (YYYY-MM-DD, null = sin límite) */
+  offerPrice: number | null
+  offerFrom: string | null
+  offerTo: string | null
   shortDescription: string
   longDescription: string
   ageMin: number | null
@@ -68,6 +72,8 @@ export interface SaveWebProductInput {
   webPrice: number | null
   /** undefined = no tocar el que ya tiene */
   compareAtPrice?: number | null
+  /** undefined = no tocar la oferta que ya tiene */
+  offer?: { price: number | null; from: string | null; to: string | null }
   shortDescription: string
   longDescription: string
   ageMin: number | null
@@ -114,6 +120,7 @@ export interface WebBanner {
   linkProductUnavailable: boolean
   linkProductPrice: number | null
   linkProductWebPrice: number | null
+  linkProductOfferPrice: number | null
   linkProductCompareAtPrice: number | null
   linkProductImageFilename: string | null
   linkCategoryName: string | null
@@ -135,7 +142,7 @@ export interface SaveWebBannerInput {
   active: boolean
   sortOrder: number
   /** Solo con linkType 'product': precios del producto vinculado */
-  productOffer?: { webPrice: number | null; compareAtPrice: number | null }
+  productOffer?: { offerPrice: number | null; compareAtPrice: number | null }
 }
 
 export interface WebBannersConfig {

@@ -40,12 +40,13 @@ try {
         if (!$idList) { echo json_encode([]); exit; }
         $idList = array_slice($idList, 0, 100);
         $placeholders = implode(',', array_fill(0, count($idList), '?'));
-        $stmt = $pdo->prepare("SELECT id, stock, price FROM web_products WHERE visible = 1 AND id IN ($placeholders)");
+        $stmt = $pdo->prepare("SELECT id, stock, price, compare_at_price, offer_price, offer_from, offer_to
+                               FROM web_products WHERE visible = 1 AND id IN ($placeholders)");
         $stmt->execute($idList);
         echo json_encode(array_map(fn($r) => [
             'id'    => (int)$r['id'],
             'stock' => (int)$r['stock'],
-            'price' => (float)$r['price'],
+            'price' => (float)applyOffer($r)['price'],
         ], $stmt->fetchAll()));
         exit;
     }
@@ -74,6 +75,7 @@ try {
             exit;
         }
 
+        $product = applyOffer($product);
         $product['images'] = getProductImages($pdo, (int)$product['id']);
         $product['thumbnail'] = $product['images'][0] ?? null;
         echo json_encode($product);
@@ -115,6 +117,7 @@ try {
 
     // Para la lista solo incluimos la primera imagen (thumbnail)
     foreach ($products as &$prod) {
+        $prod = applyOffer($prod);
         $imgs = getProductImages($pdo, (int)$prod['id'], 1);
         $prod['thumbnail'] = $imgs[0] ?? null;
     }

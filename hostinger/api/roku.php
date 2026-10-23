@@ -44,7 +44,7 @@ try {
     // Primera imagen de cada producto en una sola consulta (products.php hace
     // una por producto; con ~270 productos acá conviene evitarlo).
     $sql = "
-        SELECT p.name, p.price, i.filename
+        SELECT p.name, p.price, p.compare_at_price, p.offer_price, p.offer_from, p.offer_to, i.filename
         FROM web_products p
         LEFT JOIN web_categories c ON c.id = p.web_category_id
         JOIN web_product_images i ON i.id = (
@@ -62,7 +62,7 @@ try {
     $proxyBase = dirname(WEBHOOK_URL) . '/roku-image.php?f=';
     $out = [];
     foreach ($stmt->fetchAll() as $r) {
-        $price = (float)$r['price'];
+        $price = (float)applyOffer($r)['price'];
         $out[] = [
             'name'      => $r['name'],
             'price'     => $price,

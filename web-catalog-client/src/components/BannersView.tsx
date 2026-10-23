@@ -16,7 +16,7 @@ interface FormState {
   linkProductId: string
   linkCategoryId: string
   linkUrl: string
-  offerWebPrice: string
+  offerPrice: string
   offerCompareAt: string
   showButton: boolean
   buttonText: string
@@ -29,7 +29,7 @@ interface FormState {
 const EMPTY_FORM: FormState = {
   title: '', subtitle: '', badge: '', finePrint: '', theme: 'gold',
   linkType: 'none', linkProductId: '', linkCategoryId: '', linkUrl: '',
-  offerWebPrice: '', offerCompareAt: '',
+  offerPrice: '', offerCompareAt: '',
   showButton: true, buttonText: 'Ver oferta',
   dateFrom: '', dateTo: '', active: true, sortOrder: '0',
 }
@@ -144,7 +144,7 @@ export default function BannersView() {
     setForm(prev => ({
       ...prev,
       linkProductId: value,
-      offerWebPrice: priceText(p?.webPrice ?? null),
+      offerPrice: priceText(p?.offerPrice ?? null),
       offerCompareAt: priceText(p?.compareAtPrice ?? null),
     }))
   }
@@ -174,7 +174,7 @@ export default function BannersView() {
       linkProductId: b.linkProductId !== null ? String(b.linkProductId) : '',
       linkCategoryId: b.linkCategoryId !== null ? String(b.linkCategoryId) : '',
       linkUrl: b.linkUrl,
-      offerWebPrice: priceText(b.linkProductWebPrice),
+      offerPrice: priceText(b.linkProductOfferPrice),
       offerCompareAt: priceText(b.linkProductCompareAtPrice),
       showButton: b.buttonText !== '',
       buttonText: b.buttonText || 'Ver oferta',
@@ -206,7 +206,7 @@ export default function BannersView() {
       active: form.active,
       sortOrder: Number(form.sortOrder) || 0,
       productOffer: form.linkType === 'product'
-        ? { webPrice: numOrNull(form.offerWebPrice), compareAtPrice: numOrNull(form.offerCompareAt) }
+        ? { offerPrice: numOrNull(form.offerPrice), compareAtPrice: numOrNull(form.offerCompareAt) }
         : undefined,
     }
     try {
@@ -274,10 +274,10 @@ export default function BannersView() {
   const ownImage = editing?.imageFilename ?? null
   const productImage = form.linkType === 'product' ? selectedProduct?.images[0]?.filename ?? null : null
   const shownImage = ownImage ?? productImage
-  const offerNow = selectedProduct
-    ? (Number(form.offerWebPrice) || selectedProduct.productPrice)
-    : 0
-  const offerBefore = Number(form.offerCompareAt)
+  const offerRegular = selectedProduct ? selectedProduct.webPrice ?? selectedProduct.productPrice : 0
+  const offerNow = Number(form.offerPrice) || offerRegular
+  // Sin precio anterior, se tacha el precio normal
+  const offerBefore = Number(form.offerCompareAt) || (form.offerPrice ? offerRegular : 0)
 
   return (
     <div className="field-row" style={{ alignItems: 'flex-start' }}>
@@ -379,25 +379,27 @@ export default function BannersView() {
             <label>💲 Precio de oferta del producto</label>
             <div className="field-row">
               <div className="field" style={{ flex: 1 }}>
-                <span className="hint">Precio web (oferta)</span>
-                <input type="number" step="0.01" value={form.offerWebPrice}
-                  placeholder={`${money(selectedProduct.productPrice)} (catálogo)`}
-                  onChange={e => set('offerWebPrice', e.target.value)} />
+                <span className="hint">Precio de oferta</span>
+                <input type="number" step="0.01" value={form.offerPrice} placeholder="Sin oferta"
+                  onChange={e => set('offerPrice', e.target.value)} />
               </div>
               <div className="field" style={{ flex: 1 }}>
                 <span className="hint">Precio anterior (tachado)</span>
-                <input type="number" step="0.01" value={form.offerCompareAt} placeholder="Sin tachado"
+                <input type="number" step="0.01" value={form.offerCompareAt}
+                  placeholder={form.offerPrice ? `${money(offerRegular)} (normal)` : 'Sin tachado'}
                   onChange={e => set('offerCompareAt', e.target.value)} />
               </div>
             </div>
             {!offerBefore ? (
-              <span className="hint">Precio web vacío = precio del catálogo ({money(selectedProduct.productPrice)}). Es lo que se cobra en la web.</span>
+              <span className="hint">Precio normal en la web: {money(offerRegular)}. Cargá un precio de oferta para que el banner la publique.</span>
             ) : offerBefore <= offerNow ? (
               <span className="error">El precio anterior tiene que ser mayor a {money(offerNow)}.</span>
             ) : (
               <span className="hint">
-                La web muestra <s>{money(offerBefore)}</s> {money(offerNow)} · OFERTA -{Math.round((1 - offerNow / offerBefore) * 100)}%.
-                Cuando termine la oferta, vaciá ambos precios.
+                La web muestra <s>{money(offerBefore)}</s> {money(offerNow)} · OFERTA -{Math.round((1 - offerNow / offerBefore) * 100)}%.{' '}
+                {form.dateTo
+                  ? <>La oferta vence sola con el banner (el {formatDate(form.dateTo)}): después vuelve a {money(offerRegular)}, sin tachado.</>
+                  : <>Sin fecha "hasta", la oferta sigue hasta que vacíes los precios.</>}
               </span>
             )}
           </div>

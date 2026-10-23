@@ -14,6 +14,9 @@ interface FormState {
   webCategoryId: string
   webPrice: string
   compareAtPrice: string
+  offerPrice: string
+  offerFrom: string
+  offerTo: string
   shortDescription: string
   longDescription: string
   ageMin: string
@@ -35,6 +38,9 @@ function toForm(p: WebProduct): FormState {
     webCategoryId: p.webCategoryId !== null ? String(p.webCategoryId) : '',
     webPrice: p.webPrice !== null ? String(p.webPrice) : '',
     compareAtPrice: p.compareAtPrice !== null ? String(p.compareAtPrice) : '',
+    offerPrice: p.offerPrice !== null ? String(p.offerPrice) : '',
+    offerFrom: p.offerFrom ?? '',
+    offerTo: p.offerTo ?? '',
     shortDescription: p.shortDescription,
     longDescription: p.longDescription,
     ageMin: p.ageMin !== null ? String(p.ageMin) : '',
@@ -105,6 +111,7 @@ export default function ProductEditorView({ productId, onBack }: { productId: nu
         giftCategories: form.giftCategories,
         webPrice: numOrNull(form.webPrice),
         compareAtPrice: numOrNull(form.compareAtPrice),
+        offer: { price: numOrNull(form.offerPrice), from: form.offerFrom || null, to: form.offerTo || null },
         shortDescription: form.shortDescription,
         longDescription: form.longDescription,
         ageMin: numOrNull(form.ageMin),
@@ -261,10 +268,26 @@ export default function ProductEditorView({ productId, onBack }: { productId: nu
             <input type="number" value={form.webPrice} onChange={e => setForm({ ...form, webPrice: e.target.value })} />
           </div>
           <div className="field">
-            <label>Precio anterior (tachado, para ofertas)</label>
-            <input type="number" value={form.compareAtPrice} placeholder="Sin oferta"
+            <label>Precio de oferta</label>
+            <input type="number" value={form.offerPrice} placeholder="Sin oferta"
+              onChange={e => setForm({ ...form, offerPrice: e.target.value })} />
+          </div>
+          <div className="field">
+            <label>Precio anterior (tachado)</label>
+            <input type="number" value={form.compareAtPrice}
+              placeholder={form.offerPrice ? 'Vacío = se tacha el precio web normal' : 'Sin tachado'}
               onChange={e => setForm({ ...form, compareAtPrice: e.target.value })} />
-            <span className="hint">Se muestra tachado solo si es mayor al precio web.</span>
+          </div>
+        </div>
+        <div className="field-row">
+          <div className="field">
+            <label>Oferta desde</label>
+            <input type="date" value={form.offerFrom} onChange={e => setForm({ ...form, offerFrom: e.target.value })} />
+          </div>
+          <div className="field">
+            <label>Oferta hasta</label>
+            <input type="date" value={form.offerTo} onChange={e => setForm({ ...form, offerTo: e.target.value })} />
+            <span className="hint">Vencida, la web vuelve sola al precio normal y sin tachado.</span>
           </div>
         </div>
 

@@ -560,6 +560,9 @@ export interface WebProduct {
   giftCategories: string[]
   webPrice: number | null
   compareAtPrice: number | null
+  offerPrice: number | null
+  offerFrom: string | null
+  offerTo: string | null
   shortDescription: string
   longDescription: string
   ageMin: number | null
@@ -606,6 +609,7 @@ export interface WebBanner {
   linkProductUnavailable: boolean
   linkProductPrice: number | null
   linkProductWebPrice: number | null
+  linkProductOfferPrice: number | null
   linkProductCompareAtPrice: number | null
   linkProductImageFilename: string | null
   linkCategoryName: string | null
@@ -626,7 +630,7 @@ export interface SaveWebBannerInput {
   dateTo: string | null
   active: boolean
   sortOrder: number
-  productOffer?: { webPrice: number | null; compareAtPrice: number | null }
+  productOffer?: { offerPrice: number | null; compareAtPrice: number | null }
 }
 
 export interface WebBannersConfig {

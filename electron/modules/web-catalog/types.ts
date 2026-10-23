@@ -29,6 +29,14 @@ export interface WebProduct {
   webPrice: number | null
   /** Precio "antes", tachado en la web (solo si es mayor al precio web efectivo) */
   compareAtPrice: number | null
+  /**
+   * Oferta con vencimiento: precio de oferta y vigencia (YYYY-MM-DD, null = sin
+   * límite). Fuera de vigencia la web vuelve sola al precio normal y sin tachado
+   * (lo decide Hostinger, ver applyOffer() en hostinger/api/db.php).
+   */
+  offerPrice: number | null
+  offerFrom: string | null
+  offerTo: string | null
   shortDescription: string
   longDescription: string
   ageMin: number | null
@@ -62,6 +70,8 @@ export interface SaveWebProductInput {
   webPrice: number | null
   /** undefined = no tocar el que ya tiene (el cliente LAN no lo envía) */
   compareAtPrice?: number | null
+  /** undefined = no tocar la oferta que ya tiene */
+  offer?: { price: number | null; from: string | null; to: string | null }
   shortDescription: string
   longDescription: string
   ageMin: number | null
@@ -115,6 +125,7 @@ export interface WebBanner {
   /** Precios del producto vinculado (para editar la oferta desde el mismo banner) */
   linkProductPrice: number | null
   linkProductWebPrice: number | null
+  linkProductOfferPrice: number | null
   linkProductCompareAtPrice: number | null
   /** Primera imagen web del producto vinculado: la que usa el banner si no tiene una propia */
   linkProductImageFilename: string | null
@@ -137,10 +148,11 @@ export interface SaveWebBannerInput {
   active: boolean
   sortOrder: number
   /**
-   * Solo con linkType 'product': precio web (null = el del catálogo) y precio
-   * anterior tachado del producto vinculado. undefined = no tocar el producto.
+   * Solo con linkType 'product': precio de oferta y precio anterior tachado del
+   * producto vinculado. La oferta toma la vigencia del banner (dateFrom/dateTo).
+   * undefined = no tocar el producto.
    */
-  productOffer?: { webPrice: number | null; compareAtPrice: number | null }
+  productOffer?: { offerPrice: number | null; compareAtPrice: number | null }
 }
 
 export interface WebBannersConfig {

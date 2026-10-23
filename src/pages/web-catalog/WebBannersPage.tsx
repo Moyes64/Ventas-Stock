@@ -15,7 +15,7 @@ const EMPTY_FORM = {
   linkProductId: null as number | null,
   linkCategoryId: null as number | null,
   linkUrl: '',
-  offerWebPrice: '',
+  offerPrice: '',
   offerCompareAt: '',
   showButton: true,
   buttonText: 'Ver oferta',
@@ -126,7 +126,7 @@ export default function WebBannersPage() {
     setForm(prev => ({
       ...prev,
       linkProductId: productId,
-      offerWebPrice: priceText(p?.webPrice ?? null),
+      offerPrice: priceText(p?.offerPrice ?? null),
       offerCompareAt: priceText(p?.compareAtPrice ?? null),
     }))
   }
@@ -151,7 +151,7 @@ export default function WebBannersPage() {
       linkProductId: b.linkProductId,
       linkCategoryId: b.linkCategoryId,
       linkUrl: b.linkUrl,
-      offerWebPrice: priceText(b.linkProductWebPrice),
+      offerPrice: priceText(b.linkProductOfferPrice),
       offerCompareAt: priceText(b.linkProductCompareAtPrice),
       showButton: b.buttonText !== '',
       buttonText: b.buttonText || 'Ver oferta',
@@ -189,7 +189,7 @@ export default function WebBannersPage() {
         active: form.active,
         sortOrder: form.sortOrder,
         productOffer: form.linkType === 'product' ? {
-          webPrice: form.offerWebPrice !== '' ? parseFloat(form.offerWebPrice) : null,
+          offerPrice: form.offerPrice !== '' ? parseFloat(form.offerPrice) : null,
           compareAtPrice: form.offerCompareAt !== '' ? parseFloat(form.offerCompareAt) : null,
         } : undefined,
       })
@@ -348,8 +348,9 @@ export default function WebBannersPage() {
                   <div style={{ fontSize: 20, fontWeight: 700, fontFamily: 'Georgia, serif' }}>{form.title || 'Título del banner'}</div>
                   {form.subtitle && <div style={{ fontSize: 14, opacity: 0.8, marginTop: 4 }}>{form.subtitle}</div>}
                   {form.linkType === 'product' && selectedProduct && (() => {
-                    const now = parseFloat(form.offerWebPrice) || selectedProduct.productPrice
-                    const before = parseFloat(form.offerCompareAt)
+                    const regular = selectedProduct.webPrice ?? selectedProduct.productPrice
+                    const now = parseFloat(form.offerPrice) || regular
+                    const before = parseFloat(form.offerCompareAt) || (form.offerPrice ? regular : 0)
                     return (
                       <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'baseline', justifyContent: previewTextOnly ? 'center' : 'flex-start' }}>
                         <span style={{ fontSize: 18, fontWeight: 700 }}>{money(now)}</span>
@@ -427,24 +428,32 @@ export default function WebBannersPage() {
               <label className="label">💲 Precio de oferta del producto</label>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <div>
-                  <span className="field-hint">Precio web (oferta)</span>
-                  <input className="input" type="number" min={0} step={0.01} value={form.offerWebPrice}
-                    placeholder={`${money(selectedProduct.productPrice)} (catálogo)`}
-                    onChange={e => set('offerWebPrice', e.target.value)} />
+                  <span className="field-hint">Precio de oferta</span>
+                  <input className="input" type="number" min={0} step={0.01} value={form.offerPrice}
+                    placeholder="Sin oferta"
+                    onChange={e => set('offerPrice', e.target.value)} />
                 </div>
                 <div>
                   <span className="field-hint">Precio anterior (tachado)</span>
                   <input className="input" type="number" min={0} step={0.01} value={form.offerCompareAt}
-                    placeholder="Sin tachado"
+                    placeholder={form.offerPrice ? `${money(selectedProduct.webPrice ?? selectedProduct.productPrice)} (normal)` : 'Sin tachado'}
                     onChange={e => set('offerCompareAt', e.target.value)} />
                 </div>
               </div>
               {(() => {
-                const now = parseFloat(form.offerWebPrice) || selectedProduct.productPrice
-                const before = parseFloat(form.offerCompareAt)
-                if (!before) return <span className="field-hint">Precio web vacío = precio del catálogo ({money(selectedProduct.productPrice)}). Es lo que se cobra en la web.</span>
+                const regular = selectedProduct.webPrice ?? selectedProduct.productPrice
+                const now = parseFloat(form.offerPrice) || regular
+                // Sin precio anterior, se tacha el precio normal
+                const before = parseFloat(form.offerCompareAt) || (form.offerPrice ? regular : 0)
+                const until = form.dateTo ? `el ${formatDate(form.dateTo)}` : null
+                if (!before) return <span className="field-hint">Precio normal en la web: {money(regular)}. Cargá un precio de oferta para que el banner la publique.</span>
                 if (before <= now) return <span className="field-hint" style={{ color: 'var(--color-danger)' }}>El precio anterior tiene que ser mayor a {money(now)}.</span>
-                return <span className="field-hint">La web muestra <s>{money(before)}</s> {money(now)} · OFERTA -{Math.round((1 - now / before) * 100)}%. Se guarda en el producto al guardar el banner; cuando termine la oferta, vaciá ambos precios.</span>
+                return <span className="field-hint">
+                  La web muestra <s>{money(before)}</s> {money(now)} · OFERTA -{Math.round((1 - now / before) * 100)}%.{' '}
+                  {until
+                    ? <>La oferta vence sola con el banner ({until}): después vuelve a {money(regular)}, sin tachado.</>
+                    : <>Sin fecha "hasta", la oferta sigue hasta que vacíes los precios.</>}
+                </span>
               })()}
             </div>
           )}

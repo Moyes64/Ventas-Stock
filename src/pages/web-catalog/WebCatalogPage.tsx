@@ -287,8 +287,10 @@ export default function WebCatalogPage() {
                 <div className="wc-price">
                   $ {(wp.webPrice ?? wp.productPrice).toFixed(2)}
                   {wp.webPrice !== null && <span className="wc-price-web"> (precio web)</span>}
-                  {wp.compareAtPrice !== null && wp.compareAtPrice > (wp.webPrice ?? wp.productPrice) && (
-                    <span className="wc-price-web"> (antes $ {wp.compareAtPrice.toFixed(2)})</span>
+                  {wp.offerPrice !== null && (
+                    <span className="wc-price-web">
+                      {' '}(oferta $ {wp.offerPrice.toFixed(2)}{wp.offerTo ? ` hasta ${wp.offerTo.split('-').reverse().join('/')}` : ''})
+                    </span>
                   )}
                 </div>
               </div>

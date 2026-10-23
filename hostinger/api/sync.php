@@ -90,15 +90,17 @@ try {
     if (!empty($payload['webProducts']) && is_array($payload['webProducts'])) {
         $stmtProd = $pdo->prepare("
             INSERT INTO web_products
-                (id, slug, name, visible, featured, featured_order, gift_categories, price, compare_at_price, stock, web_category_id,
+                (id, slug, name, visible, featured, featured_order, gift_categories, price, compare_at_price, offer_price, offer_from, offer_to, stock, web_category_id,
                  short_description, long_description, age_min, players_min, players_max,
                  play_time_min, difficulty, video_url, tags, sort_order)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON DUPLICATE KEY UPDATE
                 slug=VALUES(slug), name=VALUES(name), visible=VALUES(visible),
                 featured=VALUES(featured), featured_order=VALUES(featured_order),
                 gift_categories=VALUES(gift_categories),
-                price=VALUES(price), compare_at_price=VALUES(compare_at_price), stock=VALUES(stock),
+                price=VALUES(price), compare_at_price=VALUES(compare_at_price),
+                offer_price=VALUES(offer_price), offer_from=VALUES(offer_from), offer_to=VALUES(offer_to),
+                stock=VALUES(stock),
                 web_category_id=VALUES(web_category_id),
                 short_description=VALUES(short_description),
                 long_description=VALUES(long_description),
@@ -125,6 +127,9 @@ try {
                 $prod['giftCategories'] ?? '',
                 $prod['price'],
                 $prod['compareAtPrice'] ?? null,
+                $prod['offerPrice'] ?? null,
+                $prod['offerFrom'] ?? null,
+                $prod['offerTo'] ?? null,
                 $prod['stock'] ?? 0,
                 $prod['webCategoryId'] ?? null,
                 $prod['shortDescription'] ?? '',

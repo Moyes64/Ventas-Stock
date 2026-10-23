@@ -296,7 +296,8 @@ export class SyncService {
       ORDER BY wp.sort_order ASC, p.name ASC
     `).all() as Array<{
       product_id: number; product_name: string; product_price: number; product_stock: number
-      web_category_id: number | null; featured: number; featured_order: number; gift_categories: string; web_price: number | null; compare_at_price: number | null; visible: number
+      web_category_id: number | null; featured: number; featured_order: number; gift_categories: string; web_price: number | null; compare_at_price: number | null
+      offer_price: number | null; offer_from: string | null; offer_to: string | null; visible: number
       short_description: string; long_description: string; age_min: number | null
       players_min: number | null; players_max: number | null; play_time_min: number | null
       difficulty: number | null; video_url: string; tags: string; sort_order: number
@@ -326,7 +327,10 @@ export class SyncService {
         featuredOrder: r.featured_order,
         giftCategories: r.gift_categories,
         price,
-        compareAtPrice: r.compare_at_price !== null && r.compare_at_price > price ? r.compare_at_price : null,
+        compareAtPrice: r.compare_at_price,
+        offerPrice: r.offer_price,
+        offerFrom: r.offer_from,
+        offerTo: r.offer_to,
         stock: r.product_stock,
         webCategoryId: r.web_category_id,
         shortDescription: r.short_description,

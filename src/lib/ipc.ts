@@ -380,7 +380,8 @@ export const webCatalog = {
   deleteCategory:  (id: number) => electron.webCatalog.deleteCategory(id) as Promise<void>,
   listProducts:    () => electron.webCatalog.listProducts() as Promise<WebProduct[]>,
   getProduct:      (productId: number) => electron.webCatalog.getProduct(productId) as Promise<WebProduct | null>,
-  saveProduct:     (input: Partial<WebProduct>) => electron.webCatalog.saveProduct(input) as Promise<WebProduct>,
+  saveProduct:     (input: Partial<WebProduct> & { offer?: { price: number | null; from: string | null; to: string | null } }) =>
+    electron.webCatalog.saveProduct(input) as Promise<WebProduct>,
   listUnpublished:  () => electron.webCatalog.listUnpublished() as Promise<UnpublishedProduct[]>,
   getNextSortOrder: (webCategoryId: number | null) => electron.webCatalog.getNextSortOrder(webCategoryId) as Promise<number>,
   getNextFeaturedOrder: () => electron.webCatalog.getNextFeaturedOrder() as Promise<number>,

@@ -78,6 +78,9 @@ interface WebProductRow {
   gift_categories: string
   web_price: number | null
   compare_at_price: number | null
+  offer_price: number | null
+  offer_from: string | null
+  offer_to: string | null
   short_description: string
   long_description: string
   age_min: number | null
@@ -129,6 +132,9 @@ function mapProduct(r: WebProductRow, images: WebProductImage[]): WebProduct {
     giftCategories: parseGiftCategories(r.gift_categories),
     webPrice: r.web_price,
     compareAtPrice: r.compare_at_price,
+    offerPrice: r.offer_price,
+    offerFrom: r.offer_from,
+    offerTo: r.offer_to,
     shortDescription: r.short_description,
     longDescription: r.long_description,
     ageMin: r.age_min,
@@ -262,6 +268,12 @@ export class WebCatalogService {
         input.ageMin, input.playersMin, input.playersMax, input.playTimeMin,
         input.difficulty, input.videoUrl, input.tags, input.sortOrder,
       )
+    }
+    if (input.offer !== undefined) {
+      this.db.prepare(`
+        UPDATE web_products SET offer_price=?, offer_from=?, offer_to=?, updated_at=datetime('now','localtime')
+        WHERE product_id=?
+      `).run(input.offer.price, input.offer.from || null, input.offer.to || null, input.productId)
     }
     return this.getWebProduct(input.productId)!
   }

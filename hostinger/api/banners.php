@@ -27,6 +27,7 @@ try {
 
     $stmt = $pdo->prepare("
         SELECT b.*, p.price AS product_price, p.compare_at_price AS product_compare_at_price,
+               p.offer_price AS product_offer_price, p.offer_from AS product_offer_from, p.offer_to AS product_offer_to,
                (SELECT i.filename FROM web_product_images i
                  WHERE i.product_id = b.link_product_id ORDER BY i.sort_order ASC LIMIT 1) AS product_image
         FROM web_banners b
@@ -38,23 +39,31 @@ try {
     ");
     $stmt->execute([$today, $today]);
 
-    echo json_encode(array_map(fn($b) => [
-        'id'          => (int)$b['id'],
-        'title'       => $b['title'],
-        'subtitle'    => $b['subtitle'],
-        'badge'       => $b['badge'],
-        'fine_print'  => $b['fine_print'],
-        'theme'       => $b['theme'],
-        // Imagen propia del banner; si no tiene y lleva a un producto, la primera del producto
-        'image_url'   => $b['image_filename'] ? BANNER_IMAGES_URL . '/' . $b['image_filename']
-                       : ($b['product_image'] ? productImageUrl($b['product_image']) : null),
-        'link_href'   => $b['link_href'],
-        'button_text' => $b['button_text'],
-        // Solo en banners de producto: precio actual y anterior (tachado si es mayor)
-        'price'            => $b['link_product_id'] ? (float)$b['product_price'] : null,
-        'compare_at_price' => $b['link_product_id'] && $b['product_compare_at_price'] !== null
-            ? (float)$b['product_compare_at_price'] : null,
-    ], $stmt->fetchAll()));
+    echo json_encode(array_map(function ($b) {
+        $offer = $b['link_product_id'] ? applyOffer([
+            'price'            => $b['product_price'],
+            'compare_at_price' => $b['product_compare_at_price'],
+            'offer_price'      => $b['product_offer_price'],
+            'offer_from'       => $b['product_offer_from'],
+            'offer_to'         => $b['product_offer_to'],
+        ]) : null;
+        return [
+            'id'          => (int)$b['id'],
+            'title'       => $b['title'],
+            'subtitle'    => $b['subtitle'],
+            'badge'       => $b['badge'],
+            'fine_print'  => $b['fine_print'],
+            'theme'       => $b['theme'],
+            // Imagen propia del banner; si no tiene y lleva a un producto, la primera del producto
+            'image_url'   => $b['image_filename'] ? BANNER_IMAGES_URL . '/' . $b['image_filename']
+                           : ($b['product_image'] ? productImageUrl($b['product_image']) : null),
+            'link_href'   => $b['link_href'],
+            'button_text' => $b['button_text'],
+            // Solo en banners de producto: precio actual y anterior (tachado si es mayor)
+            'price'            => $offer ? $offer['price'] : null,
+            'compare_at_price' => $offer ? $offer['compare_at_price'] : null,
+        ];
+    }, $stmt->fetchAll()));
 
 } catch (Exception $e) {
     apiError($e);

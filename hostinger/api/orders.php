@@ -204,10 +204,12 @@ if ($method === 'POST' && $action === null) {
             $requested[$pid] = ($requested[$pid] ?? 0) + $qty;
         }
         $placeholders = implode(',', array_fill(0, count($requested), '?'));
-        $stmtProducts = $pdo->prepare("SELECT id, name, price, stock FROM web_products WHERE visible = 1 AND id IN ($placeholders)");
+        $stmtProducts = $pdo->prepare("SELECT id, name, price, compare_at_price, offer_price, offer_from, offer_to, stock
+                                       FROM web_products WHERE visible = 1 AND id IN ($placeholders)");
         $stmtProducts->execute(array_keys($requested));
         $dbProducts = [];
-        foreach ($stmtProducts->fetchAll() as $p) $dbProducts[(int)$p['id']] = $p;
+        // applyOffer(): se cobra el precio vigente hoy (oferta o normal), igual que lo que muestra la web
+        foreach ($stmtProducts->fetchAll() as $p) $dbProducts[(int)$p['id']] = applyOffer($p);
 
         $validItems = [];
         $stockErrors = [];

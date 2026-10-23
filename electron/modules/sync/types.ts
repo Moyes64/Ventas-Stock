@@ -73,8 +73,12 @@ export interface SyncWebProduct {
   featured: boolean
   featuredOrder: number
   giftCategories: string // slugs separados por coma (ver web-catalog/giftCategories.ts)
-  price: number          // precio efectivo web
-  compareAtPrice: number | null // precio "antes" (tachado en la web), solo si es mayor a price
+  price: number          // precio web normal (web_price ?? catálogo)
+  // Hostinger decide el precio a mostrar/cobrar según la fecha (applyOffer() en db.php)
+  compareAtPrice: number | null // precio "antes" (tachado)
+  offerPrice: number | null
+  offerFrom: string | null      // YYYY-MM-DD, null = sin límite
+  offerTo: string | null
   stock: number
   webCategoryId: number | null
   shortDescription: string
