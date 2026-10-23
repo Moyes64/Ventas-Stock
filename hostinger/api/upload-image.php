@@ -106,8 +106,10 @@ try {
         exit;
     }
 
-    // Solo escribir si cambió (comparar tamaño como proxy rápido)
-    if (!file_exists($destPath) || filesize($destPath) !== strlen($binaryData)) {
+    // Solo escribir si cambió el contenido (antes se comparaba el tamaño: una foto
+    // nueva con el mismo peso no se actualizaba). Reescribirla cambia su fecha y
+    // con eso la versión de la URL (ver productImageUrl() en db.php).
+    if (!file_exists($destPath) || md5_file($destPath) !== md5($binaryData)) {
         file_put_contents($destPath, $binaryData);
     }
 

@@ -47,7 +47,7 @@ try {
         'theme'       => $b['theme'],
         // Imagen propia del banner; si no tiene y lleva a un producto, la primera del producto
         'image_url'   => $b['image_filename'] ? BANNER_IMAGES_URL . '/' . $b['image_filename']
-                       : ($b['product_image'] ? IMAGES_BASE_URL . '/' . $b['product_image'] : null),
+                       : ($b['product_image'] ? productImageUrl($b['product_image']) : null),
         'link_href'   => $b['link_href'],
         'button_text' => $b['button_text'],
         // Solo en banners de producto: precio actual y anterior (tachado si es mayor)

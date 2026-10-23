@@ -133,7 +133,7 @@ function getProductImages(PDO $pdo, int $productId, int $limit = 10): array {
     $stmt->execute([$productId]);
     return array_map(function($r) {
         return [
-            'url'        => IMAGES_BASE_URL . '/' . $r['filename'],
+            'url'        => productImageUrl($r['filename']),
             'sort_order' => (int)$r['sort_order'],
         ];
     }, $stmt->fetchAll());

@@ -50,6 +50,19 @@ define('SITE_URL', getenv('SITE_URL') ?: 'https://pandorabox-web.vercel.app');
 // URL del webhook — siempre apunta al servidor PHP
 define('WEBHOOK_URL', 'https://lemonchiffon-dog-944242.hostingersite.com/pandorabox/api/webhook.php');
 
+/**
+ * URL pública de una imagen de producto con su versión (?v=<fecha del archivo>).
+ * Las imágenes se guardan siempre como <id>/img_<orden>.<ext>, así que al
+ * reemplazar una foto la URL era la misma y la CDN de Hostinger (cachea 7 días)
+ * y el optimizador de Vercel seguían mostrando la vieja. Con la versión, una
+ * foto nueva = URL nueva.
+ */
+function productImageUrl(string $filename): string {
+    $url = IMAGES_BASE_URL . '/' . $filename;
+    $mtime = @filemtime(IMAGES_BASE_PATH . '/' . $filename);
+    return $mtime ? $url . '?v=' . $mtime : $url;
+}
+
 function getConnection(): PDO {
     static $pdo = null;
     if ($pdo === null) {
