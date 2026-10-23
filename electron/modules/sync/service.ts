@@ -38,6 +38,9 @@ export class SyncService {
   private configPath: string
   private lastResult: SyncResult | null = null
   private timer: ReturnType<typeof setInterval> | null = null
+  // Una subida de imágenes completa tarda varios minutos (re-sube todas las de
+  // productos); sin esto cada sync arrancaba otra tanda encima de la anterior.
+  private imagesSyncRunning = false
   private readonly financeService: FinanceService
 
   constructor(private readonly db: Database) {
@@ -898,9 +901,28 @@ export class SyncService {
   // ── Subida de imágenes (separada del payload principal) ───────────────────
 
   private async syncImages(config: SyncConfig): Promise<void> {
+    if (this.imagesSyncRunning) return
+    this.imagesSyncRunning = true
+    try {
+      await this.uploadAllImages(config)
+    } finally {
+      this.imagesSyncRunning = false
+    }
+  }
+
+  private async uploadAllImages(config: SyncConfig): Promise<void> {
     const imagesDir = path.join(app.getPath('userData'), 'web-images')
     const baseUrl = config.apiUrl.replace(/\/api\/sync\.php$/, '')
     const uploadUrl = new URL(`${baseUrl}/api/upload-image.php`)
+
+    // Primero las imágenes propias de los banners (son pocas): antes iban al
+    // final y el banner se veía con la imagen rota hasta que terminaban de
+    // subirse todas las de productos. upload-image.php las guarda con el
+    // nombre que ya recibió en el payload del sync.
+    for (const banner of this.buildWebBanners()) {
+      if (!banner.imageFilename) continue
+      await this.postImage(config, uploadUrl, path.join(imagesDir, banner.imageFilename), { bannerId: banner.id })
+    }
 
     const rows = this.db.prepare(`
       SELECT wp.product_id, wpi.filename, wpi.sort_order
@@ -915,13 +937,6 @@ export class SyncService {
         productId: row.product_id,
         sortOrder: row.sort_order,
       })
-    }
-
-    // Imágenes de los banners publicados (upload-image.php las guarda con el
-    // nombre que ya recibió en el payload del sync).
-    for (const banner of this.buildWebBanners()) {
-      if (!banner.imageFilename) continue
-      await this.postImage(config, uploadUrl, path.join(imagesDir, banner.imageFilename), { bannerId: banner.id })
     }
   }
 

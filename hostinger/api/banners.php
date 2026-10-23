@@ -26,7 +26,9 @@ try {
     $today = substr(argentinaNow(), 0, 10);
 
     $stmt = $pdo->prepare("
-        SELECT b.*, p.price AS product_price, p.compare_at_price AS product_compare_at_price
+        SELECT b.*, p.price AS product_price, p.compare_at_price AS product_compare_at_price,
+               (SELECT i.filename FROM web_product_images i
+                 WHERE i.product_id = b.link_product_id ORDER BY i.sort_order ASC LIMIT 1) AS product_image
         FROM web_banners b
         LEFT JOIN web_products p ON p.id = b.link_product_id
         WHERE (b.date_from IS NULL OR b.date_from <= ?)
@@ -43,7 +45,9 @@ try {
         'badge'       => $b['badge'],
         'fine_print'  => $b['fine_print'],
         'theme'       => $b['theme'],
-        'image_url'   => $b['image_filename'] ? BANNER_IMAGES_URL . '/' . $b['image_filename'] : null,
+        // Imagen propia del banner; si no tiene y lleva a un producto, la primera del producto
+        'image_url'   => $b['image_filename'] ? BANNER_IMAGES_URL . '/' . $b['image_filename']
+                       : ($b['product_image'] ? IMAGES_BASE_URL . '/' . $b['product_image'] : null),
         'link_href'   => $b['link_href'],
         'button_text' => $b['button_text'],
         // Solo en banners de producto: precio actual y anterior (tachado si es mayor)

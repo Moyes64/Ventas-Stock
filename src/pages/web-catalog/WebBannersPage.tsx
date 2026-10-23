@@ -101,10 +101,17 @@ export default function WebBannersPage() {
 
   useEffect(() => { void load() }, [])
 
+  // Banner de producto sin imagen propia: se usa la primera imagen web del producto.
+  const productImage = form.linkType === 'product'
+    ? products.find(p => p.productId === form.linkProductId)?.images[0]?.filename ?? null
+    : null
+  const ownImage = editing?.imageFilename ?? null
+  const shownImage = ownImage ?? productImage
+
   useEffect(() => {
-    if (!editing?.imageFilename) { setImageUrl(null); return }
-    void webCatalog.getImageDataUrl(editing.imageFilename).then(setImageUrl)
-  }, [editing?.imageFilename])
+    if (!shownImage) { setImageUrl(null); return }
+    void webCatalog.getImageDataUrl(shownImage).then(setImageUrl)
+  }, [shownImage])
 
   function set<K extends keyof typeof form>(key: K, value: typeof form[K]) {
     setForm(prev => ({ ...prev, [key]: value }))
@@ -239,7 +246,7 @@ export default function WebBannersPage() {
   }
 
   const hasLink = form.linkType !== 'none'
-  const previewTextOnly = !(editing && imageUrl) && !(hasLink && form.showButton && form.buttonText)
+  const previewTextOnly = !imageUrl && !(hasLink && form.showButton && form.buttonText)
   const theme = THEME_STYLES[form.theme]
 
   return (
@@ -327,7 +334,7 @@ export default function WebBannersPage() {
                 display: 'flex', gap: 16, alignItems: 'center', padding: 16, borderRadius: 16,
                 background: theme.bg, border: `1px solid ${theme.border}`, color: theme.text,
               }}>
-                {editing && imageUrl && (
+                {imageUrl && (
                   <img src={imageUrl} alt="" style={{ width: 120, height: 120, objectFit: 'cover', borderRadius: 12, flexShrink: 0 }} />
                 )}
                 {/* Solo texto (sin imagen ni botón): centrado, igual que en la web */}
@@ -505,23 +512,29 @@ export default function WebBannersPage() {
           </div>
 
           <div className="form-group">
-            <label className="label">Imagen (opcional)</label>
-            {!editing ? (
-              <span className="field-hint">Guardá el banner para poder cargarle una imagen.</span>
-            ) : (
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                {imageUrl && <img src={imageUrl} alt="" style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 8 }} />}
-                <button className="btn btn-ghost btn-sm" onClick={() => void handleUploadImage()}>
-                  {editing.imageFilename ? 'Cambiar imagen' : '🖼️ Cargar imagen'}
-                </button>
-                {editing.imageFilename && (
-                  <button className="btn btn-ghost btn-sm" style={{ color: 'var(--color-danger)' }} onClick={() => void handleRemoveImage()}>
-                    Quitar
+            <label className="label">Imagen {form.linkType === 'product' ? '' : '(opcional)'}</label>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              {imageUrl && <img src={imageUrl} alt="" style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 8 }} />}
+              {editing ? (
+                <>
+                  <button className="btn btn-ghost btn-sm" onClick={() => void handleUploadImage()}>
+                    {ownImage ? 'Cambiar imagen' : form.linkType === 'product' ? '🖼️ Usar otra imagen' : '🖼️ Cargar imagen'}
                   </button>
-                )}
-              </div>
-            )}
-            <span className="field-hint">Se muestra cuadrada a la izquierda. Sin imagen, el banner es solo texto.</span>
+                  {ownImage && (
+                    <button className="btn btn-ghost btn-sm" style={{ color: 'var(--color-danger)' }} onClick={() => void handleRemoveImage()}>
+                      {form.linkType === 'product' ? 'Volver a la del producto' : 'Quitar'}
+                    </button>
+                  )}
+                </>
+              ) : form.linkType !== 'product' && (
+                <span className="field-hint">Guardá el banner para poder cargarle una imagen.</span>
+              )}
+            </div>
+            <span className="field-hint">
+              {form.linkType === 'product' && !ownImage
+                ? (productImage ? 'Se usa la primera imagen del producto en el catálogo web.' : 'El producto no tiene imágenes en el catálogo web.')
+                : 'Se muestra cuadrada a la izquierda. Sin imagen, el banner es solo texto.'}
+            </span>
           </div>
 
           {error && <p className="error">{error}</p>}

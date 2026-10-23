@@ -116,6 +116,8 @@ export interface WebBanner {
   linkProductPrice: number | null
   linkProductWebPrice: number | null
   linkProductCompareAtPrice: number | null
+  /** Primera imagen web del producto vinculado: la que usa el banner si no tiene una propia */
+  linkProductImageFilename: string | null
   linkCategoryName: string | null
 }
 

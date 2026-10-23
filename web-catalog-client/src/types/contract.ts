@@ -115,6 +115,7 @@ export interface WebBanner {
   linkProductPrice: number | null
   linkProductWebPrice: number | null
   linkProductCompareAtPrice: number | null
+  linkProductImageFilename: string | null
   linkCategoryName: string | null
 }
 

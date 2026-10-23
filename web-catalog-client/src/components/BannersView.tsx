@@ -270,6 +270,10 @@ export default function BannersView() {
   if (loading) return <p className="muted">Cargando...</p>
 
   const hasLink = form.linkType !== 'none'
+  // Banner de producto sin imagen propia: se usa la primera imagen web del producto.
+  const ownImage = editing?.imageFilename ?? null
+  const productImage = form.linkType === 'product' ? selectedProduct?.images[0]?.filename ?? null : null
+  const shownImage = ownImage ?? productImage
   const offerNow = selectedProduct
     ? (Number(form.offerWebPrice) || selectedProduct.productPrice)
     : 0
@@ -452,26 +456,34 @@ export default function BannersView() {
         </div>
 
         <div className="field">
-          <label>Imagen (opcional)</label>
-          {!editing ? (
-            <span className="hint">Guardá el banner para poder cargarle una imagen.</span>
-          ) : (
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              {editing.imageFilename && (
-                <div className="image-item" style={{ width: 64 }}>
-                  <ProductImage filename={editing.imageFilename} alt="" />
-                </div>
-              )}
-              <button type="button" className="btn btn-sm" disabled={uploading} onClick={() => fileInputRef.current?.click()}>
-                {uploading ? 'Subiendo...' : editing.imageFilename ? 'Cambiar imagen' : '🖼️ Cargar imagen'}
-              </button>
-              {editing.imageFilename && (
-                <button type="button" className="btn btn-sm btn-danger" onClick={() => { void handleRemoveImage() }}>Quitar</button>
-              )}
-              <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { void handleFile(e) }} />
-            </div>
-          )}
-          <span className="hint">Se muestra cuadrada a la izquierda. Sin imagen, el banner es solo texto.</span>
+          <label>Imagen {form.linkType === 'product' ? '' : '(opcional)'}</label>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            {shownImage && (
+              <div className="image-item" style={{ width: 64 }}>
+                <ProductImage filename={shownImage} alt="" />
+              </div>
+            )}
+            {editing ? (
+              <>
+                <button type="button" className="btn btn-sm" disabled={uploading} onClick={() => fileInputRef.current?.click()}>
+                  {uploading ? 'Subiendo...' : ownImage ? 'Cambiar imagen' : form.linkType === 'product' ? '🖼️ Usar otra imagen' : '🖼️ Cargar imagen'}
+                </button>
+                {ownImage && (
+                  <button type="button" className="btn btn-sm btn-danger" onClick={() => { void handleRemoveImage() }}>
+                    {form.linkType === 'product' ? 'Volver a la del producto' : 'Quitar'}
+                  </button>
+                )}
+                <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { void handleFile(e) }} />
+              </>
+            ) : form.linkType !== 'product' && (
+              <span className="hint">Guardá el banner para poder cargarle una imagen.</span>
+            )}
+          </div>
+          <span className="hint">
+            {form.linkType === 'product' && !ownImage
+              ? (productImage ? 'Se usa la primera imagen del producto en el catálogo web.' : 'El producto no tiene imágenes en el catálogo web.')
+              : 'Se muestra cuadrada a la izquierda. Sin imagen, el banner es solo texto.'}
+          </span>
         </div>
 
         {error && <p className="error">{error}</p>}

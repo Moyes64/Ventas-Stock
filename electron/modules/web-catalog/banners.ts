@@ -33,6 +33,7 @@ interface WebBannerRow {
   link_product_price: number | null
   link_product_web_price: number | null
   link_product_compare_at_price: number | null
+  link_product_image: string | null
   link_category_name: string | null
 }
 
@@ -61,6 +62,7 @@ function mapBanner(r: WebBannerRow): WebBanner {
     linkProductPrice: r.link_product_price,
     linkProductWebPrice: r.link_product_web_price,
     linkProductCompareAtPrice: r.link_product_compare_at_price,
+    linkProductImageFilename: r.link_type === 'product' ? r.link_product_image : null,
     linkCategoryName: r.link_category_name,
   }
 }
@@ -70,6 +72,8 @@ const SELECT_BANNERS = `
          p.name AS link_product_name, wp.visible AS link_product_visible,
          p.price AS link_product_price, wp.web_price AS link_product_web_price,
          wp.compare_at_price AS link_product_compare_at_price,
+         (SELECT filename FROM web_product_images
+           WHERE product_id = b.link_product_id ORDER BY sort_order ASC LIMIT 1) AS link_product_image,
          c.name AS link_category_name
   FROM web_banners b
   LEFT JOIN products p        ON p.id = b.link_product_id
