@@ -5,6 +5,12 @@ import http from 'http'
 import { URL } from 'url'
 
 const httpsAgent = new https.Agent({ rejectUnauthorized: false })
+
+// Registro local de qué imagen ya está subida a Hostinger en cada lugar
+// ("p:<productId>:<sortOrder>" / "b:<bannerId>" → "<archivo local>|<bytes>").
+// Antes cada sync re-subía todas las imágenes de productos (~1000, ~160 MB cada
+// 5 minutos); ahora solo las nuevas o cambiadas.
+const UPLOADED_IMAGES_FILENAME = 'web-images-uploaded.json'
 import type { Database } from 'better-sqlite3'
 import { app } from 'electron'
 import { localToday, utcToLocalDate } from '../../lib/date'
@@ -910,33 +916,83 @@ export class SyncService {
     }
   }
 
+  private uploadedImagesPath(): string {
+    return path.join(app.getPath('userData'), UPLOADED_IMAGES_FILENAME)
+  }
+
+  private readUploadedImages(): Record<string, string> {
+    try {
+      return JSON.parse(fs.readFileSync(this.uploadedImagesPath(), 'utf-8')) as Record<string, string>
+    } catch {
+      return {}
+    }
+  }
+
   private async uploadAllImages(config: SyncConfig): Promise<void> {
     const imagesDir = path.join(app.getPath('userData'), 'web-images')
     const baseUrl = config.apiUrl.replace(/\/api\/sync\.php$/, '')
     const uploadUrl = new URL(`${baseUrl}/api/upload-image.php`)
+    const uploaded = this.readUploadedImages()
+    let dirty = false
+    let pending = 0
 
-    // Primero las imágenes propias de los banners (son pocas): antes iban al
-    // final y el banner se veía con la imagen rota hasta que terminaban de
-    // subirse todas las de productos. upload-image.php las guarda con el
-    // nombre que ya recibió en el payload del sync.
-    for (const banner of this.buildWebBanners()) {
-      if (!banner.imageFilename) continue
-      await this.postImage(config, uploadUrl, path.join(imagesDir, banner.imageFilename), { bannerId: banner.id })
+    const save = () => {
+      if (!dirty) return
+      try {
+        fs.writeFileSync(this.uploadedImagesPath(), JSON.stringify(uploaded), 'utf-8')
+        dirty = false
+      } catch {
+        // si no se puede guardar, en el próximo sync se vuelven a subir
+      }
     }
 
-    const rows = this.db.prepare(`
-      SELECT wp.product_id, wpi.filename, wpi.sort_order
-      FROM web_product_images wpi
-      JOIN web_products wp ON wp.product_id = wpi.product_id
-      WHERE wp.visible = 1
-      ORDER BY wp.product_id, wpi.sort_order
-    `).all() as Array<{ product_id: number; filename: string; sort_order: number }>
+    // Sube una imagen solo si cambió desde la última vez que se subió a ese lugar.
+    // (No se puede verificar contra lo publicado: la CDN de Hostinger cachea y
+    // recomprime las imágenes, así que el tamaño servido no coincide con el real.)
+    const ensure = async (
+      key: string,
+      filename: string,
+      target: { productId: number; sortOrder: number } | { bannerId: number },
+    ) => {
+      const filePath = path.join(imagesDir, filename)
+      if (!fs.existsSync(filePath)) return
+      const signature = `${filename}|${fs.statSync(filePath).size}`
+      if (uploaded[key] === signature) return
+      if (await this.postImage(config, uploadUrl, filePath, target)) {
+        uploaded[key] = signature
+        dirty = true
+        pending++
+      }
+    }
 
-    for (const row of rows) {
-      await this.postImage(config, uploadUrl, path.join(imagesDir, row.filename), {
-        productId: row.product_id,
-        sortOrder: row.sort_order,
-      })
+    try {
+      // Primero las imágenes propias de los banners (son pocas): antes iban al
+      // final y el banner se veía con la imagen rota hasta que terminaban de
+      // subirse todas las de productos. upload-image.php las guarda con el
+      // nombre que ya recibió en el payload del sync.
+      for (const banner of this.buildWebBanners()) {
+        if (!banner.imageFilename) continue
+        await ensure(`b:${banner.id}`, banner.imageFilename, { bannerId: banner.id })
+      }
+      save()
+
+      const rows = this.db.prepare(`
+        SELECT wp.product_id, wpi.filename, wpi.sort_order
+        FROM web_product_images wpi
+        JOIN web_products wp ON wp.product_id = wpi.product_id
+        WHERE wp.visible = 1
+        ORDER BY wp.product_id, wpi.sort_order
+      `).all() as Array<{ product_id: number; filename: string; sort_order: number }>
+
+      for (const row of rows) {
+        // Clave = lugar en el servidor (upload-image.php la guarda como img_<orden> del producto)
+        await ensure(`p:${row.product_id}:${row.sort_order}`, row.filename,
+          { productId: row.product_id, sortOrder: row.sort_order })
+        // Se guarda de a tandas para no perder lo avanzado si la app se cierra a mitad.
+        if (pending >= 25) { save(); pending = 0 }
+      }
+    } finally {
+      save()
     }
   }
 
@@ -945,8 +1001,8 @@ export class SyncService {
     uploadUrl: URL,
     filePath: string,
     target: { productId: number; sortOrder: number } | { bannerId: number },
-  ): Promise<void> {
-    if (!fs.existsSync(filePath)) return
+  ): Promise<boolean> {
+    if (!fs.existsSync(filePath)) return false
     const isHttps = uploadUrl.protocol === 'https:'
     const ext = path.extname(filePath).toLowerCase().replace('.', '') || 'jpeg'
     const mime = ext === 'jpg' ? 'jpeg' : ext
@@ -956,7 +1012,8 @@ export class SyncService {
       base64: `data:image/${mime};base64,${base64}`,
     })
 
-    await new Promise<void>((resolve) => {
+    // true solo si upload-image.php confirmó { ok: true }
+    return new Promise<boolean>((resolve) => {
       const options = {
         hostname: uploadUrl.hostname,
         port: uploadUrl.port || (isHttps ? 443 : 80),
@@ -969,9 +1026,19 @@ export class SyncService {
         },
         agent: isHttps ? httpsAgent : undefined,
       }
-      const req = (isHttps ? https : http).request(options, res => { res.resume(); res.on('end', resolve) })
-      req.on('error', () => resolve())
-      req.setTimeout(30000, () => { req.destroy(); resolve() })
+      const req = (isHttps ? https : http).request(options, res => {
+        let data = ''
+        res.on('data', chunk => { data += chunk })
+        res.on('end', () => {
+          try {
+            resolve(res.statusCode === 200 && (JSON.parse(data) as { ok?: boolean }).ok === true)
+          } catch {
+            resolve(false)
+          }
+        })
+      })
+      req.on('error', () => resolve(false))
+      req.setTimeout(30000, () => { req.destroy(); resolve(false) })
       req.write(body)
       req.end()
     })
