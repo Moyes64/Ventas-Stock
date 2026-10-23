@@ -3,7 +3,7 @@
  * sync.php — Recibe el snapshot desde Ventas-Stock (Electron)
  * Método: POST
  * Header: X-Api-Key: <api_key>
- * Body: JSON con timestamp, empresa, stock, ventasHoy, caja, webCategories, webProducts
+ * Body: JSON con timestamp, empresa, stock, ventasHoy, caja, webCategories, webProducts, webBanners
  *
  * Subir a: public_html/pandorabox/api/sync.php
  */
@@ -90,15 +90,15 @@ try {
     if (!empty($payload['webProducts']) && is_array($payload['webProducts'])) {
         $stmtProd = $pdo->prepare("
             INSERT INTO web_products
-                (id, slug, name, visible, featured, featured_order, gift_categories, price, stock, web_category_id,
+                (id, slug, name, visible, featured, featured_order, gift_categories, price, compare_at_price, stock, web_category_id,
                  short_description, long_description, age_min, players_min, players_max,
                  play_time_min, difficulty, video_url, tags, sort_order)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON DUPLICATE KEY UPDATE
                 slug=VALUES(slug), name=VALUES(name), visible=VALUES(visible),
                 featured=VALUES(featured), featured_order=VALUES(featured_order),
                 gift_categories=VALUES(gift_categories),
-                price=VALUES(price), stock=VALUES(stock),
+                price=VALUES(price), compare_at_price=VALUES(compare_at_price), stock=VALUES(stock),
                 web_category_id=VALUES(web_category_id),
                 short_description=VALUES(short_description),
                 long_description=VALUES(long_description),
@@ -124,6 +124,7 @@ try {
                 $prod['featuredOrder'] ?? 0,
                 $prod['giftCategories'] ?? '',
                 $prod['price'],
+                $prod['compareAtPrice'] ?? null,
                 $prod['stock'] ?? 0,
                 $prod['webCategoryId'] ?? null,
                 $prod['shortDescription'] ?? '',
@@ -152,6 +153,42 @@ try {
                 $stmtStock->execute([$item['currentStock'] ?? 0, $item['id']]);
                 $stats['stock_updated']++;
             }
+        }
+    }
+
+    // ── Banners de la home ────────────────────────────────────────────────
+    // Reemplazo completo: Electron manda solo los activos (lista vacía = no
+    // mostrar ninguno). Se usa isset y no !empty para que una lista vacía
+    // también borre los que había.
+    if (isset($payload['webBanners']) && is_array($payload['webBanners'])) {
+        $pdo->exec('DELETE FROM web_banners');
+        $stmtBanner = $pdo->prepare("
+            INSERT INTO web_banners
+                (id, title, subtitle, badge, fine_print, theme, image_filename, link_href,
+                 link_product_id, button_text, date_from, date_to, sort_order)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+        ");
+        foreach ($payload['webBanners'] as $b) {
+            $image = $b['imageFilename'] ?? null;
+            // Solo nombres generados por Electron (banner_<id>_<ts>.jpg): upload-image.php
+            // escribe el archivo con este nombre.
+            if ($image !== null && !preg_match('/^banner_\d+_\d+\.jpg$/', $image)) $image = null;
+            $stmtBanner->execute([
+                (int)$b['id'],
+                $b['title'] ?? '',
+                $b['subtitle'] ?? '',
+                $b['badge'] ?? '',
+                $b['finePrint'] ?? '',
+                ($b['theme'] ?? '') === 'navy' ? 'navy' : 'gold',
+                $image,
+                $b['linkHref'] ?? null,
+                isset($b['linkProductId']) ? (int)$b['linkProductId'] : null,
+                $b['buttonText'] ?? '',
+                $b['dateFrom'] ?? null,
+                $b['dateTo'] ?? null,
+                (int)($b['sortOrder'] ?? 0),
+            ]);
+            $stats['banners'] = ($stats['banners'] ?? 0) + 1;
         }
     }
 

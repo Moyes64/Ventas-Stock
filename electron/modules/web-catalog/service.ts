@@ -25,7 +25,7 @@ function slugify(text: string): string {
     .replace(/^-|-$/g, '')
 }
 
-function imagesDir(): string {
+export function imagesDir(): string {
   const dir = path.join(app.getPath('userData'), 'web-images')
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
   return dir
@@ -46,14 +46,14 @@ function compressNativeImage(image: Electron.NativeImage, original: Buffer): Buf
   return resized.toJPEG(JPEG_QUALITY)
 }
 
-function compressImage(sourcePath: string): Buffer {
+export function compressImage(sourcePath: string): Buffer {
   return compressNativeImage(nativeImage.createFromPath(sourcePath), fs.readFileSync(sourcePath))
 }
 
 // Usado por el servidor LAN del catálogo web (electron/modules/web-catalog-server):
 // ahí la imagen llega como bytes en memoria (upload desde un browser), no como
 // un path de archivo local, así que no se puede usar nativeImage.createFromPath.
-function compressImageBuffer(buffer: Buffer): Buffer {
+export function compressImageBuffer(buffer: Buffer): Buffer {
   return compressNativeImage(nativeImage.createFromBuffer(buffer), buffer)
 }
 
@@ -77,6 +77,7 @@ interface WebProductRow {
   featured_order: number
   gift_categories: string
   web_price: number | null
+  compare_at_price: number | null
   short_description: string
   long_description: string
   age_min: number | null
@@ -127,6 +128,7 @@ function mapProduct(r: WebProductRow, images: WebProductImage[]): WebProduct {
     featuredOrder: r.featured_order,
     giftCategories: parseGiftCategories(r.gift_categories),
     webPrice: r.web_price,
+    compareAtPrice: r.compare_at_price,
     shortDescription: r.short_description,
     longDescription: r.long_description,
     ageMin: r.age_min,
@@ -219,8 +221,8 @@ export class WebCatalogService {
 
   saveWebProduct(input: SaveWebProductInput): WebProduct {
     const existing = this.db
-      .prepare('SELECT id, gift_categories FROM web_products WHERE product_id=?')
-      .get(input.productId) as { id: number; gift_categories: string } | undefined
+      .prepare('SELECT id, gift_categories, compare_at_price FROM web_products WHERE product_id=?')
+      .get(input.productId) as { id: number; gift_categories: string; compare_at_price: number | null } | undefined
 
     const supplier = this.db.prepare(`
       SELECT s.name FROM products p LEFT JOIN suppliers s ON s.id = p.supplier_id WHERE p.id = ?
@@ -228,18 +230,21 @@ export class WebCatalogService {
     const giftCategories = input.giftCategories === undefined
       ? (existing?.gift_categories ?? '')
       : serializeGiftCategories(input.giftCategories, supplier?.name ?? null)
+    const compareAtPrice = input.compareAtPrice === undefined
+      ? (existing?.compare_at_price ?? null)
+      : input.compareAtPrice
 
     if (existing) {
       this.db.prepare(`
         UPDATE web_products SET
           web_category_id=?, visible=?, featured=?, featured_order=?, gift_categories=?, web_price=?,
-          short_description=?, long_description=?, age_min=?, players_min=?,
+          compare_at_price=?, short_description=?, long_description=?, age_min=?, players_min=?,
           players_max=?, play_time_min=?, difficulty=?, video_url=?, tags=?,
           sort_order=?, updated_at=datetime('now','localtime')
         WHERE product_id=?
       `).run(
         input.webCategoryId, input.visible ? 1 : 0, input.featured ? 1 : 0, input.featuredOrder,
-        giftCategories, input.webPrice, input.shortDescription, input.longDescription,
+        giftCategories, input.webPrice, compareAtPrice, input.shortDescription, input.longDescription,
         input.ageMin, input.playersMin, input.playersMax, input.playTimeMin,
         input.difficulty, input.videoUrl, input.tags, input.sortOrder,
         input.productId,
@@ -248,12 +253,12 @@ export class WebCatalogService {
       this.db.prepare(`
         INSERT INTO web_products (
           product_id, web_category_id, visible, featured, featured_order, gift_categories, web_price,
-          short_description, long_description, age_min, players_min,
+          compare_at_price, short_description, long_description, age_min, players_min,
           players_max, play_time_min, difficulty, video_url, tags, sort_order
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
       `).run(
         input.productId, input.webCategoryId, input.visible ? 1 : 0, input.featured ? 1 : 0, input.featuredOrder,
-        giftCategories, input.webPrice, input.shortDescription, input.longDescription,
+        giftCategories, input.webPrice, compareAtPrice, input.shortDescription, input.longDescription,
         input.ageMin, input.playersMin, input.playersMax, input.playTimeMin,
         input.difficulty, input.videoUrl, input.tags, input.sortOrder,
       )

@@ -222,6 +222,14 @@ const electronAPI = {
     reorderImages:    (productId: number, orderedIds: number[]) => invoke('webCatalog:reorderImages', productId, orderedIds),
     getImageDataUrl:  (filename: string) => invoke<string | null>('webCatalog:getImageDataUrl', filename),
     getImagesDir:     () => invoke<string>('webCatalog:getImagesDir'),
+    getBannersConfig: () => invoke('webCatalog:getBannersConfig'),
+    setBannersEnabled: (enabled: boolean) => invoke('webCatalog:setBannersEnabled', enabled),
+    listBanners:      () => invoke('webCatalog:listBanners'),
+    saveBanner:       (id: number | null, input: unknown) => invoke('webCatalog:saveBanner', id, input),
+    deleteBanner:     (id: number) => invoke('webCatalog:deleteBanner', id),
+    getNextBannerSortOrder: () => invoke('webCatalog:getNextBannerSortOrder'),
+    uploadBannerImage: (id: number) => invoke('webCatalog:uploadBannerImage', id),
+    removeBannerImage: (id: number) => invoke('webCatalog:removeBannerImage', id),
   },
 
   // Mail

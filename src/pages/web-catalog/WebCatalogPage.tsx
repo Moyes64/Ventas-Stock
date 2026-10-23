@@ -118,6 +118,9 @@ export default function WebCatalogPage() {
           <button className="btn btn-ghost" onClick={() => navigate('/web-catalog/categories')}>
             🗂️ Categorías
           </button>
+          <button className="btn btn-ghost" onClick={() => navigate('/web-catalog/banners')}>
+            📢 Banners web
+          </button>
           <button className="btn btn-ghost" onClick={() => navigate('/web-catalog/remoto')}>
             📡 Acceso remoto
           </button>
@@ -284,6 +287,9 @@ export default function WebCatalogPage() {
                 <div className="wc-price">
                   $ {(wp.webPrice ?? wp.productPrice).toFixed(2)}
                   {wp.webPrice !== null && <span className="wc-price-web"> (precio web)</span>}
+                  {wp.compareAtPrice !== null && wp.compareAtPrice > (wp.webPrice ?? wp.productPrice) && (
+                    <span className="wc-price-web"> (antes $ {wp.compareAtPrice.toFixed(2)})</span>
+                  )}
                 </div>
               </div>
 

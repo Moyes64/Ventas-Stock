@@ -7,6 +7,7 @@ import QRCode from 'qrcode'
 import type { Server } from 'http'
 import { createWebCatalogServer } from './server'
 import type { WebCatalogService } from '../web-catalog/service'
+import type { WebBannersService } from '../web-catalog/banners'
 import type {
   WebCatalogServerConfig,
   WebCatalogServerStatus,
@@ -23,7 +24,8 @@ export class WebCatalogServerService {
   private lastError: string | null = null
 
   constructor(
-    private readonly webCatalogService: WebCatalogService
+    private readonly webCatalogService: WebCatalogService,
+    private readonly webBannersService: WebBannersService
   ) {
     this.configPath = path.join(app.getPath('userData'), CONFIG_FILENAME)
   }
@@ -109,6 +111,14 @@ export class WebCatalogServerService {
         deleteImage: imageId => this.webCatalogService.deleteImage(imageId),
         reorderImages: (productId, orderedIds) => this.webCatalogService.reorderImages(productId, orderedIds),
         getImagePath: filename => this.webCatalogService.getImagePath(filename),
+        getBannersConfig: () => this.webBannersService.getConfig(),
+        setBannersEnabled: enabled => this.webBannersService.setEnabled(enabled),
+        listBanners: () => this.webBannersService.list(),
+        saveBanner: (id, input) => this.webBannersService.save(id, input),
+        deleteBanner: id => this.webBannersService.delete(id),
+        getNextBannerSortOrder: () => this.webBannersService.getNextSortOrder(),
+        saveBannerImage: (id, base64) => this.webBannersService.setImageFromBuffer(id, decodeBase64Image(base64)),
+        removeBannerImage: id => this.webBannersService.removeImage(id),
         staticDir: () => this.getStaticDir(),
       })
 

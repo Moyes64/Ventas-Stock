@@ -371,7 +371,7 @@ export const sync = {
 }
 
 // Web Catalog
-import type { WebCategory, WebProduct, WebProductImage, UnpublishedProduct } from '../types/ipc'
+import type { WebCategory, WebProduct, WebProductImage, UnpublishedProduct, WebBanner, SaveWebBannerInput, WebBannersConfig } from '../types/ipc'
 
 export const webCatalog = {
   listCategories:  () => electron.webCatalog.listCategories() as Promise<WebCategory[]>,
@@ -391,6 +391,16 @@ export const webCatalog = {
     electron.webCatalog.reorderImages(productId, orderedIds) as Promise<{ success: boolean }>,
   getImageDataUrl: (filename: string) => electron.webCatalog.getImageDataUrl(filename) as Promise<string | null>,
   getImagesDir:    () => electron.webCatalog.getImagesDir() as Promise<string>,
+  getBannersConfig: () => electron.webCatalog.getBannersConfig() as Promise<WebBannersConfig>,
+  setBannersEnabled: (enabled: boolean) => electron.webCatalog.setBannersEnabled(enabled) as Promise<WebBannersConfig>,
+  listBanners:     () => electron.webCatalog.listBanners() as Promise<WebBanner[]>,
+  saveBanner:      (id: number | null, input: SaveWebBannerInput) =>
+    electron.webCatalog.saveBanner(id, input) as Promise<WebBanner>,
+  deleteBanner:    (id: number) => electron.webCatalog.deleteBanner(id) as Promise<void>,
+  getNextBannerSortOrder: () => electron.webCatalog.getNextBannerSortOrder() as Promise<number>,
+  uploadBannerImage: (id: number) =>
+    electron.webCatalog.uploadBannerImage(id) as Promise<{ success: boolean; banner?: WebBanner; error?: string }>,
+  removeBannerImage: (id: number) => electron.webCatalog.removeBannerImage(id) as Promise<WebBanner>,
 }
 
 // Servidor LAN del catálogo web

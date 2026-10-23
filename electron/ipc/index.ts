@@ -55,14 +55,14 @@ export function registerAllIpcHandlers(
   registerLabelConfigHandlers()
   registerCsrHandlers()
   registerMailHandlers(db)
-  const webCatalogService = registerWebCatalogHandlers(db)
+  const { svc: webCatalogService, banners: webBannersService } = registerWebCatalogHandlers(db)
   registerCambiosHandlers(db)
   registerFreeExchangeHandlers(db)
   registerCreditsHandlers(db)
   registerFinanceHandlers(db)
   registerPricingHandlers(db)
   const stockCountService = registerStockCountHandlers(db)
-  const webCatalogServerService = registerWebCatalogServerHandlers(webCatalogService)
+  const webCatalogServerService = registerWebCatalogServerHandlers(webCatalogService, webBannersService)
 
   return { stockCountService, webCatalogServerService }
 }

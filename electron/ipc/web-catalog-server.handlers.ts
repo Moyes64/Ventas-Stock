@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import { WebCatalogServerService } from '../modules/web-catalog-server/service'
 import type { WebCatalogService } from '../modules/web-catalog/service'
+import type { WebBannersService } from '../modules/web-catalog/banners'
 
 /**
  * Devuelve la instancia (única) del servicio para que main.ts pueda llamar
@@ -8,8 +9,11 @@ import type { WebCatalogService } from '../modules/web-catalog/service'
  * stock-count.handlers.ts (el `http.Server` vive como estado en memoria de
  * la instancia que lo arrancó).
  */
-export function registerWebCatalogServerHandlers(webCatalogService: WebCatalogService): WebCatalogServerService {
-  const webCatalogServerService = new WebCatalogServerService(webCatalogService)
+export function registerWebCatalogServerHandlers(
+  webCatalogService: WebCatalogService,
+  webBannersService: WebBannersService
+): WebCatalogServerService {
+  const webCatalogServerService = new WebCatalogServerService(webCatalogService, webBannersService)
 
   ipcMain.handle('webCatalogServer:getStatus', () => {
     return webCatalogServerService.getServerStatus()

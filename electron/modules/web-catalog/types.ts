@@ -27,6 +27,8 @@ export interface WebProduct {
   /** Slugs de las categorías de regalo (ver giftCategories.ts) */
   giftCategories: string[]
   webPrice: number | null
+  /** Precio "antes", tachado en la web (solo si es mayor al precio web efectivo) */
+  compareAtPrice: number | null
   shortDescription: string
   longDescription: string
   ageMin: number | null
@@ -58,6 +60,8 @@ export interface SaveWebProductInput {
   /** undefined = no tocar las que ya tiene el producto */
   giftCategories?: string[]
   webPrice: number | null
+  /** undefined = no tocar el que ya tiene (el cliente LAN no lo envía) */
+  compareAtPrice?: number | null
   shortDescription: string
   longDescription: string
   ageMin: number | null
@@ -75,4 +79,69 @@ export interface SaveWebCategoryInput {
   description: string
   sortOrder: number
   active: boolean
+}
+
+// ── Banners web (home de la tienda, debajo del Hero) ─────────────────────────
+
+export type WebBannerTheme = 'gold' | 'navy'
+export type WebBannerLinkType = 'none' | 'product' | 'category' | 'url'
+
+export interface WebBanner {
+  id: number
+  title: string
+  subtitle: string
+  /** Etiqueta chica arriba del título (ej. "OFERTA", "CUOTAS SIN INTERÉS") */
+  badge: string
+  /** Letra chica / condiciones (ej. "Válido con tarjetas bancarias seleccionadas") */
+  finePrint: string
+  theme: WebBannerTheme
+  imageFilename: string | null
+  linkType: WebBannerLinkType
+  linkProductId: number | null
+  linkCategoryId: number | null
+  linkUrl: string
+  /** Vacío con link = toda la tarjeta es clickeable, sin botón */
+  buttonText: string
+  dateFrom: string | null
+  dateTo: string | null
+  active: boolean
+  sortOrder: number
+  createdAt: string
+  updatedAt: string
+  // joined
+  linkProductName: string | null
+  /** El producto vinculado no está publicado/visible en la web: el banner no se muestra */
+  linkProductUnavailable: boolean
+  /** Precios del producto vinculado (para editar la oferta desde el mismo banner) */
+  linkProductPrice: number | null
+  linkProductWebPrice: number | null
+  linkProductCompareAtPrice: number | null
+  linkCategoryName: string | null
+}
+
+export interface SaveWebBannerInput {
+  title: string
+  subtitle: string
+  badge: string
+  finePrint: string
+  theme: WebBannerTheme
+  linkType: WebBannerLinkType
+  linkProductId: number | null
+  linkCategoryId: number | null
+  linkUrl: string
+  buttonText: string
+  dateFrom: string | null
+  dateTo: string | null
+  active: boolean
+  sortOrder: number
+  /**
+   * Solo con linkType 'product': precio web (null = el del catálogo) y precio
+   * anterior tachado del producto vinculado. undefined = no tocar el producto.
+   */
+  productOffer?: { webPrice: number | null; compareAtPrice: number | null }
+}
+
+export interface WebBannersConfig {
+  /** Interruptor general: apagado no se publica ningún banner en la web */
+  enabled: boolean
 }

@@ -5,6 +5,9 @@ import type {
   SaveWebCategoryInput,
   SaveWebProductInput,
   UnpublishedProduct,
+  WebBanner,
+  SaveWebBannerInput,
+  WebBannersConfig,
 } from '../types/contract'
 
 const TOKEN_HEADER = 'x-web-catalog-token'
@@ -113,6 +116,22 @@ export const api = {
   deleteImage: (imageId: number) => request<{ ok: true }>(`/api/images/${imageId}`, { method: 'DELETE' }),
   reorderImages: (productId: number, orderedIds: number[]) =>
     request<{ ok: true }>(`/api/products/${productId}/images/reorder`, { method: 'POST', body: { orderedIds } }),
+
+  getBannersConfig: () => request<WebBannersConfig>('/api/banners/config'),
+  setBannersEnabled: (enabled: boolean) =>
+    request<WebBannersConfig>('/api/banners/config', { method: 'PUT', body: { enabled } }),
+  listBanners: () => request<WebBanner[]>('/api/banners'),
+  createBanner: (input: SaveWebBannerInput) => request<WebBanner>('/api/banners', { method: 'POST', body: input }),
+  updateBanner: (id: number, input: SaveWebBannerInput) =>
+    request<WebBanner>(`/api/banners/${id}`, { method: 'PUT', body: input }),
+  deleteBanner: (id: number) => request<{ ok: true }>(`/api/banners/${id}`, { method: 'DELETE' }),
+  getNextBannerSortOrder: async () => {
+    const { value } = await request<{ value: number }>('/api/banners/next-sort-order')
+    return value
+  },
+  uploadBannerImage: (id: number, base64: string) =>
+    request<WebBanner>(`/api/banners/${id}/image`, { method: 'POST', body: { base64 }, timeoutMs: 30_000 }),
+  removeBannerImage: (id: number) => request<WebBanner>(`/api/banners/${id}/image`, { method: 'DELETE' }),
 
   // El token no puede ir en la URL de un <img src>, así que las imágenes se
   // piden autenticadas y se muestran como blob: URL.

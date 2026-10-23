@@ -74,6 +74,7 @@ export interface SyncWebProduct {
   featuredOrder: number
   giftCategories: string // slugs separados por coma (ver web-catalog/giftCategories.ts)
   price: number          // precio efectivo web
+  compareAtPrice: number | null // precio "antes" (tachado en la web), solo si es mayor a price
   stock: number
   webCategoryId: number | null
   shortDescription: string
@@ -87,6 +88,24 @@ export interface SyncWebProduct {
   tags: string
   sortOrder: number
   images: SyncWebImage[]
+}
+
+// Banners de la home: solo se envían los activos (y ninguno si el interruptor
+// general está apagado). El rango de fechas lo evalúa banners.php.
+export interface SyncWebBanner {
+  id: number
+  title: string
+  subtitle: string
+  badge: string
+  finePrint: string
+  theme: 'gold' | 'navy'
+  imageFilename: string | null
+  linkHref: string | null          // ya resuelto: '/catalogo/<slug>', '/catalogo?categoria=<slug>' o URL
+  linkProductId: number | null     // para que banners.php lo oculte si el producto queda sin stock
+  buttonText: string
+  dateFrom: string | null
+  dateTo: string | null
+  sortOrder: number
 }
 
 // ── Web orders (pull) ────────────────────────────────────────────────────
@@ -203,6 +222,7 @@ export interface SyncPayload {
   caja: SyncCaja
   webCategories: SyncWebCategory[]
   webProducts: SyncWebProduct[]
+  webBanners: SyncWebBanner[]
   webParams?: { costoEnvioWeb: number; recargoTarjetaCreditoWeb: number }
   finance: SyncFinance
 }

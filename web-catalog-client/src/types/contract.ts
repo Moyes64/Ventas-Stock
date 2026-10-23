@@ -35,6 +35,8 @@ export interface WebProduct {
   featuredOrder: number
   giftCategories: string[]
   webPrice: number | null
+  /** Precio "antes", tachado en la web (solo si es mayor al precio web efectivo) */
+  compareAtPrice: number | null
   shortDescription: string
   longDescription: string
   ageMin: number | null
@@ -64,6 +66,8 @@ export interface SaveWebProductInput {
   /** undefined = no tocar las que ya tiene el producto */
   giftCategories?: string[]
   webPrice: number | null
+  /** undefined = no tocar el que ya tiene */
+  compareAtPrice?: number | null
   shortDescription: string
   longDescription: string
   ageMin: number | null
@@ -81,6 +85,60 @@ export interface SaveWebCategoryInput {
   description: string
   sortOrder: number
   active: boolean
+}
+
+export type WebBannerTheme = 'gold' | 'navy'
+export type WebBannerLinkType = 'none' | 'product' | 'category' | 'url'
+
+export interface WebBanner {
+  id: number
+  title: string
+  subtitle: string
+  badge: string
+  finePrint: string
+  theme: WebBannerTheme
+  imageFilename: string | null
+  linkType: WebBannerLinkType
+  linkProductId: number | null
+  linkCategoryId: number | null
+  linkUrl: string
+  /** Vacío con link = toda la tarjeta es clickeable, sin botón */
+  buttonText: string
+  dateFrom: string | null
+  dateTo: string | null
+  active: boolean
+  sortOrder: number
+  createdAt: string
+  updatedAt: string
+  linkProductName: string | null
+  linkProductUnavailable: boolean
+  linkProductPrice: number | null
+  linkProductWebPrice: number | null
+  linkProductCompareAtPrice: number | null
+  linkCategoryName: string | null
+}
+
+export interface SaveWebBannerInput {
+  title: string
+  subtitle: string
+  badge: string
+  finePrint: string
+  theme: WebBannerTheme
+  linkType: WebBannerLinkType
+  linkProductId: number | null
+  linkCategoryId: number | null
+  linkUrl: string
+  buttonText: string
+  dateFrom: string | null
+  dateTo: string | null
+  active: boolean
+  sortOrder: number
+  /** Solo con linkType 'product': precios del producto vinculado */
+  productOffer?: { webPrice: number | null; compareAtPrice: number | null }
+}
+
+export interface WebBannersConfig {
+  enabled: boolean
 }
 
 export interface UnpublishedProduct {

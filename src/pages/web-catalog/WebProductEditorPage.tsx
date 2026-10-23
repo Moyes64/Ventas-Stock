@@ -27,6 +27,7 @@ export default function WebProductEditorPage() {
     featuredOrder: '0' as string,
     giftCategories: [] as string[],
     webPrice: '' as string,
+    compareAtPrice: '' as string,
     shortDescription: '',
     longDescription: '',
     ageMin: '' as string,
@@ -55,6 +56,7 @@ export default function WebProductEditorPage() {
           featuredOrder: String(product.featuredOrder),
           giftCategories: product.giftCategories,
           webPrice: product.webPrice !== null ? String(product.webPrice) : '',
+          compareAtPrice: product.compareAtPrice !== null ? String(product.compareAtPrice) : '',
           shortDescription: product.shortDescription,
           longDescription: product.longDescription,
           ageMin: product.ageMin !== null ? String(product.ageMin) : '',
@@ -108,6 +110,7 @@ export default function WebProductEditorPage() {
         featuredOrder: parseInt(form.featuredOrder) || 0,
         giftCategories: form.giftCategories,
         webPrice: form.webPrice !== '' ? parseFloat(form.webPrice) : null,
+        compareAtPrice: form.compareAtPrice !== '' ? parseFloat(form.compareAtPrice) : null,
         shortDescription: form.shortDescription,
         longDescription: form.longDescription,
         ageMin: form.ageMin !== '' ? parseInt(form.ageMin) : null,
@@ -291,6 +294,25 @@ export default function WebProductEditorPage() {
                   onChange={e => set('webPrice', e.target.value)}
                 />
                 <span className="field-hint">Dejalo vacío para usar el precio del catálogo.</span>
+              </div>
+              <div className="form-group sysparam-col2">
+                <label className="label">Precio anterior (tachado)</label>
+                <input
+                  className="input"
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  placeholder="Sin oferta"
+                  value={form.compareAtPrice}
+                  onChange={e => set('compareAtPrice', e.target.value)}
+                />
+                {(() => {
+                  const before = parseFloat(form.compareAtPrice)
+                  const now = form.webPrice !== '' ? parseFloat(form.webPrice) : wp.productPrice
+                  if (!before) return <span className="field-hint">Para mostrar una oferta: la web lo muestra tachado al lado del precio.</span>
+                  if (before <= now) return <span className="field-hint" style={{ color: 'var(--color-danger)' }}>Tiene que ser mayor al precio web ($ {now.toFixed(2)}); si no, no se muestra.</span>
+                  return <span className="field-hint">La web muestra "OFERTA -{Math.round((1 - now / before) * 100)}%". Vacialo cuando termine la oferta.</span>
+                })()}
               </div>
             </div>
           </div>

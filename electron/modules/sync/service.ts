@@ -10,12 +10,13 @@ import { app } from 'electron'
 import { localToday, utcToLocalDate } from '../../lib/date'
 import type {
   SyncConfig, SyncPayload, SyncResult, SyncStockItem, SyncVentasHoy, SyncSaleHistory, SyncCaja,
-  SyncWebCategory, SyncWebProduct, SyncWebImage, WebOrder, PullResult, SyncFinance,
+  SyncWebCategory, SyncWebProduct, SyncWebImage, SyncWebBanner, WebOrder, PullResult, SyncFinance,
   SyncFinanceAccountStatement, SyncFinanceAccountMovement,
 } from './types'
 import type { FinanceAccount } from '../finance/types'
 import { SystemParamsService } from '../system-params/service'
 import { FinanceService } from '../finance/service'
+import { WebBannersService } from '../web-catalog/banners'
 
 const CONFIG_FILENAME = 'sync-config.json'
 const DEFAULT_CONFIG: SyncConfig = {
@@ -23,6 +24,14 @@ const DEFAULT_CONFIG: SyncConfig = {
   apiUrl: '',
   apiKey: '',
   intervalMinutes: 15,
+}
+
+// Mismo slug que usa la web para la ficha del producto (/catalogo/<slug>).
+function webProductSlug(productName: string, productId: number): string {
+  return productName.toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+    + '-' + productId
 }
 
 export class SyncService {
@@ -59,6 +68,18 @@ export class SyncService {
     return this.lastResult
   }
 
+  // La app de desarrollo (`npm run dev`) comparte userData — y por lo tanto
+  // sync-config.json — con la instalada, pero trabaja sobre data/ventas.db (una
+  // copia vieja). Sin este bloqueo pisaba cada 5 minutos el stock/precios de la
+  // tienda y el dashboard con esos datos, y además podía bajarse pedidos web y
+  // marcarlos procesados en el servidor, así la app real nunca los recibía
+  // (detectado 2026-10-23). Para probar contra producción a propósito:
+  // SYNC_IN_DEV=1 en .env.
+  private devBlockReason(): string | null {
+    if (app.isPackaged || process.env.SYNC_IN_DEV === '1') return null
+    return 'Sincronización desactivada en la app de desarrollo (usa otra base que la real). Para habilitarla: SYNC_IN_DEV=1 en .env'
+  }
+
   // ── Timer ─────────────────────────────────────────────────────────────────
 
   startTimer(): void {
@@ -73,6 +94,10 @@ export class SyncService {
 
     const config = this.getConfig()
     if (!config.enabled || !config.apiUrl || !config.apiKey) return
+    if (this.devBlockReason()) {
+      console.log('[sync] Timer no iniciado: app de desarrollo sin SYNC_IN_DEV=1')
+      return
+    }
 
     const intervalMs = Math.max(config.intervalMinutes, 1) * 60 * 1000
     this.timer = setInterval(() => {
@@ -84,6 +109,13 @@ export class SyncService {
 
   async sync(): Promise<SyncResult> {
     const config = this.getConfig()
+
+    const blocked = this.devBlockReason()
+    if (blocked) {
+      const result: SyncResult = { success: false, timestamp: new Date().toISOString(), error: blocked }
+      this.lastResult = result
+      return result
+    }
 
     if (!config.apiUrl || !config.apiKey) {
       const result: SyncResult = {
@@ -136,6 +168,7 @@ export class SyncService {
       caja: this.buildCaja(today),
       webCategories: this.buildWebCategories(),
       webProducts: this.buildWebProducts(),
+      webBanners: this.buildWebBanners(),
       webParams: { costoEnvioWeb, recargoTarjetaCreditoWeb },
       finance: this.buildFinance(today),
     }
@@ -254,7 +287,7 @@ export class SyncService {
       ORDER BY wp.sort_order ASC, p.name ASC
     `).all() as Array<{
       product_id: number; product_name: string; product_price: number; product_stock: number
-      web_category_id: number | null; featured: number; featured_order: number; gift_categories: string; web_price: number | null; visible: number
+      web_category_id: number | null; featured: number; featured_order: number; gift_categories: string; web_price: number | null; compare_at_price: number | null; visible: number
       short_description: string; long_description: string; age_min: number | null
       players_min: number | null; players_max: number | null; play_time_min: number | null
       difficulty: number | null; video_url: string; tags: string; sort_order: number
@@ -272,10 +305,8 @@ export class SyncService {
         filename: img.filename,
       }))
 
-      const slug = r.product_name.toLowerCase()
-        .normalize('NFD').replace(/[̀-ͯ]/g, '')
-        .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-        + '-' + r.product_id
+      const slug = webProductSlug(r.product_name, r.product_id)
+      const price = r.web_price ?? r.product_price
 
       return {
         productId: r.product_id,
@@ -285,7 +316,8 @@ export class SyncService {
         featured: r.featured === 1,
         featuredOrder: r.featured_order,
         giftCategories: r.gift_categories,
-        price: r.web_price ?? r.product_price,
+        price,
+        compareAtPrice: r.compare_at_price !== null && r.compare_at_price > price ? r.compare_at_price : null,
         stock: r.product_stock,
         webCategoryId: r.web_category_id,
         shortDescription: r.short_description,
@@ -301,6 +333,47 @@ export class SyncService {
         images,
       }
     })
+  }
+
+  private buildWebBanners(): SyncWebBanner[] {
+    const bannersService = new WebBannersService(this.db)
+    if (!bannersService.getConfig().enabled) return []
+
+    const categorySlug = (id: number | null) => id === null ? null
+      : (this.db.prepare('SELECT slug FROM web_categories WHERE id=? AND active=1').get(id) as { slug: string } | undefined)?.slug ?? null
+
+    const result: SyncWebBanner[] = []
+    for (const b of bannersService.list()) {
+      if (!b.active) continue
+      let linkHref: string | null = null
+      if (b.linkType === 'product') {
+        // Un banner que lleva a un producto que no está publicado en la web no se muestra.
+        if (b.linkProductUnavailable || b.linkProductId === null || b.linkProductName === null) continue
+        linkHref = `/catalogo/${webProductSlug(b.linkProductName, b.linkProductId)}`
+      } else if (b.linkType === 'category') {
+        const slug = categorySlug(b.linkCategoryId)
+        if (!slug) continue
+        linkHref = `/catalogo?categoria=${encodeURIComponent(slug)}`
+      } else if (b.linkType === 'url') {
+        linkHref = b.linkUrl
+      }
+      result.push({
+        id: b.id,
+        title: b.title,
+        subtitle: b.subtitle,
+        badge: b.badge,
+        finePrint: b.finePrint,
+        theme: b.theme,
+        imageFilename: b.imageFilename,
+        linkHref,
+        linkProductId: b.linkType === 'product' ? b.linkProductId : null,
+        buttonText: linkHref ? b.buttonText : '',
+        dateFrom: b.dateFrom,
+        dateTo: b.dateTo,
+        sortOrder: b.sortOrder,
+      })
+    }
+    return result
   }
 
   // ── Listar órdenes web locales ────────────────────────────────────────────
@@ -373,6 +446,12 @@ export class SyncService {
   async pullOrders(): Promise<PullResult> {
     const config = this.getConfig()
     const result: PullResult = { success: false, ordersProcessed: 0, errors: [], timestamp: new Date().toISOString() }
+
+    const blocked = this.devBlockReason()
+    if (blocked) {
+      result.errors.push(blocked)
+      return result
+    }
 
     if (!config.apiUrl || !config.apiKey) {
       result.errors.push('URL o API key no configurados')
@@ -549,6 +628,8 @@ export class SyncService {
 
   async markWebOrderProcessed(externalId: string): Promise<void> {
     const config = this.getConfig()
+    const blocked = this.devBlockReason()
+    if (blocked) throw new Error(blocked)
     if (!config.apiUrl || !config.apiKey) throw new Error('Sync no configurado')
     const baseUrl = config.apiUrl.replace(/\/api\/sync\.php$/, '').replace(/\/sync\/?$/, '')
     await this.markOrderProcessed(config, baseUrl, externalId)
@@ -820,7 +901,6 @@ export class SyncService {
     const imagesDir = path.join(app.getPath('userData'), 'web-images')
     const baseUrl = config.apiUrl.replace(/\/api\/sync\.php$/, '')
     const uploadUrl = new URL(`${baseUrl}/api/upload-image.php`)
-    const isHttps = uploadUrl.protocol === 'https:'
 
     const rows = this.db.prepare(`
       SELECT wp.product_id, wpi.filename, wpi.sort_order
@@ -831,36 +911,54 @@ export class SyncService {
     `).all() as Array<{ product_id: number; filename: string; sort_order: number }>
 
     for (const row of rows) {
-      const filePath = path.join(imagesDir, row.filename)
-      if (!fs.existsSync(filePath)) continue
-      const ext = path.extname(row.filename).toLowerCase().replace('.', '') || 'jpeg'
-      const mime = ext === 'jpg' ? 'jpeg' : ext
-      const base64 = fs.readFileSync(filePath).toString('base64')
-      const body = JSON.stringify({
+      await this.postImage(config, uploadUrl, path.join(imagesDir, row.filename), {
         productId: row.product_id,
         sortOrder: row.sort_order,
-        base64: `data:image/${mime};base64,${base64}`,
-      })
-
-      await new Promise<void>((resolve) => {
-        const options = {
-          hostname: uploadUrl.hostname,
-          port: uploadUrl.port || (isHttps ? 443 : 80),
-          path: uploadUrl.pathname,
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(body),
-            'X-Api-Key': config.apiKey,
-          },
-          agent: isHttps ? httpsAgent : undefined,
-        }
-        const req = (isHttps ? https : http).request(options, res => { res.resume(); res.on('end', resolve) })
-        req.on('error', () => resolve())
-        req.setTimeout(30000, () => { req.destroy(); resolve() })
-        req.write(body)
-        req.end()
       })
     }
+
+    // Imágenes de los banners publicados (upload-image.php las guarda con el
+    // nombre que ya recibió en el payload del sync).
+    for (const banner of this.buildWebBanners()) {
+      if (!banner.imageFilename) continue
+      await this.postImage(config, uploadUrl, path.join(imagesDir, banner.imageFilename), { bannerId: banner.id })
+    }
+  }
+
+  private async postImage(
+    config: SyncConfig,
+    uploadUrl: URL,
+    filePath: string,
+    target: { productId: number; sortOrder: number } | { bannerId: number },
+  ): Promise<void> {
+    if (!fs.existsSync(filePath)) return
+    const isHttps = uploadUrl.protocol === 'https:'
+    const ext = path.extname(filePath).toLowerCase().replace('.', '') || 'jpeg'
+    const mime = ext === 'jpg' ? 'jpeg' : ext
+    const base64 = fs.readFileSync(filePath).toString('base64')
+    const body = JSON.stringify({
+      ...target,
+      base64: `data:image/${mime};base64,${base64}`,
+    })
+
+    await new Promise<void>((resolve) => {
+      const options = {
+        hostname: uploadUrl.hostname,
+        port: uploadUrl.port || (isHttps ? 443 : 80),
+        path: uploadUrl.pathname,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(body),
+          'X-Api-Key': config.apiKey,
+        },
+        agent: isHttps ? httpsAgent : undefined,
+      }
+      const req = (isHttps ? https : http).request(options, res => { res.resume(); res.on('end', resolve) })
+      req.on('error', () => resolve())
+      req.setTimeout(30000, () => { req.destroy(); resolve() })
+      req.write(body)
+      req.end()
+    })
   }
 }

@@ -3,8 +3,9 @@ import { hasToken } from './lib/api'
 import CategoriesView from './components/CategoriesView'
 import ProductListView from './components/ProductListView'
 import ProductEditorView from './components/ProductEditorView'
+import BannersView from './components/BannersView'
 
-type View = { name: 'products' } | { name: 'categories' } | { name: 'editor'; productId: number }
+type View = { name: 'products' } | { name: 'categories' } | { name: 'banners' } | { name: 'editor'; productId: number }
 
 export default function App() {
   // hasToken() lee (y consume) el ?token=... de la URL de pairing la primera
@@ -34,6 +35,7 @@ export default function App() {
         <nav className="nav">
           <button className="btn" onClick={() => setView({ name: 'products' })}>Productos</button>
           <button className="btn" onClick={() => setView({ name: 'categories' })}>Categorías</button>
+          <button className="btn" onClick={() => setView({ name: 'banners' })}>Banners</button>
         </nav>
       </header>
 
@@ -41,6 +43,7 @@ export default function App() {
         <ProductListView onEditProduct={productId => setView({ name: 'editor', productId })} />
       )}
       {view.name === 'categories' && <CategoriesView />}
+      {view.name === 'banners' && <BannersView />}
       {view.name === 'editor' && (
         <ProductEditorView productId={view.productId} onBack={() => setView({ name: 'products' })} />
       )}

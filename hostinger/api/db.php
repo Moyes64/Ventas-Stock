@@ -35,6 +35,9 @@ define('EXPECTED_API_KEY', requireEnv('SYNC_API_KEY'));
 // Directorio donde se guardan las imágenes de productos (relativo a public_html)
 define('IMAGES_BASE_PATH', dirname(__DIR__) . '/images/products');
 define('IMAGES_BASE_URL', 'https://lemonchiffon-dog-944242.hostingersite.com/pandorabox/images/products');
+// Imágenes de los banners de la home (ver banners.php)
+define('BANNER_IMAGES_PATH', dirname(__DIR__) . '/images/banners');
+define('BANNER_IMAGES_URL', 'https://lemonchiffon-dog-944242.hostingersite.com/pandorabox/images/banners');
 
 // MercadoPago
 define('MP_ACCESS_TOKEN', requireEnv('MP_ACCESS_TOKEN'));
@@ -439,6 +442,29 @@ function initSchema(): void {
 
     // Categoría de regalo elegida en el buscador (estampillas) — no destructiva
     try { $pdo->exec("ALTER TABLE search_logs ADD COLUMN categoria VARCHAR(20) NULL"); } catch (\Exception $e) {}
+
+    // Precio "antes" que la web muestra tachado (oferta) — no destructiva
+    try { $pdo->exec("ALTER TABLE web_products ADD COLUMN compare_at_price DECIMAL(10,2) NULL"); } catch (\Exception $e) {}
+
+    // Banners promocionales de la home. Se reemplazan completos en cada sync
+    // (solo llegan los activos); el rango de fechas lo filtra banners.php.
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS web_banners (
+            id              INT PRIMARY KEY,          -- = id de SQLite
+            title           VARCHAR(255) NOT NULL,
+            subtitle        VARCHAR(500) NOT NULL DEFAULT '',
+            badge           VARCHAR(100) NOT NULL DEFAULT '',
+            fine_print      VARCHAR(500) NOT NULL DEFAULT '',
+            theme           VARCHAR(10)  NOT NULL DEFAULT 'gold',
+            image_filename  VARCHAR(255) NULL,
+            link_href       VARCHAR(500) NULL,
+            link_product_id INT NULL,
+            button_text     VARCHAR(100) NOT NULL DEFAULT '',
+            date_from       DATE NULL,
+            date_to         DATE NULL,
+            sort_order      INT NOT NULL DEFAULT 0
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
 
     // Rate limiting — registro de búsquedas (mismo criterio que order_creation_attempts)
     $pdo->exec("

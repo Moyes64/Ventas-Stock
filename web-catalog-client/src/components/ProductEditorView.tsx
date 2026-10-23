@@ -13,6 +13,7 @@ interface FormState {
   giftCategories: string[]
   webCategoryId: string
   webPrice: string
+  compareAtPrice: string
   shortDescription: string
   longDescription: string
   ageMin: string
@@ -33,6 +34,7 @@ function toForm(p: WebProduct): FormState {
     giftCategories: p.giftCategories,
     webCategoryId: p.webCategoryId !== null ? String(p.webCategoryId) : '',
     webPrice: p.webPrice !== null ? String(p.webPrice) : '',
+    compareAtPrice: p.compareAtPrice !== null ? String(p.compareAtPrice) : '',
     shortDescription: p.shortDescription,
     longDescription: p.longDescription,
     ageMin: p.ageMin !== null ? String(p.ageMin) : '',
@@ -102,6 +104,7 @@ export default function ProductEditorView({ productId, onBack }: { productId: nu
         featuredOrder: Number(form.featuredOrder) || 0,
         giftCategories: form.giftCategories,
         webPrice: numOrNull(form.webPrice),
+        compareAtPrice: numOrNull(form.compareAtPrice),
         shortDescription: form.shortDescription,
         longDescription: form.longDescription,
         ageMin: numOrNull(form.ageMin),
@@ -256,6 +259,12 @@ export default function ProductEditorView({ productId, onBack }: { productId: nu
           <div className="field">
             <label>Precio web (opcional, pisa el de catálogo)</label>
             <input type="number" value={form.webPrice} onChange={e => setForm({ ...form, webPrice: e.target.value })} />
+          </div>
+          <div className="field">
+            <label>Precio anterior (tachado, para ofertas)</label>
+            <input type="number" value={form.compareAtPrice} placeholder="Sin oferta"
+              onChange={e => setForm({ ...form, compareAtPrice: e.target.value })} />
+            <span className="hint">Se muestra tachado solo si es mayor al precio web.</span>
           </div>
         </div>
 

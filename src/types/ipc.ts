@@ -559,6 +559,7 @@ export interface WebProduct {
   featuredOrder: number
   giftCategories: string[]
   webPrice: number | null
+  compareAtPrice: number | null
   shortDescription: string
   longDescription: string
   ageMin: number | null
@@ -577,6 +578,58 @@ export interface WebProduct {
   productSku: string
   supplierName: string | null
   images: WebProductImage[]
+}
+
+export type WebBannerTheme = 'gold' | 'navy'
+export type WebBannerLinkType = 'none' | 'product' | 'category' | 'url'
+
+export interface WebBanner {
+  id: number
+  title: string
+  subtitle: string
+  badge: string
+  finePrint: string
+  theme: WebBannerTheme
+  imageFilename: string | null
+  linkType: WebBannerLinkType
+  linkProductId: number | null
+  linkCategoryId: number | null
+  linkUrl: string
+  buttonText: string
+  dateFrom: string | null
+  dateTo: string | null
+  active: boolean
+  sortOrder: number
+  createdAt: string
+  updatedAt: string
+  linkProductName: string | null
+  linkProductUnavailable: boolean
+  linkProductPrice: number | null
+  linkProductWebPrice: number | null
+  linkProductCompareAtPrice: number | null
+  linkCategoryName: string | null
+}
+
+export interface SaveWebBannerInput {
+  title: string
+  subtitle: string
+  badge: string
+  finePrint: string
+  theme: WebBannerTheme
+  linkType: WebBannerLinkType
+  linkProductId: number | null
+  linkCategoryId: number | null
+  linkUrl: string
+  buttonText: string
+  dateFrom: string | null
+  dateTo: string | null
+  active: boolean
+  sortOrder: number
+  productOffer?: { webPrice: number | null; compareAtPrice: number | null }
+}
+
+export interface WebBannersConfig {
+  enabled: boolean
 }
 
 export interface UnpublishedProduct {

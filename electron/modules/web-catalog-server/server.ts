@@ -8,6 +8,9 @@ import type {
   WebProductImage,
   SaveWebCategoryInput,
   SaveWebProductInput,
+  WebBanner,
+  SaveWebBannerInput,
+  WebBannersConfig,
 } from '../web-catalog/types'
 
 const TOKEN_HEADER = 'x-web-catalog-token'
@@ -45,6 +48,14 @@ export interface WebCatalogServerHandlers {
   deleteImage: (imageId: number) => void
   reorderImages: (productId: number, orderedIds: number[]) => void
   getImagePath: (filename: string) => string
+  getBannersConfig: () => WebBannersConfig
+  setBannersEnabled: (enabled: boolean) => WebBannersConfig
+  listBanners: () => WebBanner[]
+  saveBanner: (id: number | null, input: SaveWebBannerInput) => WebBanner
+  deleteBanner: (id: number) => void
+  getNextBannerSortOrder: () => number
+  saveBannerImage: (id: number, base64: string) => WebBanner
+  removeBannerImage: (id: number) => WebBanner
   /** Carpeta con el build estático de web-catalog-client, o null si no está compilado (dev sin build previo). */
   staticDir: () => string | null
 }
@@ -239,6 +250,58 @@ async function handleApi(
     const product = handlers.getProduct(Number(productMatch[1]))
     if (!product) return sendJson(res, 404, { error: 'No encontrado' })
     sendJson(res, 200, product)
+    return
+  }
+
+  // ── Banners web ───────────────────────────────────────────────────────
+  if (pathname === '/api/banners/config' && method === 'GET') {
+    sendJson(res, 200, handlers.getBannersConfig())
+    return
+  }
+  if (pathname === '/api/banners/config' && method === 'PUT') {
+    const body = await readJsonBody<{ enabled: unknown }>(req)
+    if (!body || typeof body.enabled !== 'boolean') return sendJson(res, 400, { error: 'Se esperaba { enabled }' })
+    sendJson(res, 200, handlers.setBannersEnabled(body.enabled))
+    return
+  }
+  if (pathname === '/api/banners/next-sort-order' && method === 'GET') {
+    sendJson(res, 200, { value: handlers.getNextBannerSortOrder() })
+    return
+  }
+  if (pathname === '/api/banners' && method === 'GET') {
+    sendJson(res, 200, handlers.listBanners())
+    return
+  }
+  const bannerMatch = pathname.match(/^\/api\/banners(?:\/(\d+))?$/)
+  if (bannerMatch && (method === 'POST' || method === 'PUT')) {
+    const input = await readJsonBody<SaveWebBannerInput>(req)
+    if (!input) return sendJson(res, 400, { error: 'Body inválido' })
+    // Las validaciones del servicio (título, link, fechas, precio) vuelven como 400 con su mensaje.
+    try {
+      sendJson(res, 200, handlers.saveBanner(bannerMatch[1] ? Number(bannerMatch[1]) : null, input))
+    } catch (err) {
+      sendJson(res, 400, { error: err instanceof Error ? err.message : String(err) })
+    }
+    return
+  }
+  if (bannerMatch?.[1] && method === 'DELETE') {
+    handlers.deleteBanner(Number(bannerMatch[1]))
+    sendJson(res, 200, { ok: true })
+    return
+  }
+  const bannerImageMatch = pathname.match(/^\/api\/banners\/(\d+)\/image$/)
+  if (bannerImageMatch && method === 'POST') {
+    const body = await readJsonBody<{ base64: unknown }>(req)
+    if (!body || typeof body.base64 !== 'string') return sendJson(res, 400, { error: 'Se esperaba { base64 }' })
+    try {
+      sendJson(res, 200, handlers.saveBannerImage(Number(bannerImageMatch[1]), body.base64))
+    } catch (err) {
+      sendJson(res, 400, { error: err instanceof Error ? err.message : String(err) })
+    }
+    return
+  }
+  if (bannerImageMatch && method === 'DELETE') {
+    sendJson(res, 200, handlers.removeBannerImage(Number(bannerImageMatch[1])))
     return
   }
 

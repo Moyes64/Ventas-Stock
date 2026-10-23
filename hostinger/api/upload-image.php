@@ -3,7 +3,9 @@
  * upload-image.php — Recibe imágenes individuales en base64 desde Ventas-Stock
  * Método: POST application/json
  * Header: X-Api-Key: <api_key>
- * Body: { productId, sortOrder, base64 }
+ * Body: { productId, sortOrder, base64 }  → imagen de producto
+ *       { bannerId, base64 }              → imagen de un banner de la home (el
+ *         nombre del archivo es el que ya llegó en el sync, web_banners.image_filename)
  */
 
 require_once __DIR__ . '/db.php';
@@ -19,10 +21,11 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 $data = json_decode(file_get_contents('php://input'), true);
 $productId = isset($data['productId']) ? (int)$data['productId'] : 0;
+$bannerId  = isset($data['bannerId']) ? (int)$data['bannerId'] : 0;
 $sortOrder = isset($data['sortOrder']) ? (int)$data['sortOrder'] : 0;
 $base64    = $data['base64'] ?? '';
 
-if ($productId <= 0 || empty($base64)) {
+if (($productId <= 0 && $bannerId <= 0) || empty($base64)) {
     http_response_code(400);
     echo json_encode(['error' => 'Missing productId or base64']);
     exit;
@@ -60,6 +63,31 @@ if ($binaryData === false) {
 try {
     initSchema();
     $pdo = getConnection();
+
+    // ── Imagen de banner ──────────────────────────────────────────────────
+    // El nombre sale de la base (validado en sync.php), nunca del request.
+    if ($bannerId > 0) {
+        $stmt = $pdo->prepare('SELECT image_filename FROM web_banners WHERE id=?');
+        $stmt->execute([$bannerId]);
+        $filename = $stmt->fetchColumn();
+        if (!$filename) {
+            echo json_encode(['ok' => false, 'reason' => 'banner_not_found']);
+            exit;
+        }
+        if (!is_dir(BANNER_IMAGES_PATH)) {
+            mkdir(BANNER_IMAGES_PATH, 0755, true);
+        }
+        $destPath = BANNER_IMAGES_PATH . '/' . $filename;
+        if (!file_exists($destPath)) {
+            file_put_contents($destPath, $binaryData);
+        }
+        // Borra las imágenes viejas de ese banner (cada carga nueva tiene otro nombre)
+        foreach (glob(BANNER_IMAGES_PATH . '/banner_' . $bannerId . '_*') ?: [] as $old) {
+            if (basename($old) !== $filename) @unlink($old);
+        }
+        echo json_encode(['ok' => true, 'filename' => $filename]);
+        exit;
+    }
 
     $imagesDir = IMAGES_BASE_PATH . '/' . $productId;
     if (!is_dir($imagesDir)) {

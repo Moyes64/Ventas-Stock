@@ -3,9 +3,10 @@ import path from 'path'
 import fs from 'fs'
 import type { Database } from 'better-sqlite3'
 import { WebCatalogService } from '../modules/web-catalog/service'
-import type { SaveWebProductInput, SaveWebCategoryInput } from '../modules/web-catalog/types'
+import { WebBannersService } from '../modules/web-catalog/banners'
+import type { SaveWebProductInput, SaveWebCategoryInput, SaveWebBannerInput } from '../modules/web-catalog/types'
 
-export function registerWebCatalogHandlers(db: Database): WebCatalogService {
+export function registerWebCatalogHandlers(db: Database): { svc: WebCatalogService; banners: WebBannersService } {
   const svc = new WebCatalogService(db)
 
   // ── Categorías ────────────────────────────────────────────────────────────
@@ -70,9 +71,41 @@ export function registerWebCatalogHandlers(db: Database): WebCatalogService {
     }
   })
 
+  // ── Banners web ───────────────────────────────────────────────────────────
+  const banners = new WebBannersService(db)
+
+  ipcMain.handle('webCatalog:getBannersConfig', () => banners.getConfig())
+
+  ipcMain.handle('webCatalog:setBannersEnabled', (_e, enabled: boolean) => banners.setEnabled(enabled))
+
+  ipcMain.handle('webCatalog:listBanners', () => banners.list())
+
+  ipcMain.handle('webCatalog:saveBanner', (_e, id: number | null, input: SaveWebBannerInput) =>
+    banners.save(id, input))
+
+  ipcMain.handle('webCatalog:deleteBanner', (_e, id: number) => banners.delete(id))
+
+  ipcMain.handle('webCatalog:getNextBannerSortOrder', () => banners.getNextSortOrder())
+
+  ipcMain.handle('webCatalog:uploadBannerImage', async (_e, id: number) => {
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+      title: 'Seleccionar imagen del banner',
+      filters: [{ name: 'Imágenes', extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif'] }],
+      properties: ['openFile'],
+    })
+    if (canceled || !filePaths[0]) return { success: false }
+    try {
+      return { success: true, banner: banners.setImage(id, filePaths[0]) }
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('webCatalog:removeBannerImage', (_e, id: number) => banners.removeImage(id))
+
   // Devuelve el directorio de imágenes para que el sync pueda leerlas
   ipcMain.handle('webCatalog:getImagesDir', () =>
     path.join(app.getPath('userData'), 'web-images'))
 
-  return svc
+  return { svc, banners }
 }
