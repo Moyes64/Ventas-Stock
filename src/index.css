@@ -1712,6 +1712,32 @@ code {
   color: var(--color-text);
 }
 
+.linechart-legend-dot--dashed {
+  background: transparent;
+  border: 2px dashed;
+}
+
+.evolution-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.evolution-controls label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.evolution-hint {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.evolution-vs--up { color: var(--color-success); font-weight: 600; }
+.evolution-vs--down { color: var(--color-danger); font-weight: 600; }
+
 /* ── Bar List (preferencias de búsqueda) ──────────────────────────────────── */
 .barlist {
   display: flex;

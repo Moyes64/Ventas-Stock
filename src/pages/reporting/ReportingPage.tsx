@@ -21,6 +21,26 @@ function daysInMonth(yearMonth: string): number {
   return new Date(y, m, 0).getDate()
 }
 
+/** Meses YYYY-MM desde `from` hasta `to`, ambos inclusive. */
+function monthRange(from: string, to: string): string[] {
+  const months: string[] = []
+  let [y, m] = from.split('-').map(Number)
+  const [toY, toM] = to.split('-').map(Number)
+  while (y < toY || (y === toY && m <= toM)) {
+    months.push(`${y}-${String(m).padStart(2, '0')}`)
+    m++
+    if (m > 12) { m = 1; y++ }
+  }
+  return months
+}
+
+/** Tramos del mes para el resumen de patrón (inicio / mitad / fin). */
+const MONTH_SEGMENTS = [
+  { label: 'Inicio de mes', from: 1, to: 10 },
+  { label: 'Mitad de mes', from: 11, to: 20 },
+  { label: 'Fin de mes', from: 21, to: 31 },
+]
+
 function monthLabel(yearMonth: string): string {
   const [y, m] = yearMonth.split('-').map(Number)
   const label = new Intl.DateTimeFormat('es-AR', { month: 'long', year: 'numeric' }).format(new Date(y, m - 1, 1))
@@ -180,7 +200,9 @@ export default function ReportingPage() {
   const [evolutionData, setEvolutionData] = useState<SalesSummary[]>([])
   const [evolutionLoading, setEvolutionLoading] = useState(false)
   const [evolutionError, setEvolutionError] = useState<string | null>(null)
-  const [evolutionMonth, setEvolutionMonth] = useState(localCurrentMonth)
+  const [evolutionFrom, setEvolutionFrom] = useState(EVOLUTION_START_DATE.slice(0, 7))
+  const [evolutionTo, setEvolutionTo] = useState(localCurrentMonth)
+  const [evolutionOnlyAverage, setEvolutionOnlyAverage] = useState(false)
 
   // Búsquedas de clientes (buscador rápido de pandorabox-web) state
   const [searchDateFrom, setSearchDateFrom] = useState(localFirstOfMonth)
@@ -290,27 +312,65 @@ export default function ReportingPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeReport])
 
-  // Agrupa las filas diarias por mes (YYYY-MM) para armar las series de los gráficos
-  const evolutionByMonth = new Map<string, LineChartSeries['points']>()
-  for (const row of evolutionData) {
-    const [, , dayStr] = row.date.split('-')
-    const key = row.date.slice(0, 7)
-    if (!evolutionByMonth.has(key)) evolutionByMonth.set(key, [])
-    evolutionByMonth.get(key)!.push({ x: Number(dayStr), y: row.totalAmount })
+  // Total por fecha (YYYY-MM-DD). La consulta solo trae días con ventas: un día
+  // sin ventas dentro del período registrado cuenta como $0 (no como "sin dato").
+  const evolutionByDate = new Map(evolutionData.map(row => [row.date, row.totalAmount]))
+  const evolutionToday = localToday()
+  const evolutionAvailableMonths = monthRange(EVOLUTION_START_DATE.slice(0, 7), localCurrentMonth())
+  const evolutionSelectedMonths = evolutionFrom <= evolutionTo
+    ? monthRange(evolutionFrom, evolutionTo)
+    : monthRange(evolutionTo, evolutionFrom)
+  const evolutionSingleMonth = evolutionSelectedMonths.length === 1
+
+  // Por cada mes del rango, los días que caen dentro del período registrado
+  // (no antes del piso ni después de hoy) con su total
+  const evolutionMonthDays = evolutionSelectedMonths.map(key => {
+    const days: { day: number; amount: number }[] = []
+    for (let day = 1; day <= daysInMonth(key); day++) {
+      const date = `${key}-${String(day).padStart(2, '0')}`
+      if (date < EVOLUTION_START_DATE || date > evolutionToday) continue
+      days.push({ day, amount: evolutionByDate.get(date) ?? 0 })
+    }
+    return { key, days }
+  })
+
+  // Promedio por día del mes: para el día N, promedio entre los meses del rango que tienen ese día registrado
+  const evolutionAveragePoints: LineChartSeries['points'] = []
+  for (let day = 1; day <= 31; day++) {
+    const values = evolutionMonthDays.flatMap(m => m.days.filter(d => d.day === day).map(d => d.amount))
+    if (values.length > 0) evolutionAveragePoints.push({ x: day, y: values.reduce((a, b) => a + b, 0) / values.length })
   }
-  const evolutionMonths = Array.from(evolutionByMonth.keys()).sort()
 
-  const evolutionAllMonthsSeries: LineChartSeries[] = evolutionMonths.map((key, idx) => ({
-    label: monthLabel(key),
-    color: COLORS[idx % COLORS.length],
-    points: evolutionByMonth.get(key) ?? [],
-  }))
+  const evolutionSeries: LineChartSeries[] = [
+    ...(evolutionOnlyAverage && !evolutionSingleMonth ? [] : evolutionMonthDays.map(m => ({
+      label: monthLabel(m.key),
+      color: COLORS[evolutionAvailableMonths.indexOf(m.key) % COLORS.length] ?? COLORS[0],
+      points: m.days.map(d => ({ x: d.day, y: d.amount })),
+    }))),
+    ...(evolutionSingleMonth ? [] : [{
+      label: 'Promedio del rango',
+      color: 'var(--color-text)',
+      points: evolutionAveragePoints,
+      dashed: true,
+      strokeWidth: 3,
+    }]),
+  ]
 
-  const evolutionSelectedSeries: LineChartSeries[] = [{
-    label: monthLabel(evolutionMonth),
-    color: COLORS[evolutionMonths.indexOf(evolutionMonth) % COLORS.length] ?? COLORS[0],
-    points: evolutionByMonth.get(evolutionMonth) ?? [],
-  }]
+  // Resumen por tramo: promedio diario de cada tramo vs. el promedio diario general del rango
+  const evolutionAllDays = evolutionMonthDays.flatMap(m => m.days)
+  const evolutionRangeTotal = evolutionAllDays.reduce((a, d) => a + d.amount, 0)
+  const evolutionOverallDailyAvg = evolutionAllDays.length > 0 ? evolutionRangeTotal / evolutionAllDays.length : 0
+  const evolutionSegments = MONTH_SEGMENTS.map(seg => {
+    const days = evolutionAllDays.filter(d => d.day >= seg.from && d.day <= seg.to)
+    const total = days.reduce((a, d) => a + d.amount, 0)
+    const dailyAvg = days.length > 0 ? total / days.length : 0
+    return {
+      ...seg,
+      dailyAvg,
+      share: evolutionRangeTotal > 0 ? total / evolutionRangeTotal : 0,
+      vsAverage: evolutionOverallDailyAvg > 0 && days.length > 0 ? dailyAvg / evolutionOverallDailyAvg - 1 : null,
+    }
+  })
 
   async function loadSearchReport() {
     setSearchLoading(true)
@@ -468,27 +528,69 @@ export default function ReportingPage() {
           {!evolutionLoading && !evolutionError && (
             <>
               <div className="linechart-section">
-                <h3 className="linechart-section-title">Todos los meses juntos</h3>
-                <LineChart series={evolutionAllMonthsSeries} maxDay={31} />
+                <div className="linechart-section-header">
+                  <h3 className="linechart-section-title">
+                    {evolutionSingleMonth
+                      ? monthLabel(evolutionSelectedMonths[0])
+                      : `${monthLabel(evolutionSelectedMonths[0])} a ${monthLabel(evolutionSelectedMonths[evolutionSelectedMonths.length - 1])}`}
+                  </h3>
+                  <div className="evolution-controls">
+                    <label>
+                      Desde:
+                      <select className="input" value={evolutionFrom} onChange={e => setEvolutionFrom(e.target.value)}>
+                        {evolutionAvailableMonths.map(key => (
+                          <option key={key} value={key}>{monthLabel(key)}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Hasta:
+                      <select className="input" value={evolutionTo} onChange={e => setEvolutionTo(e.target.value)}>
+                        {evolutionAvailableMonths.map(key => (
+                          <option key={key} value={key}>{monthLabel(key)}</option>
+                        ))}
+                      </select>
+                    </label>
+                    {!evolutionSingleMonth && (
+                      <label className="evolution-checkbox">
+                        <input
+                          type="checkbox"
+                          checked={evolutionOnlyAverage}
+                          onChange={e => setEvolutionOnlyAverage(e.target.checked)}
+                        />
+                        Ver solo el promedio
+                      </label>
+                    )}
+                  </div>
+                </div>
+                <LineChart
+                  series={evolutionSeries}
+                  maxDay={evolutionSingleMonth ? daysInMonth(evolutionSelectedMonths[0]) : 31}
+                />
+                {!evolutionSingleMonth && (
+                  <p className="evolution-hint">
+                    La línea punteada es el promedio de cada día del mes entre los meses elegidos
+                    (los días sin ventas cuentan como $0).
+                  </p>
+                )}
               </div>
 
               <div className="linechart-section">
-                <div className="linechart-section-header">
-                  <h3 className="linechart-section-title">Detalle de un mes</h3>
-                  <label>
-                    Mes:
-                    <select
-                      className="input"
-                      value={evolutionMonth}
-                      onChange={e => setEvolutionMonth(e.target.value)}
-                    >
-                      {Array.from(new Set([...evolutionMonths, localCurrentMonth()])).sort().map(key => (
-                        <option key={key} value={key}>{monthLabel(key)}</option>
-                      ))}
-                    </select>
-                  </label>
+                <h3 className="linechart-section-title">Comportamiento según el momento del mes</h3>
+                <div className="stats-grid">
+                  {evolutionSegments.map(seg => (
+                    <div key={seg.label} className="stat-card">
+                      <div className="stat-label">{seg.label} (días {seg.from}–{seg.to === 31 ? 'fin' : seg.to})</div>
+                      <div className="stat-value">{currency(seg.dailyAvg)}</div>
+                      <div className="stat-sub">promedio por día · {(seg.share * 100).toFixed(0)}% del total</div>
+                      {seg.vsAverage !== null && (
+                        <div className={`stat-sub evolution-vs ${seg.vsAverage >= 0 ? 'evolution-vs--up' : 'evolution-vs--down'}`}>
+                          {seg.vsAverage >= 0 ? '▲' : '▼'} {Math.abs(seg.vsAverage * 100).toFixed(0)}% vs. el promedio diario
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
-                <LineChart series={evolutionSelectedSeries} maxDay={daysInMonth(evolutionMonth)} />
               </div>
             </>
           )}

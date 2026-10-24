@@ -7,6 +7,8 @@ export interface LineChartSeries {
   label: string
   color: string
   points: LineChartPoint[]
+  dashed?: boolean      // p.ej. la línea de promedio, para distinguirla de los meses
+  strokeWidth?: number
 }
 
 const WIDTH = 760
@@ -106,7 +108,15 @@ export function LineChart({
             .join(' ')
           return (
             <g key={idx}>
-              <path d={d} fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+              <path
+                d={d}
+                fill="none"
+                stroke={s.color}
+                strokeWidth={s.strokeWidth ?? 2}
+                strokeDasharray={s.dashed ? '6 4' : undefined}
+                strokeLinejoin="round"
+                strokeLinecap="round"
+              />
               {sorted.map((p, pidx) => (
                 <circle key={pidx} cx={xScale(p.x)} cy={yScale(p.y)} r={2.5} fill={s.color}>
                   <title>{`${s.label} — día ${p.x}: ${new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(p.y)}`}</title>
@@ -120,7 +130,10 @@ export function LineChart({
       <div className="linechart-legend">
         {series.map((s, idx) => (
           <div key={idx} className="linechart-legend-item">
-            <span className="linechart-legend-dot" style={{ background: s.color }} />
+            <span
+              className={`linechart-legend-dot${s.dashed ? ' linechart-legend-dot--dashed' : ''}`}
+              style={s.dashed ? { borderColor: s.color } : { background: s.color }}
+            />
             <span>{s.label}</span>
           </div>
         ))}
