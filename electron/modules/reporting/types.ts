@@ -55,6 +55,16 @@ export interface RankingItem {
   value: number   // cantidad vendida ó ganancia neta según el reporte
 }
 
+export interface ProductSalesSummaryItem {
+  productId: number
+  productName: string
+  sku: string
+  barcode: string | null
+  quantity: number
+  revenue: number
+  profit: number
+}
+
 export interface PurchaseItem {
   movementId: number
   productId: number

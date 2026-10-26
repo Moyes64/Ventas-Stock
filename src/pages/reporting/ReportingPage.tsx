@@ -225,28 +225,20 @@ export default function ReportingPage() {
   // Ranking dashboard state
   const [rankDateFrom, setRankDateFrom] = useState(localFirstOfMonth)
   const [rankDateTo, setRankDateTo] = useState(localToday)
-  const [rankMonth, setRankMonth] = useState(localCurrentMonth)
-  const [rankFilterMode, setRankFilterMode] = useState<'range' | 'month'>('month')
   const [rankingQty, setRankingQty] = useState<RankingItem[]>([])
   const [rankingProfit, setRankingProfit] = useState<RankingItem[]>([])
   const [rankLoading, setRankLoading] = useState(false)
   const [rankError, setRankError] = useState<string | null>(null)
+  const [rankExporting, setRankExporting] = useState(false)
+  const [rankExportMsg, setRankExportMsg] = useState<string | null>(null)
 
-  async function loadRanking(overrides?: { dateFrom?: string; dateTo?: string }) {
-    let from = overrides?.dateFrom ?? rankDateFrom
-    let to = overrides?.dateTo ?? rankDateTo
-    if (rankFilterMode === 'month') {
-      const [y, m] = rankMonth.split('-').map(Number)
-      const last = new Date(y, m, 0).getDate()
-      from = `${rankMonth}-01`
-      to = `${rankMonth}-${String(last).padStart(2, '0')}`
-    }
+  async function loadRanking() {
     setRankLoading(true)
     setRankError(null)
     try {
       const [qty, profit] = await Promise.all([
-        reporting.rankingPorCantidad({ dateFrom: from, dateTo: to }),
-        reporting.rankingPorGanancia({ dateFrom: from, dateTo: to }),
+        reporting.rankingPorCantidad({ dateFrom: rankDateFrom, dateTo: rankDateTo }),
+        reporting.rankingPorGanancia({ dateFrom: rankDateFrom, dateTo: rankDateTo }),
       ])
       setRankingQty(qty)
       setRankingProfit(profit)
@@ -254,6 +246,25 @@ export default function ReportingPage() {
       setRankError(err instanceof Error ? err.message : 'Error al cargar ranking')
     } finally {
       setRankLoading(false)
+    }
+  }
+
+  async function exportRanking() {
+    setRankExporting(true)
+    setRankError(null)
+    setRankExportMsg(null)
+    try {
+      const result = await reporting.exportProductsReport({ dateFrom: rankDateFrom, dateTo: rankDateTo })
+      if (result.canceled) return
+      if (result.success) {
+        setRankExportMsg(`Exportado (${result.count ?? 0} productos): ${result.filePath ?? ''}`)
+      } else {
+        setRankError(result.error ?? 'Error al exportar')
+      }
+    } catch (err) {
+      setRankError(err instanceof Error ? err.message : 'Error al exportar')
+    } finally {
+      setRankExporting(false)
     }
   }
 
@@ -602,45 +613,29 @@ export default function ReportingPage() {
           {/* Filtros */}
           <div className="filter-bar filter-bar--wrap">
             <label>
-              Filtrar por:
-              <select
-                value={rankFilterMode}
-                onChange={e => setRankFilterMode(e.target.value as 'range' | 'month')}
-                className="select"
-              >
-                <option value="month">Mes</option>
-                <option value="range">Rango de fechas</option>
-              </select>
+              Desde:
+              <input type="date" value={rankDateFrom} onChange={e => setRankDateFrom(e.target.value)} className="input" />
             </label>
-            {rankFilterMode === 'month' ? (
-              <label>
-                Mes:
-                <input
-                  type="month"
-                  value={rankMonth}
-                  onChange={e => setRankMonth(e.target.value)}
-                  className="input"
-                />
-              </label>
-            ) : (
-              <>
-                <label>
-                  Desde:
-                  <input type="date" value={rankDateFrom} onChange={e => setRankDateFrom(e.target.value)} className="input" />
-                </label>
-                <label>
-                  Hasta:
-                  <input type="date" value={rankDateTo} onChange={e => setRankDateTo(e.target.value)} className="input" />
-                </label>
-              </>
-            )}
+            <label>
+              Hasta:
+              <input type="date" value={rankDateTo} onChange={e => setRankDateTo(e.target.value)} className="input" />
+            </label>
             <button onClick={() => { void loadRanking() }} className="btn btn-secondary">
               🔍 Actualizar
+            </button>
+            <button
+              onClick={() => { void exportRanking() }}
+              className="btn btn-secondary"
+              disabled={rankExporting}
+              title="Exportar todos los productos vendidos en el período a Excel (.xlsx) o CSV"
+            >
+              {rankExporting ? '⏳ Exportando...' : '📊 Exportar a Excel'}
             </button>
           </div>
 
           {rankLoading && <p>Cargando ranking...</p>}
           {rankError && <p className="error">{rankError}</p>}
+          {rankExportMsg && <p className="text-muted">{rankExportMsg}</p>}
 
           {!rankLoading && (
             <div className="ranking-charts">

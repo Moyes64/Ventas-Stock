@@ -6,6 +6,7 @@ import type {
   DailySummaryReport,
   ReportFilters,
   RankingItem,
+  ProductSalesSummaryItem,
   PurchasesReport,
   PurchaseSupplierGroup,
   IncompleteEntry,
@@ -167,6 +168,30 @@ export class ReportingService {
       ORDER BY value DESC
       LIMIT 10
     `).all(params) as RankingItem[]
+  }
+
+  /**
+   * Todos los productos vendidos en el período con unidades y ganancia neta
+   * (mismo criterio que los rankings, sin el límite de 10), para exportar.
+   */
+  productSalesSummary(filters: ReportFilters): ProductSalesSummaryItem[] {
+    const params: Record<string, unknown> = {}
+    const conditions: string[] = ["s.status IN ('AUTHORIZED', 'INTERNAL_RECEIPT')"]
+    if (filters.dateFrom) { conditions.push('s.sale_date >= @dateFrom'); params.dateFrom = filters.dateFrom }
+    if (filters.dateTo)   { conditions.push('s.sale_date <= @dateTo');   params.dateTo   = filters.dateTo   }
+    const where = `WHERE ${conditions.join(' AND ')}`
+    return this.db.prepare(`
+      SELECT p.id AS productId, p.name AS productName, p.sku, p.barcode,
+             SUM(si.quantity) AS quantity,
+             SUM(si.unit_price * si.quantity) AS revenue,
+             SUM((si.unit_price - p.cost) * si.quantity) AS profit
+      FROM sale_items si
+      JOIN products p ON p.id = si.product_id
+      JOIN sales s ON s.id = si.sale_id
+      ${where}
+      GROUP BY p.id
+      ORDER BY quantity DESC, profit DESC
+    `).all(params) as ProductSalesSummaryItem[]
   }
 
   lowStockProducts(): StockReport[] {

@@ -258,6 +258,8 @@ export const reporting = {
     electron.reporting.rankingPorCantidad(filters) as Promise<RankingItem[]>,
   rankingPorGanancia: (filters: { dateFrom?: string; dateTo?: string }) =>
     electron.reporting.rankingPorGanancia(filters) as Promise<RankingItem[]>,
+  exportProductsReport: (filters: { dateFrom: string; dateTo: string }) =>
+    electron.reporting.exportProductsReport(filters) as Promise<{ success: boolean; canceled?: boolean; error?: string; count?: number; filePath?: string }>,
   purchasesBySupplier: (filters: { dateFrom?: string; dateTo?: string; supplierId?: number }) =>
     electron.reporting.purchasesBySupplier(filters) as Promise<PurchasesReport>,
   incompleteEntries: (filters: { dateFrom?: string; dateTo?: string }) =>

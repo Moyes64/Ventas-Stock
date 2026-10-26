@@ -114,6 +114,7 @@ const electronAPI = {
     dailySummary: (filters: unknown) => invoke('reporting:dailySummary', filters),
     rankingPorCantidad: (filters: unknown) => invoke('reporting:rankingPorCantidad', filters),
     rankingPorGanancia: (filters: unknown) => invoke('reporting:rankingPorGanancia', filters),
+    exportProductsReport: (filters: unknown) => invoke('reporting:exportProductsReport', filters),
     purchasesBySupplier: (filters: unknown) => invoke('reporting:purchasesBySupplier', filters),
     incompleteEntries: (filters: unknown) => invoke('reporting:incompleteEntries', filters),
   },
