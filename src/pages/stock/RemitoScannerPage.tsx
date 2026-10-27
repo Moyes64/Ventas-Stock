@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { remitoScanner, stock, catalog, suppliers } from '../../lib/ipc'
 import { localToday } from '../../lib/date'
-import { calcSalePrice, calcGainFromPrice } from '../../lib/pricing'
+import { calcRoundedSalePrice, calcGainFromPrice } from '../../lib/pricing'
 import type { RemitoExtracted, RemitoItem, MatchSource, Product, TaxRate, Supplier } from '../../types/ipc'
 
 interface NewProductForm {
@@ -496,7 +496,7 @@ export default function RemitoScannerPage() {
                               <input className="input" type="number" min={0} value={newProductForm.cost}
                                 onChange={e => {
                                   const val = e.target.value
-                                  const newPrice = calcSalePrice(parseFloat(val) || 0, parseFloat(newProductForm.gainPercent) || 0, newProductIvaPct)
+                                  const newPrice = calcRoundedSalePrice(parseFloat(val) || 0, parseFloat(newProductForm.gainPercent) || 0, newProductIvaPct)
                                   setNewProductForm(f => ({ ...f, cost: val, price: String(newPrice) }))
                                 }} />
                             </div>
@@ -505,7 +505,7 @@ export default function RemitoScannerPage() {
                               <input className="input" type="number" min={0} value={newProductForm.gainPercent}
                                 onChange={e => {
                                   const val = e.target.value
-                                  const newPrice = calcSalePrice(parseFloat(newProductForm.cost) || 0, parseFloat(val) || 0, newProductIvaPct)
+                                  const newPrice = calcRoundedSalePrice(parseFloat(newProductForm.cost) || 0, parseFloat(val) || 0, newProductIvaPct)
                                   setNewProductForm(f => ({ ...f, gainPercent: val, price: String(newPrice) }))
                                 }} />
                             </div>
@@ -516,7 +516,7 @@ export default function RemitoScannerPage() {
                               onChange={e => {
                                 const newId = e.target.value
                                 const newPct = taxRates.find(t => t.id === Number(newId))?.percentage ?? 0
-                                const newPrice = calcSalePrice(parseFloat(newProductForm.cost) || 0, parseFloat(newProductForm.gainPercent) || 0, newPct)
+                                const newPrice = calcRoundedSalePrice(parseFloat(newProductForm.cost) || 0, parseFloat(newProductForm.gainPercent) || 0, newPct)
                                 setNewProductForm(f => ({ ...f, taxRateId: newId, price: String(newPrice) }))
                               }}>
                               <option value="">— Seleccionar —</option>

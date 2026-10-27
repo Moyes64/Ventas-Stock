@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { catalog, suppliers as suppliersApi, printing as printingApi } from '../../lib/ipc'
 import type { Product, TaxRate, Supplier } from '../../types/ipc'
 import { useConfirm } from '../../hooks/useConfirm'
-import { calcSalePrice, calcGainFromPrice } from '../../lib/pricing'
+import { calcRoundedSalePrice, calcGainFromPrice, roundCost, roundUpToStep, SALE_PRICE_STEP } from '../../lib/pricing'
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
@@ -259,10 +259,10 @@ function ProductForm({
     description: product?.description ?? '',
     supplierId: product?.supplierId ?? ('' as number | ''),
     supplierCode: product?.supplierCode ?? '',
-    cost: String(product?.cost ?? 0),
+    cost: String(roundCost(product?.cost ?? 0)),
     taxRateId: product?.taxRateId ?? 0,
     gainPercent: String(product?.gainPercent ?? 0),
-    price: String(product?.price ?? calcSalePrice(product?.cost ?? 0, product?.gainPercent ?? 0, 0)),
+    price: String(product?.price ?? calcRoundedSalePrice(product?.cost ?? 0, product?.gainPercent ?? 0, 0)),
     stockMin: String(product?.stockMin ?? 0),
   })
 
@@ -284,21 +284,21 @@ function ProductForm({
   function handleCostChange(value: string) {
     const nextCost = parseFloat(value)
     const normalizedNextCost = Number.isNaN(nextCost) ? 0 : nextCost
-    const nextPrice = calcSalePrice(normalizedNextCost, normalizedGainPercent, ivaPct)
+    const nextPrice = calcRoundedSalePrice(normalizedNextCost, normalizedGainPercent, ivaPct)
     setForm(prev => ({ ...prev, cost: value, price: String(nextPrice) }))
   }
 
   function handleTaxRateChange(nextTaxRateId: number) {
     const nextTaxRate = taxRates.find(t => t.id === nextTaxRateId)
     const nextIvaPct = nextTaxRate?.percentage ?? 0
-    const nextPrice = calcSalePrice(normalizedCost, normalizedGainPercent, nextIvaPct)
+    const nextPrice = calcRoundedSalePrice(normalizedCost, normalizedGainPercent, nextIvaPct)
     setForm(prev => ({ ...prev, taxRateId: nextTaxRateId, price: String(nextPrice) }))
   }
 
   function handleGainPercentChange(value: string) {
     const nextGainPercent = parseFloat(value)
     const normalizedNextGainPercent = Number.isNaN(nextGainPercent) ? 0 : nextGainPercent
-    const nextPrice = calcSalePrice(normalizedCost, normalizedNextGainPercent, ivaPct)
+    const nextPrice = calcRoundedSalePrice(normalizedCost, normalizedNextGainPercent, ivaPct)
     setForm(prev => ({ ...prev, gainPercent: value, price: String(nextPrice) }))
   }
 
@@ -307,6 +307,14 @@ function ProductForm({
     const normalizedNextPrice = Number.isNaN(nextPrice) ? 0 : nextPrice
     const nextGainPercent = calcGainFromPrice(normalizedCost, normalizedNextPrice, ivaPct)
     setForm(prev => ({ ...prev, price: value, gainPercent: String(nextGainPercent) }))
+  }
+
+  // Al salir del campo, el precio tipeado a mano se lleva a centenas (sin decimales)
+  function handlePriceBlur(value: string) {
+    const parsed = parseFloat(value)
+    if (value.trim() === '' || Number.isNaN(parsed)) { handlePriceChange('0'); return }
+    const rounded = roundUpToStep(parsed, SALE_PRICE_STEP)
+    if (rounded !== parsed) handlePriceChange(String(rounded))
   }
 
   useEffect(() => {
@@ -352,7 +360,7 @@ function ProductForm({
           description: form.description,
           supplierId: form.supplierId === '' ? undefined : Number(form.supplierId),
           supplierCode: form.supplierCode,
-          cost: normalizedCost,
+          cost: roundCost(normalizedCost),
           price: normalizedPrice,
           taxRateId: Number(form.taxRateId),
           gainPercent: normalizedGainPercent,
@@ -366,7 +374,7 @@ function ProductForm({
           description: form.description,
           supplierId: form.supplierId === '' ? undefined : Number(form.supplierId),
           supplierCode: form.supplierCode,
-          cost: normalizedCost,
+          cost: roundCost(normalizedCost),
           price: normalizedPrice,
           taxRateId: Number(form.taxRateId),
           gainPercent: normalizedGainPercent,
@@ -518,10 +526,10 @@ function ProductForm({
                 type="number"
                 value={form.price}
                 onChange={e => handlePriceChange(e.target.value)}
-                onBlur={e => { if (e.target.value.trim() === '') handlePriceChange('0') }}
+                onBlur={e => handlePriceBlur(e.target.value)}
                 onFocus={e => e.target.select()}
                 min="0"
-                step="0.01"
+                step="any"
                 className="input"
                 title="Editable: al cambiar este valor se recalcula la ganancia (%)"
               />

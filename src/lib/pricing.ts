@@ -3,6 +3,19 @@ export function calcSalePrice(cost: number, gainPct: number, ivaPct: number): nu
   return cost * (1 + gainPct / 100) * (1 + ivaPct / 100)
 }
 
+/** Paso de redondeo del precio de venta (c/ IVA): siempre a centenas, sin decimales */
+export const SALE_PRICE_STEP = 100
+
+/** Precio de venta (c/ IVA) redondeado hacia arriba a centenas, para que el markup nunca quede bajo el objetivo */
+export function calcRoundedSalePrice(cost: number, gainPct: number, ivaPct: number): number {
+  return roundUpToStep(calcSalePrice(cost, gainPct, ivaPct), SALE_PRICE_STEP)
+}
+
+/** Costo (s/ IVA) a 2 decimales, como lo informa el proveedor */
+export function roundCost(cost: number): number {
+  return Math.round(cost * 100) / 100
+}
+
 /** Derives gain% from a manually entered sale price */
 export function calcGainFromPrice(cost: number, price: number, ivaPct: number): number {
   if (cost <= 0) return 0
