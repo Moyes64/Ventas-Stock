@@ -769,6 +769,21 @@ export class FinanceService {
     return this.repo.expensesByCategory(this.clampDateFrom(dateFrom), dateTo, accountId)
   }
 
+  getIncomesByCategory(dateFrom: string, dateTo: string, accountId?: number): CategoryExpense[] {
+    return this.repo.incomesByCategory(this.clampDateFrom(dateFrom), dateTo, accountId)
+  }
+
+  /** Ingresos/egresos del período en la cuenta "Socios (fuera de Pandora)": no movieron plata de Pandora. */
+  getOffBooksCashFlow(dateFrom: string, dateTo: string): { ingresos: number; egresos: number } {
+    const account = this.repo.findSociosAccount()
+    if (!account) return { ingresos: 0, egresos: 0 }
+    const points = this.repo.cashFlowByFinanceMovements(this.clampDateFrom(dateFrom), dateTo, 'month', account.id)
+    return points.reduce(
+      (acc, p) => ({ ingresos: acc.ingresos + p.ingresos, egresos: acc.egresos + p.egresos }),
+      { ingresos: 0, egresos: 0 }
+    )
+  }
+
   getPartnersEquity(): PartnerEquity[] {
     const partners = this.repo.listPartners()
     const retiroCategoria = this.repo.findCategoryByName(RETIRO_SOCIO_CATEGORIA)

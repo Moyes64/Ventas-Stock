@@ -677,8 +677,16 @@ export class FinanceRepository {
   }
 
   expensesByCategory(dateFrom: string, dateTo: string, accountId?: number): CategoryExpense[] {
-    const conditions = ["tipo = 'egreso'", 'fecha >= @dateFrom', 'fecha <= @dateTo']
-    const params: Record<string, unknown> = { dateFrom, dateTo }
+    return this.totalsByCategory('egreso', dateFrom, dateTo, accountId)
+  }
+
+  incomesByCategory(dateFrom: string, dateTo: string, accountId?: number): CategoryExpense[] {
+    return this.totalsByCategory('ingreso', dateFrom, dateTo, accountId)
+  }
+
+  private totalsByCategory(tipo: 'ingreso' | 'egreso', dateFrom: string, dateTo: string, accountId?: number): CategoryExpense[] {
+    const conditions = ['tipo = @tipo', 'fecha >= @dateFrom', 'fecha <= @dateTo']
+    const params: Record<string, unknown> = { tipo, dateFrom, dateTo }
     if (accountId !== undefined) {
       conditions.push('account_id = @accountId')
       params.accountId = accountId

@@ -518,13 +518,25 @@ foreach ($mpMovements as $m) {
 
   <?php $cashFlow = $finance['cashFlowMonth'] ?? null; ?>
   <?php if ($cashFlow): ?>
+  <?php
+    $offBooksIn  = (float)($cashFlow['offBooksIngresos'] ?? 0);
+    $offBooksOut = (float)($cashFlow['offBooksEgresos'] ?? 0);
+  ?>
   <div class="caja-grid">
     <div class="caja-row">
-      <span class="caja-lbl">Ingresos del mes</span>
+      <span class="caja-lbl">Ingresos del mes
+        <?php if ($offBooksIn > 0): ?>
+        <small class="caja-note">Incluye <?= fmt($offBooksIn) ?> de operaciones de socios fuera de Pandora</small>
+        <?php endif; ?>
+      </span>
       <span class="caja-val"><?= fmt((float)($cashFlow['ingresos'] ?? 0)) ?></span>
     </div>
     <div class="caja-row">
-      <span class="caja-lbl">Egresos del mes</span>
+      <span class="caja-lbl">Egresos del mes
+        <?php if ($offBooksOut > 0): ?>
+        <small class="caja-note">Incluye <?= fmt($offBooksOut) ?> de operaciones de socios fuera de Pandora</small>
+        <?php endif; ?>
+      </span>
       <span class="caja-val caja-val--neg">- <?= fmt((float)($cashFlow['egresos'] ?? 0)) ?></span>
     </div>
     <div class="caja-row caja-row--total">
@@ -534,6 +546,24 @@ foreach ($mpMovements as $m) {
       </span>
     </div>
   </div>
+  <?php endif; ?>
+
+  <?php $incomesByCategory = $finance['incomesByCategoryMonth'] ?? []; ?>
+  <?php if (!empty($incomesByCategory)): ?>
+  <details class="collapsible">
+    <summary>Ingresos por categoría (mes actual)</summary>
+    <table class="mini-table">
+      <thead><tr><th>Categoría</th><th>Total</th></tr></thead>
+      <tbody>
+        <?php foreach ($incomesByCategory as $e): ?>
+        <tr>
+          <td><?= htmlspecialchars($e['categoriaName'] ?? 'Sin categoría') ?></td>
+          <td><?= fmt((float)($e['total'] ?? 0)) ?></td>
+        </tr>
+        <?php endforeach; ?>
+      </tbody>
+    </table>
+  </details>
   <?php endif; ?>
 
   <?php $expensesByCategory = $finance['expensesByCategoryMonth'] ?? []; ?>

@@ -189,6 +189,9 @@ export interface SyncFinanceCashFlow {
   ingresos: number
   egresos: number
   neto: number
+  /** Parte de ingresos/egresos que son operaciones de socios fuera de Pandora (no movieron plata de sus cuentas). */
+  offBooksIngresos: number
+  offBooksEgresos: number
 }
 
 export interface SyncFinanceCategoryExpense {
@@ -210,6 +213,7 @@ export interface SyncFinance {
   accountBalances: SyncFinanceAccountBalance[]
   cashFlowMonth: SyncFinanceCashFlow
   expensesByCategoryMonth: SyncFinanceCategoryExpense[]
+  incomesByCategoryMonth: SyncFinanceCategoryExpense[]
   partnersEquity: SyncFinancePartnerEquity[]
   pendingAccreditations: SyncFinancePendingAccreditation[]
   recentTransfers: SyncFinanceTransfer[]

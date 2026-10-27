@@ -130,6 +130,7 @@ a:hover { text-decoration: underline; }
   font-weight: 700;
 }
 .caja-lbl { color: var(--muted); }
+.caja-note { display: block; font-size: .72rem; margin-top: .1rem; }
 .caja-val { font-weight: 600; }
 .caja-val--neg { color: var(--danger); }
 

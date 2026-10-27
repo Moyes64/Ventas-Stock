@@ -190,6 +190,8 @@ export class SyncService {
     const balances = this.financeService.getAccountBalances()
     const [cashFlow] = this.financeService.getCashFlowSummary(firstOfMonth, today, 'month')
     const expenses = this.financeService.getExpensesByCategory(firstOfMonth, today)
+    const incomes = this.financeService.getIncomesByCategory(firstOfMonth, today)
+    const offBooks = this.financeService.getOffBooksCashFlow(firstOfMonth, today)
     const equity = this.financeService.getPartnersEquity()
     const pending = this.financeService.getPendingAccreditations()
     const transfers = this.financeService.listTransfers({ dateFrom: firstOfMonth, dateTo: today })
@@ -209,8 +211,14 @@ export class SyncService {
         ingresos: cashFlow?.ingresos ?? 0,
         egresos: cashFlow?.egresos ?? 0,
         neto: cashFlow?.neto ?? 0,
+        offBooksIngresos: offBooks.ingresos,
+        offBooksEgresos: offBooks.egresos,
       },
       expensesByCategoryMonth: expenses.map(e => ({
+        categoriaName: e.categoriaName,
+        total: e.total,
+      })),
+      incomesByCategoryMonth: incomes.map(e => ({
         categoriaName: e.categoriaName,
         total: e.total,
       })),
