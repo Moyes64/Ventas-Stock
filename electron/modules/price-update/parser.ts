@@ -58,19 +58,8 @@ function parsePrice(raw: unknown): number | null {
   return Number.isFinite(n) ? n : null
 }
 
-export function parsePriceExcel(filePath: string): ParseExcelResult {
-  const warnings: string[] = []
-  const emptyColumns = { sku: null, barcode: null, description: null, price: null }
-  const workbook = XLSX.readFile(filePath)
-  const sheetName = workbook.SheetNames[0]
-  if (!sheetName) return { rows: [], warnings: ['El archivo no tiene hojas.'], detectedColumns: emptyColumns }
-
-  const sheet = workbook.Sheets[sheetName]
-  const raw = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '' })
-  if (raw.length === 0) return { rows: [], warnings: ['La hoja está vacía.'], detectedColumns: emptyColumns }
-
-  const rawHeaders = raw[0].map(h => String(h ?? '').trim())
-  const headers = raw[0].map(normalizeHeader)
+function detectColumns(headerRow: unknown[]) {
+  const headers = headerRow.map(normalizeHeader)
 
   // Código de barras primero, con palabras clave específicas (no ambiguas con "código" a secas)
   const barcodeCol = findColumn(headers, ['codigo de barras', 'cod. barras', 'barras', 'ean'])
@@ -80,13 +69,35 @@ export function parsePriceExcel(filePath: string): ParseExcelResult {
   // y siempre evitando la columna ya asignada a código de barras. Si el comodín genérico se
   // probara junto con "sku" en una sola pasada, una columna "Código de barras" que aparezca
   // antes que la de "SKU" en la planilla "robaría" el match por contener la palabra "código".
-  let finalSkuCol = findColumn(headers, ['sku', 'codigo de proveedor', 'codigo prov', 'articulo'])
-  if (finalSkuCol === -1) {
-    finalSkuCol = headers.findIndex((h, i) => i !== barcodeCol && h.includes('codigo'))
+  let skuCol = findColumn(headers, ['sku', 'codigo de proveedor', 'codigo prov', 'articulo'])
+  if (skuCol === -1) {
+    skuCol = headers.findIndex((h, i) => i !== barcodeCol && h.includes('codigo'))
   }
 
   const descCol = findColumn(headers, ['descripcion', 'descripción', 'nombre', 'producto', 'detalle'])
   const priceCol = findColumn(headers, ['precio', 'costo'])
+
+  return { skuCol, barcodeCol, descCol, priceCol }
+}
+
+export function parsePriceExcel(filePath: string): ParseExcelResult {
+  const warnings: string[] = []
+  const emptyColumns = { sku: null, barcode: null, description: null, price: null }
+  const workbook = XLSX.readFile(filePath)
+  if (workbook.SheetNames.length === 0) return { rows: [], warnings: ['El archivo no tiene hojas.'], detectedColumns: emptyColumns }
+
+  // Se usa la primera hoja cuyo encabezado (fila 1) tenga SKU/Código de barras y Precio.
+  // Los proveedores suelen mandar su lista original en la primera hoja y la planilla con el
+  // formato esperado queda en otra; si ninguna matchea se cae a la primera para reportar avisos.
+  const sheets = workbook.SheetNames.map(name => {
+    const raw = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[name], { header: 1, defval: '' })
+    return { raw, cols: detectColumns(raw[0] ?? []) }
+  })
+  const { raw, cols } = sheets.find(s => (s.cols.skuCol >= 0 || s.cols.barcodeCol >= 0) && s.cols.priceCol >= 0) ?? sheets[0]
+  if (raw.length === 0) return { rows: [], warnings: ['La hoja está vacía.'], detectedColumns: emptyColumns }
+
+  const rawHeaders = raw[0].map(h => String(h ?? '').trim())
+  const { skuCol: finalSkuCol, barcodeCol, descCol, priceCol } = cols
 
   const detectedColumns = {
     sku: finalSkuCol >= 0 ? rawHeaders[finalSkuCol] : null,
