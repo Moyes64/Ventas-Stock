@@ -26,7 +26,7 @@ const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 
   // Configuración por equipo (p. ej. TURSO_DATABASE_URL / TURSO_AUTH_TOKEN) que
   // no viaja en el instalador: <userData>/config.env. En Mac es
-  // ~/Library/Application Support/Ventas-Stock/config.env. No pisa variables
+  // ~/Library/Application Support/ventas-stock/config.env. No pisa variables
   // ya definidas (el lanzador o el .env de arriba tienen prioridad).
   {
     const userEnvPath = path.join(app.getPath('userData'), 'config.env')
