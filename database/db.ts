@@ -64,6 +64,9 @@ function openLibsql(resolvedPath: string): Database.Database {
         syncUrl,
         authToken: process.env.TURSO_AUTH_TOKEN ?? '',
         syncPeriod: Number(process.env.TURSO_SYNC_PERIOD ?? 2),
+        // Sin readYourWrites cada escritura no espera traerse el cambio: se
+        // sincroniza una sola vez al terminar la escritura suelta o el COMMIT.
+        readYourWrites: process.env.TURSO_READ_YOUR_WRITES === '1',
       })
     : new Libsql(resolvedPath)
 
@@ -76,21 +79,55 @@ function openLibsql(resolvedPath: string): Database.Database {
   }
   db.pragma('foreign_keys = ON')
 
+  // Contra Turso los parámetros con nombre (@x, :x, $x) llegan vacíos al
+  // servidor: se reescriben a numerados (?1, ?2…) y el objeto se pasa como array.
+  const originalPrepare = db.prepare.bind(db)
+  db.prepare = (sql: string) => {
+    const { sql: rewritten, names } = namedToNumbered(sql)
+    const stmt = originalPrepare(rewritten)
+    if (names.length > 0) stmt.__paramNames = names
+    // Réplica embebida: una sentencia preparada antes del BEGIN se ejecuta fuera
+    // de la transacción (se graba aunque haya ROLLBACK y rompe la transacción).
+    // Se vuelve a preparar en cada ejecución, en el estado actual de la conexión.
+    if (syncUrl) stmt.__sql = rewritten
+    return stmt
+  }
+
   const probe = db.prepare('SELECT 1')
   const statementProto = Object.getPrototypeOf(probe)
   if (!statementProto.__compatPatched) {
-    // Un único parámetro null lo toma como objeto de parámetros nombrados y
-    // falla ("failed to downcast any to object"); envuelto en array va posicional.
-    const fixArgs = (args: unknown[]) => (args.length === 1 && args[0] === null ? [[null]] : args)
+    const fixArgs = (stmt: { __paramNames?: string[] }, args: unknown[]) => {
+      const names = stmt.__paramNames
+      const single = args.length === 1 ? args[0] : undefined
+      if (names && single && typeof single === 'object' && !Array.isArray(single) && !Buffer.isBuffer(single)) {
+        const params = single as Record<string, unknown>
+        return [names.map(name => {
+          // Mismo error que better-sqlite3 ante un parámetro con nombre faltante.
+          if (params[name] === undefined) throw new RangeError(`Missing named parameter "${name}"`)
+          return params[name]
+        })]
+      }
+      // Un único parámetro null lo toma como objeto de parámetros nombrados y
+      // falla ("failed to downcast any to object"); envuelto en array va posicional.
+      return args.length === 1 && args[0] === null ? [[null]] : args
+    }
+    const target = (stmt: { __sql?: string; pluckMode?: boolean }) => {
+      if (!stmt.__sql) return stmt
+      const fresh = originalPrepare(stmt.__sql)
+      fresh.pluckMode = stmt.pluckMode
+      return fresh
+    }
     for (const method of ['run', 'all', 'iterate']) {
       const original = statementProto[method]
       statementProto[method] = function (...args: unknown[]) {
-        return original.apply(this, fixArgs(args))
+        const result = original.apply(target(this), fixArgs(this, args))
+        if (syncUrl && method === 'run' && !db.inTransaction) db.sync()
+        return result
       }
     }
     const originalGet = statementProto.get
     statementProto.get = function (...args: unknown[]) {
-      const row = originalGet.apply(this, fixArgs(args))
+      const row = originalGet.apply(target(this), fixArgs(this, args))
       if (row && typeof row === 'object') delete (row as Record<string, unknown>)._metadata
       return row
     }
@@ -118,9 +155,16 @@ function openLibsql(resolvedPath: string): Database.Database {
       try {
         const result = fn(...args)
         db.exec('COMMIT')
+        if (syncUrl) db.sync()
         return result
       } catch (err) {
-        if (db.inTransaction) db.exec('ROLLBACK')
+        // En una réplica embebida la transacción vive en Turso: si el error la
+        // cerró allá, el ROLLBACK falla y no debe tapar el error original.
+        try {
+          if (db.inTransaction) db.exec('ROLLBACK')
+        } catch (rollbackErr) {
+          console.error('[db] ROLLBACK falló:', rollbackErr)
+        }
         throw err
       }
     }
@@ -138,6 +182,58 @@ function openLibsql(resolvedPath: string): Database.Database {
   }
 
   return db as Database.Database
+}
+
+/**
+ * Reemplaza los parámetros con nombre (@x, :x, $x) por numerados (?1, ?2…),
+ * ignorando literales, identificadores entre comillas y comentarios. Devuelve
+ * los nombres en el orden de su número. Si la sentencia mezcla `?` sueltos con
+ * nombres no se toca (la numeración no sería confiable).
+ */
+function namedToNumbered(sql: string): { sql: string; names: string[] } {
+  const names: string[] = []
+  let out = ''
+  let hasBarePositional = false
+  let i = 0
+  while (i < sql.length) {
+    const ch = sql[i]
+    if (ch === "'" || ch === '"' || ch === '`' || ch === '[') {
+      const close = ch === '[' ? ']' : ch
+      let j = i + 1
+      while (j < sql.length) {
+        if (sql[j] === close) {
+          if (close !== ']' && sql[j + 1] === close) { j += 2; continue }
+          break
+        }
+        j++
+      }
+      out += sql.slice(i, j + 1)
+      i = j + 1
+    } else if (ch === '-' && sql[i + 1] === '-') {
+      const end = sql.indexOf('\n', i)
+      const j = end === -1 ? sql.length : end
+      out += sql.slice(i, j)
+      i = j
+    } else if (ch === '/' && sql[i + 1] === '*') {
+      const end = sql.indexOf('*/', i + 2)
+      const j = end === -1 ? sql.length : end + 2
+      out += sql.slice(i, j)
+      i = j
+    } else if ((ch === '@' || ch === ':' || ch === '$') && /[A-Za-z_]/.test(sql[i + 1] ?? '')) {
+      const match = /^[A-Za-z_][A-Za-z0-9_]*/.exec(sql.slice(i + 1))!
+      const name = match[0]
+      let idx = names.indexOf(name)
+      if (idx === -1) idx = names.push(name) - 1
+      out += `?${idx + 1}`
+      i += 1 + name.length
+    } else {
+      if (ch === '?' && !/[0-9]/.test(sql[i + 1] ?? '')) hasBarePositional = true
+      out += ch
+      i++
+    }
+  }
+  if (names.length === 0 || hasBarePositional) return { sql, names: [] }
+  return { sql: out, names }
 }
 
 /** Closes the database connection (call on app quit). */
