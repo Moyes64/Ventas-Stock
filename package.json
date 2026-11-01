@@ -32,6 +32,7 @@
     "better-sqlite3": "12.9.0",
     "date-fns": "^3.3.1",
     "dotenv": "^16.4.7",
+    "libsql": "0.5.29",
     "node-forge": "^1.4.0",
     "nodemailer": "^9.0.1",
     "qrcode": "^1.5.3",
