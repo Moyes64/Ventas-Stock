@@ -62,4 +62,24 @@ export function registerAuthHandlers(db: Database): void {
   ipcMain.handle('auth:listRoles', () => {
     return authService.listRoles()
   })
+
+  ipcMain.handle('auth:listPermissionAreas', () => {
+    return authService.listPermissionAreas()
+  })
+
+  ipcMain.handle('auth:listRolesWithPermissions', () => {
+    return authService.listRolesWithPermissions()
+  })
+
+  ipcMain.handle('auth:createRole', (_event, data: Parameters<AuthService['createRole']>[0]) => {
+    return authService.createRole(data)
+  })
+
+  ipcMain.handle('auth:updateRole', (_event, id: number, data: Parameters<AuthService['updateRole']>[1]) => {
+    return authService.updateRole(id, data)
+  })
+
+  ipcMain.handle('auth:deleteRole', (_event, id: number) => {
+    return authService.deleteRole(id)
+  })
 }

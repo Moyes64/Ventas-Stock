@@ -30,6 +30,25 @@ export interface Permission {
   action: string
 }
 
+/** Sección a la que se le puede dar acceso por rol (lista fija del sistema). */
+export interface PermissionAreaInfo {
+  key: string
+  label: string
+  description: string
+}
+
+export interface RoleWithPermissions extends Role {
+  permissions: Permission[]
+  userCount: number
+}
+
+export interface RoleInput {
+  name: string
+  description: string
+  /** Claves de PermissionAreaInfo a las que accede el rol. */
+  areas: string[]
+}
+
 export interface User {
   id: number
   username: string

@@ -4,6 +4,7 @@ import type { User, Role } from '../../types/ipc'
 import { useConfirm } from '../../hooks/useConfirm'
 import { formatDate } from '../../lib/date'
 import { useAuth } from '../../context/AuthContext'
+import RolesPanel from './RolesPanel'
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([])
@@ -14,6 +15,7 @@ export default function UsersPage() {
   const [editUser, setEditUser] = useState<User | null>(null)
   const { confirm, dialog: confirmDialog } = useConfirm()
   const { user: currentUser } = useAuth()
+  const [tab, setTab] = useState<'users' | 'roles'>('users')
 
   async function loadData() {
     setLoading(true)
@@ -56,78 +58,91 @@ export default function UsersPage() {
     <div className="page">
       <div className="page-header">
         <h1 className="page-title">Usuarios</h1>
-        <button className="btn btn-primary" onClick={() => { setEditUser(null); setShowForm(true) }}>
-          + Nuevo Usuario
+        {tab === 'users' && (
+          <button className="btn btn-primary" onClick={() => { setEditUser(null); setShowForm(true) }}>
+            + Nuevo Usuario
+          </button>
+        )}
+      </div>
+
+      <div className="tab-bar">
+        <button className={`tab ${tab === 'users' ? 'tab--active' : ''}`} onClick={() => { setTab('users'); void loadData() }}>
+          Usuarios
+        </button>
+        <button className={`tab ${tab === 'roles' ? 'tab--active' : ''}`} onClick={() => setTab('roles')}>
+          Roles y permisos
         </button>
       </div>
 
-      {loading && <p>Cargando...</p>}
-      {error && <p className="error">{error}</p>}
+      {tab === 'roles' ? <RolesPanel /> : <>
+        {loading && <p>Cargando...</p>}
+        {error && <p className="error">{error}</p>}
 
-      {!loading && (
-        <div className="table-container">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Usuario</th>
-                <th>Nombre</th>
-                <th>Rol</th>
-                <th>Estado</th>
-                <th>Creado</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map(u => (
-                <tr key={u.id} className={!u.active ? 'row--inactive' : ''}>
-                  <td><code>{u.username}</code></td>
-                  <td>{u.name}</td>
-                  <td><span className="badge">{getRoleName(u.roleId)}</span></td>
-                  <td>
-                    <span className={u.active ? 'badge badge--success' : 'badge badge--danger'}>
-                      {u.active ? 'Activo' : 'Inactivo'}
-                    </span>
-                  </td>
-                  <td>{formatDate(u.createdAt)}</td>
-                  <td>
-                    <button
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => { setEditUser(u); setShowForm(true) }}
-                    >Editar</button>
-                    {/* El usuario de la sesión no puede desactivarse ni eliminarse a sí mismo. */}
-                    {u.id !== currentUser?.id && (
-                      <>
-                        <button
-                          className={`btn btn-sm ${u.active ? 'btn-warning' : 'btn-secondary'}`}
-                          onClick={() => { void handleToggleActive(u) }}
-                        >
-                          {u.active ? 'Desactivar' : 'Activar'}
-                        </button>
-                        <button
-                          className="btn btn-danger btn-sm"
-                          onClick={() => { void handleDelete(u.id) }}
-                        >Eliminar</button>
-                      </>
-                    )}
-                  </td>
+        {!loading && (
+          <div className="table-container">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Usuario</th>
+                  <th>Nombre</th>
+                  <th>Rol</th>
+                  <th>Estado</th>
+                  <th>Creado</th>
+                  <th>Acciones</th>
                 </tr>
-              ))}
-              {users.length === 0 && (
-                <tr><td colSpan={6} className="empty-row">Sin usuarios</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </thead>
+              <tbody>
+                {users.map(u => (
+                  <tr key={u.id} className={!u.active ? 'row--inactive' : ''}>
+                    <td><code>{u.username}</code></td>
+                    <td>{u.name}</td>
+                    <td><span className="badge">{getRoleName(u.roleId)}</span></td>
+                    <td>
+                      <span className={u.active ? 'badge badge--success' : 'badge badge--danger'}>
+                        {u.active ? 'Activo' : 'Inactivo'}
+                      </span>
+                    </td>
+                    <td>{formatDate(u.createdAt)}</td>
+                    <td>
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => { setEditUser(u); setShowForm(true) }}
+                      >Editar</button>
+                      {/* El usuario de la sesión no puede desactivarse ni eliminarse a sí mismo. */}
+                      {u.id !== currentUser?.id && (
+                        <>
+                          <button
+                            className={`btn btn-sm ${u.active ? 'btn-warning' : 'btn-secondary'}`}
+                            onClick={() => { void handleToggleActive(u) }}
+                          >
+                            {u.active ? 'Desactivar' : 'Activar'}
+                          </button>
+                          <button
+                            className="btn btn-danger btn-sm"
+                            onClick={() => { void handleDelete(u.id) }}
+                          >Eliminar</button>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {users.length === 0 && (
+                  <tr><td colSpan={6} className="empty-row">Sin usuarios</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
 
-      {showForm && (
-        <UserForm
-          user={editUser}
-          roles={roles}
-          onClose={() => setShowForm(false)}
-          onSaved={() => { void loadData() }}
-        />
-      )}
+        {showForm && (
+          <UserForm
+            user={editUser}
+            roles={roles}
+            onClose={() => setShowForm(false)}
+            onSaved={() => { void loadData() }}
+          />
+        )}
+      </>}
 
       {confirmDialog}
     </div>

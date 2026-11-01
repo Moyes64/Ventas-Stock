@@ -4,12 +4,15 @@ import { reporting, catalog } from '../lib/ipc'
 import { localToday, formatWeekdayDate } from '../lib/date'
 import type { DailySummaryReport, ExchangeDifference } from '../types/ipc'
 import { useHiddenOptions } from '../context/HiddenOptionsContext'
+import { useAuth } from '../context/AuthContext'
+import { canAccessPath } from '../lib/permissions'
 
 export default function Dashboard() {
   const [todaySummary, setTodaySummary] = useState<DailySummaryReport | null>(null)
   const [lowStockCount, setLowStockCount] = useState(0)
   const [exchangeDiffs, setExchangeDiffs] = useState<ExchangeDifference[]>([])
   const [loading, setLoading] = useState(true)
+  const { user } = useAuth()
   const [error, setError] = useState<string | null>(null)
   const { isHiddenOptionsVisible } = useHiddenOptions()
 
@@ -100,15 +103,21 @@ export default function Dashboard() {
       <div className="quick-actions">
         <h2>Acciones rápidas</h2>
         <div className="action-buttons">
-          <Link to="/sales/new" className="btn btn-primary btn-lg">
-            🛒 Nueva Venta
-          </Link>
-          <Link to="/stock" className="btn btn-secondary">
-            📊 Ver Stock
-          </Link>
-          <Link to="/reporting" className="btn btn-secondary">
-            📈 Ver Reportes
-          </Link>
+          {canAccessPath(user, '/sales/new') && (
+            <Link to="/sales/new" className="btn btn-primary btn-lg">
+              🛒 Nueva Venta
+            </Link>
+          )}
+          {canAccessPath(user, '/stock') && (
+            <Link to="/stock" className="btn btn-secondary">
+              📊 Ver Stock
+            </Link>
+          )}
+          {canAccessPath(user, '/reporting') && (
+            <Link to="/reporting" className="btn btn-secondary">
+              📈 Ver Reportes
+            </Link>
+          )}
         </div>
       </div>
     </div>

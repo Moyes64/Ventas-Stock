@@ -142,6 +142,24 @@ html, body, #root {
 }
 .sidebar-logout:hover { background: rgba(255,255,255,0.08); color: #fff; }
 
+/* Roles y permisos */
+.role-areas { display: flex; flex-wrap: wrap; gap: 4px; }
+.role-area-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+.role-area-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+.role-area-option input { margin-top: 3px; }
+
 /* Login */
 .login-screen {
   min-height: 100vh;

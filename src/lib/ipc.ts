@@ -11,6 +11,9 @@ import type {
   PedidoProduct,
   LoginResult,
   AuthenticatedUser,
+  PermissionAreaInfo,
+  RoleWithPermissions,
+  RoleInput,
   User,
   Role,
   Product,
@@ -97,6 +100,11 @@ export const auth = {
     electron.auth.updateUser(id, data) as Promise<void>,
   deleteUser: (id: number) => electron.auth.deleteUser(id) as Promise<void>,
   listRoles: () => electron.auth.listRoles() as Promise<Role[]>,
+  listPermissionAreas: () => electron.auth.listPermissionAreas() as Promise<PermissionAreaInfo[]>,
+  listRolesWithPermissions: () => electron.auth.listRolesWithPermissions() as Promise<RoleWithPermissions[]>,
+  createRole: (data: RoleInput) => electron.auth.createRole(data) as Promise<number>,
+  updateRole: (id: number, data: RoleInput) => electron.auth.updateRole(id, data) as Promise<void>,
+  deleteRole: (id: number) => electron.auth.deleteRole(id) as Promise<void>,
 }
 
 // Catalog

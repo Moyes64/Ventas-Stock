@@ -153,6 +153,53 @@ export class RoleRepository {
       .all(roleId) as Permission[]
   }
 
+  /** Roles con sus permisos y cuántos usuarios tienen cada uno. */
+  listWithPermissions(): Array<Role & { userCount: number }> {
+    const rows = this.db
+      .prepare(
+        `SELECT r.*, (SELECT count(*) FROM users u WHERE u.role_id = r.id) AS user_count
+         FROM roles r ORDER BY r.name ASC`
+      )
+      .all() as Array<RoleRow & { user_count: number }>
+    const permissions = this.db.prepare('SELECT * FROM permissions').all() as PermissionRow[]
+    return rows.map(r => ({
+      ...this.mapRow(r, permissions.filter(p => p.role_id === r.id)),
+      userCount: r.user_count,
+    }))
+  }
+
+  create(data: { name: string; description: string }): number {
+    const result = this.db
+      .prepare('INSERT INTO roles (name, description) VALUES (@name, @description)')
+      .run(data)
+    return result.lastInsertRowid as number
+  }
+
+  update(id: number, data: { name: string; description: string }): void {
+    this.db
+      .prepare('UPDATE roles SET name = @name, description = @description WHERE id = @id')
+      .run({ id, ...data })
+  }
+
+  /** Reemplaza las secciones a las que accede el rol. */
+  setAccess(roleId: number, modules: string[], action: string): void {
+    const insert = this.db.prepare(
+      'INSERT INTO permissions (role_id, module, action) VALUES (@roleId, @module, @action)'
+    )
+    this.db.transaction(() => {
+      this.db.prepare('DELETE FROM permissions WHERE role_id = ?').run(roleId)
+      for (const module of modules) insert.run({ roleId, module, action })
+    })()
+  }
+
+  countUsers(roleId: number): number {
+    return (this.db.prepare('SELECT count(*) AS n FROM users WHERE role_id = ?').get(roleId) as { n: number }).n
+  }
+
+  delete(id: number): void {
+    this.db.prepare('DELETE FROM roles WHERE id = ?').run(id)
+  }
+
   private mapRow(row: RoleRow, permissions: PermissionRow[] = []): Role {
     return {
       id: row.id,

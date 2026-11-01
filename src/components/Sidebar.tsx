@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { canAccessPath } from '../lib/permissions'
 
 interface NavItem {
   to: string
@@ -90,6 +91,13 @@ export default function Sidebar() {
     return initial
   })
 
+  // Solo las secciones a las que el rol tiene acceso; un grupo sin ítems visibles no se muestra.
+  const visibleEntries = navEntries.flatMap<NavEntry>(entry => {
+    if (entry.kind === 'item') return canAccessPath(user, entry.to) ? [entry] : []
+    const items = entry.items.filter(item => canAccessPath(user, item.to))
+    return items.length > 0 ? [{ ...entry, items }] : []
+  })
+
   function toggleGroup(prefix: string) {
     setOpenGroups(prev => ({ ...prev, [prefix]: !prev[prefix] }))
   }
@@ -101,7 +109,7 @@ export default function Sidebar() {
         <span className="sidebar-title">Ventas-Stock</span>
       </div>
       <nav className="sidebar-nav">
-        {navEntries.map(entry => {
+        {visibleEntries.map(entry => {
           if (entry.kind === 'item') {
             return (
               <NavLink

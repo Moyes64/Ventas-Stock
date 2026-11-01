@@ -1,9 +1,8 @@
 import crypto from 'crypto'
 import type { Database } from 'better-sqlite3'
 import { UserRepository, RoleRepository } from './repository'
-import type { AuthenticatedUser, LoginRequest, LoginResult, Permission } from './types'
-
-const ADMIN_ROLE = 'admin'
+import type { AuthenticatedUser, LoginRequest, LoginResult } from './types'
+import { ACCESS_ACTION, ADMIN_ROLE, PERMISSION_AREAS } from './permissions'
 
 const SCRYPT_PARAMS = { N: 16384, r: 8, p: 1, dkLen: 64 } as const
 // N=16384 (CPU/memory cost), r=8 (block size), p=1 (parallelism), dkLen=64 bytes output
@@ -88,10 +87,57 @@ export class AuthService {
     return this.login({ username: data.username, password: data.password })
   }
 
-  hasPermission(permissions: Permission[], module: string, action: string): boolean {
-    return permissions.some(
-      p => p.module === module && (p.action === action || p.action === 'admin')
-    )
+  listPermissionAreas() {
+    return PERMISSION_AREAS
+  }
+
+  listRolesWithPermissions() {
+    return this.roleRepo.listWithPermissions()
+  }
+
+  createRole(data: { name: string; description: string; areas: string[] }): number {
+    const name = this.validateRoleName(data.name)
+    const id = this.roleRepo.create({ name, description: data.description.trim() })
+    this.roleRepo.setAccess(id, this.validAreas(data.areas), ACCESS_ACTION)
+    return id
+  }
+
+  updateRole(id: number, data: { name: string; description: string; areas: string[] }): void {
+    const role = this.editableRole(id)
+    const name = this.validateRoleName(data.name, role.id)
+    this.roleRepo.update(id, { name, description: data.description.trim() })
+    this.roleRepo.setAccess(id, this.validAreas(data.areas), ACCESS_ACTION)
+  }
+
+  deleteRole(id: number): void {
+    this.editableRole(id)
+    const users = this.roleRepo.countUsers(id)
+    if (users > 0) {
+      throw new Error(`No se puede eliminar: ${users === 1 ? 'hay 1 usuario' : `hay ${users} usuarios`} con este rol`)
+    }
+    this.roleRepo.delete(id)
+  }
+
+  /** El rol admin tiene acceso total fijo: no se edita ni se elimina. */
+  private editableRole(id: number) {
+    const role = this.roleRepo.findById(id)
+    if (!role) throw new Error('Rol no encontrado')
+    if (role.name === ADMIN_ROLE) throw new Error('El rol admin tiene acceso total y no se puede modificar')
+    return role
+  }
+
+  private validateRoleName(raw: string, currentId?: number): string {
+    const name = raw.trim()
+    if (!name) throw new Error('Poné un nombre para el rol')
+    if (name.toLowerCase() === ADMIN_ROLE) throw new Error('El nombre admin está reservado')
+    const existing = this.roleRepo.findByName(name)
+    if (existing && existing.id !== currentId) throw new Error(`Ya existe un rol llamado ${name}`)
+    return name
+  }
+
+  private validAreas(areas: string[]): string[] {
+    const known = new Set<string>(PERMISSION_AREAS.map(a => a.key))
+    return [...new Set(areas)].filter(a => known.has(a))
   }
 
   listUsers() {

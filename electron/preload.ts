@@ -25,6 +25,11 @@ const electronAPI = {
     updateUser: (id: number, data: unknown) => invoke('auth:updateUser', id, data),
     deleteUser: (id: number) => invoke('auth:deleteUser', id),
     listRoles: () => invoke('auth:listRoles'),
+    listPermissionAreas: () => invoke('auth:listPermissionAreas'),
+    listRolesWithPermissions: () => invoke('auth:listRolesWithPermissions'),
+    createRole: (data: unknown) => invoke('auth:createRole', data),
+    updateRole: (id: number, data: unknown) => invoke('auth:updateRole', id, data),
+    deleteRole: (id: number) => invoke('auth:deleteRole', id),
   },
 
   // Catalog

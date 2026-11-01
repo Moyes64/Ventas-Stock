@@ -1,4 +1,5 @@
 import type { Database } from 'better-sqlite3'
+import { installAccessControl } from './access-control'
 import { registerAuthHandlers } from './auth.handlers'
 import { registerCatalogHandlers } from './catalog.handlers'
 import { registerCustomerHandlers } from './customers.handlers'
@@ -34,6 +35,8 @@ import type { WebCatalogServerService } from '../modules/web-catalog-server/serv
 export function registerAllIpcHandlers(
   db: Database
 ): { stockCountService: StockCountService; webCatalogServerService: WebCatalogServerService } {
+  // Antes que cualquier handler: todos quedan detrás del control de sesión y permisos.
+  installAccessControl(db)
   registerAuthHandlers(db)
   registerCatalogHandlers(db)
   registerCustomerHandlers(db)
