@@ -55,6 +55,9 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: node scripts/package.cjs --mac --x64
 
+      - name: Verify packaged native modules
+        run: node scripts/verify-packaged-modules.cjs release/mac/Ventas-Stock.app/Contents/Resources/app.asar
+
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
