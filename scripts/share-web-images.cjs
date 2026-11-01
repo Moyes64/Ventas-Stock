@@ -40,7 +40,7 @@ console.log(`fotos usadas: ${referenced.length} | ya en la base: ${shared.size} 
 
 const started = Date.now()
 let bytes = 0
-const BATCH = 20
+const BATCH = Number(process.env.SHARE_BATCH ?? 20)
 for (let i = 0; i < pending.length; i += BATCH) {
   const chunk = pending.slice(i, i + BATCH)
   db.exec('BEGIN')
