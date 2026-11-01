@@ -47,6 +47,20 @@ export function getDb(): Database.Database {
   return _db
 }
 
+interface CompatContext {
+  db: { inTransaction: boolean; sync(): unknown }
+  replica: boolean
+  originalPrepare: (sql: string) => unknown
+  txStatements: Map<string, CompatStatement> | null
+}
+
+interface CompatStatement {
+  __sql?: string
+  __ctx?: CompatContext
+  __paramNames?: string[]
+  pluckMode?: boolean
+}
+
 /**
  * Abre la base con libsql y tapa las diferencias con better-sqlite3 que usa el
  * código, así los módulos siguen tipados y escritos contra better-sqlite3:
@@ -82,14 +96,28 @@ function openLibsql(resolvedPath: string): Database.Database {
   // Contra Turso los parámetros con nombre (@x, :x, $x) llegan vacíos al
   // servidor: se reescriben a numerados (?1, ?2…) y el objeto se pasa como array.
   const originalPrepare = db.prepare.bind(db)
+  // Estado de esta conexión. Cada sentencia lo lleva consigo porque el parche
+  // del prototipo se instala una sola vez y la conexión puede reabrirse
+  // (closeDb + getDb, ej. al restaurar un backup).
+  const ctx: CompatContext = {
+    db,
+    replica: !!syncUrl,
+    originalPrepare,
+    // Sentencias preparadas dentro de la transacción en curso (solo réplica).
+    txStatements: null,
+  }
   db.prepare = (sql: string) => {
     const { sql: rewritten, names } = namedToNumbered(sql)
     const stmt = originalPrepare(rewritten)
     if (names.length > 0) stmt.__paramNames = names
     // Réplica embebida: una sentencia preparada antes del BEGIN se ejecuta fuera
     // de la transacción (se graba aunque haya ROLLBACK y rompe la transacción).
-    // Se vuelve a preparar en cada ejecución, en el estado actual de la conexión.
-    if (syncUrl) stmt.__sql = rewritten
+    // Se vuelve a preparar al ejecutarla, en el estado actual de la conexión.
+    if (ctx.replica) {
+      stmt.__sql = rewritten
+      stmt.__ctx = ctx
+      if (ctx.txStatements && db.inTransaction && !ctx.txStatements.has(rewritten)) ctx.txStatements.set(rewritten, stmt)
+    }
     return stmt
   }
 
@@ -111,22 +139,30 @@ function openLibsql(resolvedPath: string): Database.Database {
       // falla ("failed to downcast any to object"); envuelto en array va posicional.
       return args.length === 1 && args[0] === null ? [[null]] : args
     }
-    const target = (stmt: { __sql?: string; pluckMode?: boolean }) => {
-      if (!stmt.__sql) return stmt
-      const fresh = originalPrepare(stmt.__sql)
+    // Fuera de una transacción preparar es local (~0 ms); dentro es un viaje a
+    // Turso, así que cada SQL se prepara una vez por transacción y se reutiliza.
+    const target = (stmt: CompatStatement) => {
+      const ctx = stmt.__ctx
+      if (!ctx || !stmt.__sql) return stmt
+      let fresh = ctx.txStatements?.get(stmt.__sql)
+      if (!fresh) {
+        fresh = ctx.originalPrepare(stmt.__sql) as CompatStatement
+        if (ctx.txStatements && ctx.db.inTransaction) ctx.txStatements.set(stmt.__sql, fresh)
+      }
       fresh.pluckMode = stmt.pluckMode
       return fresh
     }
     for (const method of ['run', 'all', 'iterate']) {
       const original = statementProto[method]
-      statementProto[method] = function (...args: unknown[]) {
+      statementProto[method] = function (this: CompatStatement, ...args: unknown[]) {
         const result = original.apply(target(this), fixArgs(this, args))
-        if (syncUrl && method === 'run' && !db.inTransaction) db.sync()
+        const ctx = this.__ctx
+        if (ctx && method === 'run' && !ctx.db.inTransaction) ctx.db.sync()
         return result
       }
     }
     const originalGet = statementProto.get
-    statementProto.get = function (...args: unknown[]) {
+    statementProto.get = function (this: CompatStatement, ...args: unknown[]) {
       const row = originalGet.apply(target(this), fixArgs(this, args))
       if (row && typeof row === 'object') delete (row as Record<string, unknown>)._metadata
       return row
@@ -152,6 +188,7 @@ function openLibsql(resolvedPath: string): Database.Database {
         }
       }
       db.exec(`BEGIN ${mode}`)
+      if (ctx.replica) ctx.txStatements = new Map()
       try {
         const result = fn(...args)
         db.exec('COMMIT')
@@ -166,6 +203,8 @@ function openLibsql(resolvedPath: string): Database.Database {
           console.error('[db] ROLLBACK falló:', rollbackErr)
         }
         throw err
+      } finally {
+        ctx.txStatements = null
       }
     }
     const txn = wrap('') as ((...args: unknown[]) => unknown) & Record<string, unknown>

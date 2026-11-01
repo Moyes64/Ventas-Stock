@@ -7,6 +7,7 @@ import type { InvoicingService } from '../invoicing-afip/service'
 import type { Sale, AppliedParameter, CreateSaleInput } from './types'
 
 export class SaleService {
+  private readonly db: Database
   private readonly saleRepo: SaleRepository
   private readonly stockService: StockService
   private readonly paramRepo: ParameterRepository
@@ -14,6 +15,7 @@ export class SaleService {
   private readonly financeService: FinanceService
 
   constructor(db: Database, invoicingService: InvoicingService) {
+    this.db = db
     this.saleRepo = new SaleRepository(db)
     this.stockService = new StockService(db)
     this.paramRepo = new ParameterRepository(db)
@@ -85,11 +87,13 @@ export class SaleService {
    *    - tipo '-': subtotal *= (1 - pct/100)
    *    - tipo '+': subtotal *= (1 + pct/100)
    *    IVA is scaled proportionally with the adjustment factor.
-   * 4. Persist sale + sale_parameters
-   * 5. Register stock exits
-   * 6. For normal sales: call InvoicingService.solicitarCAE(sale)
-   *    For black sales: skip AFIP -> status = INTERNAL_RECEIPT (IVA is still calculated)
-   * 7. Return the final sale state
+   * 4-6. En una sola transacción: venta + sale_parameters, salidas de stock,
+   *    estado INTERNAL_RECEIPT para Venta N y el ingreso financiero automático.
+   *    Con la base en Turso cada transacción cuesta viajes de red, y además así
+   *    la venta no puede quedar grabada sin su stock.
+   * 7. For normal sales: call InvoicingService.solicitarCAE(sale) — fuera de la
+   *    transacción, para no tenerla abierta mientras responde AFIP.
+   * 8. Return the final sale state
    */
   async createSale(input: CreateSaleInput): Promise<Sale> {
     // Las ventas por Mercado Libre (MP Ariel) van solo como Venta N y con un único
@@ -149,32 +153,59 @@ export class SaleService {
     const discountAmount = originalSubtotal - adjustedSubtotal  // positive = net savings
     const total = adjustedSubtotal + taxAmount
 
-    // Step 4: Persist sale
-    const saleId = this.saleRepo.create({
-      ...input,
-      subtotal: Math.round(adjustedSubtotal * 100) / 100,
-      taxAmount: Math.round(taxAmount * 100) / 100,
-      total: Math.round(total * 100) / 100,
-      discountAmount: Math.round(discountAmount * 100) / 100,
-      appliedParameters,
-    })
+    const saleId = this.db.transaction(() => {
+      // Step 4: Persist sale
+      const id = this.saleRepo.create({
+        ...input,
+        subtotal: Math.round(adjustedSubtotal * 100) / 100,
+        taxAmount: Math.round(taxAmount * 100) / 100,
+        total: Math.round(total * 100) / 100,
+        discountAmount: Math.round(discountAmount * 100) / 100,
+        appliedParameters,
+      })
 
-    // Step 5: Register stock exits
-    this.stockService.registerSaleExit(
-      input.items.map(i => ({ productId: i.productId, quantity: i.quantity })),
-      saleId,
-      input.userId
-    )
+      // Step 5: Register stock exits
+      this.stockService.registerSaleExit(
+        input.items.map(i => ({ productId: i.productId, quantity: i.quantity })),
+        id,
+        input.userId
+      )
 
-    // Step 6: Request CAE (skip for black sales -- always internal receipt)
+      // Black sales skip AFIP and are always stored as internal receipts.
+      // IVA is still calculated (same as a normal sale) but no CAE is requested.
+      if (input.isBlackSale) this.saleRepo.updateStatus(id, 'INTERNAL_RECEIPT')
+
+      // Step 6: Auto-registrar el ingreso a MP-Anabella si corresponde (no bloquea la venta si falla).
+      // Una pierna por medio de pago -- para una venta simple es una sola (el
+      // total completo); para una combinada, una por cada medio usado. Va en una
+      // transacción anidada (SAVEPOINT): si falla se deshace solo el ingreso.
+      try {
+        this.db.transaction(() => {
+          const saleDate = this.saleRepo.getSaleDate(id)
+          if (!saleDate) throw new Error(`Venta no encontrada: ${id}`)
+          for (const leg of this.saleRepo.getPayments(id)) {
+            this.financeService.registerSaleIncome({
+              saleId: id,
+              salePaymentId: leg.id,
+              paymentMethod: leg.paymentMethod,
+              monto: leg.amount,
+              fecha: saleDate,
+              fechaAcreditacion: input.fechaAcreditacion,
+            })
+          }
+        })()
+      } catch (err) {
+        console.error('[sales] Error registrando ingreso financiero automático:', err)
+      }
+
+      return id
+    })()
+
+    // Step 7: Request CAE (skip for black sales -- always internal receipt)
     const sale = this.saleRepo.findById(saleId)
     if (!sale) throw new Error(`Venta no encontrada: ${saleId}`)
 
-    if (input.isBlackSale) {
-      // Black sales skip AFIP and are always stored as internal receipts.
-      // IVA is still calculated (same as a normal sale) but no CAE is requested.
-      this.saleRepo.updateStatus(sale.id, 'INTERNAL_RECEIPT')
-    } else {
+    if (!input.isBlackSale) {
       try {
         const caeResult = await this.invoicingService.solicitarCAE(sale)
 
@@ -198,28 +229,9 @@ export class SaleService {
       }
     }
 
-    // Step 7: Return final state
+    // Step 8: Return final state
     const finalSale = this.saleRepo.findById(saleId)
     if (!finalSale) throw new Error(`Venta no encontrada: ${saleId}`)
-
-    // Step 8: Auto-registrar el ingreso a MP-Anabella si corresponde (no bloquea la venta si falla).
-    // Una pierna por medio de pago -- para una venta simple es una sola (el
-    // total completo); para una combinada, una por cada medio usado.
-    try {
-      const payments = this.saleRepo.getPayments(finalSale.id)
-      for (const leg of payments) {
-        this.financeService.registerSaleIncome({
-          saleId: finalSale.id,
-          salePaymentId: leg.id,
-          paymentMethod: leg.paymentMethod,
-          monto: leg.amount,
-          fecha: finalSale.saleDate,
-          fechaAcreditacion: input.fechaAcreditacion,
-        })
-      }
-    } catch (err) {
-      console.error('[sales] Error registrando ingreso financiero automático:', err)
-    }
 
     return finalSale
   }

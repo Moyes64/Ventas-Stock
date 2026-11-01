@@ -337,6 +337,14 @@ export class SaleRepository {
     }))
   }
 
+  /** Solo la fecha de la venta — evita traer la venta completa (4 consultas). */
+  getSaleDate(id: number): string | undefined {
+    const row = this.db.prepare('SELECT sale_date FROM sales WHERE id = ?').get(id) as
+      | { sale_date: string }
+      | undefined
+    return row?.sale_date
+  }
+
   getPayments(saleId: number): SalePayment[] {
     const rows = this.db
       .prepare('SELECT * FROM sale_payments WHERE sale_id = ? ORDER BY id ASC')
