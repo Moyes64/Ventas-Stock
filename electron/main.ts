@@ -6,6 +6,7 @@ import { runMigrations } from '../database/migrate'
 import { registerAllIpcHandlers } from './ipc/index'
 import { initPrincipalService } from './modules/principal/service'
 import { startPrincipalJobs } from './principal-jobs'
+import { imagePath } from './modules/web-catalog/image-store'
 
 // Handle app lifecycle
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
@@ -133,7 +134,8 @@ protocol.registerSchemesAsPrivileged([
 void app.whenReady().then(async () => {
   protocol.handle('web-image', request => {
     const filename = decodeURIComponent(request.url.replace('web-image://', ''))
-    const filePath = path.join(app.getPath('userData'), 'web-images', filename)
+    // Con la base compartida, si a esta PC le falta la foto la trae de la base.
+    const filePath = imagePath(filename)
     return net.fetch(`file:///${filePath.replace(/\\/g, '/')}`)
   })
   await bootstrap()

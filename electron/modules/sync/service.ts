@@ -25,6 +25,7 @@ import { FinanceService } from '../finance/service'
 import { WebBannersService } from '../web-catalog/banners'
 import { runAsSystem } from '../auth/actor'
 import { isPrincipalPc, principalName } from '../principal/service'
+import { imagePath } from '../web-catalog/image-store'
 
 const CONFIG_FILENAME = 'sync-config.json'
 const DEFAULT_CONFIG: SyncConfig = {
@@ -962,7 +963,6 @@ export class SyncService {
   }
 
   private async uploadAllImages(config: SyncConfig): Promise<void> {
-    const imagesDir = path.join(app.getPath('userData'), 'web-images')
     const baseUrl = config.apiUrl.replace(/\/api\/sync\.php$/, '')
     const uploadUrl = new URL(`${baseUrl}/api/upload-image.php`)
     const uploaded = this.readUploadedImages()
@@ -987,7 +987,8 @@ export class SyncService {
       filename: string,
       target: { productId: number; sortOrder: number } | { bannerId: number },
     ) => {
-      const filePath = path.join(imagesDir, filename)
+      // Con la base compartida la foto pudo cargarse en otra PC: se trae de la base.
+      const filePath = imagePath(filename)
       if (!fs.existsSync(filePath)) return
       const signature = `${filename}|${fs.statSync(filePath).size}`
       if (uploaded[key] === signature) return

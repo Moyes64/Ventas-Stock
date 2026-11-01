@@ -1,6 +1,5 @@
 import fs from 'fs'
-import path from 'path'
-import { app, nativeImage } from 'electron'
+import { nativeImage } from 'electron'
 import type { Database } from 'better-sqlite3'
 import type {
   WebCategory,
@@ -10,6 +9,7 @@ import type {
   SaveWebCategoryInput,
 } from './types'
 import { parseGiftCategories, serializeGiftCategories } from './giftCategories'
+import { imagePath, removeImage, writeImage } from './image-store'
 
 // Las imágenes se suben tal cual a Hostinger y de ahí las optimiza Vercel
 // (facturado por uso); si entran sin comprimir agotan esa cuota rápido.
@@ -25,11 +25,7 @@ function slugify(text: string): string {
     .replace(/^-|-$/g, '')
 }
 
-export function imagesDir(): string {
-  const dir = path.join(app.getPath('userData'), 'web-images')
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-  return dir
-}
+export { imagesDir } from './image-store'
 
 // Redimensiona/comprime una imagen ya cargada en memoria; si Electron no
 // pudo decodificarla devuelve los bytes originales tal cual (mejor subir
@@ -305,8 +301,7 @@ export class WebCatalogService {
 
   private persistImage(productId: number, jpeg: Buffer, sortOrder: number): WebProductImage {
     const filename = `${productId}_${Date.now()}.jpg`
-    const dest = path.join(imagesDir(), filename)
-    fs.writeFileSync(dest, jpeg)
+    writeImage(filename, jpeg)
 
     const result = this.db.prepare(`
       INSERT INTO web_product_images (product_id, filename, sort_order) VALUES (?,?,?)
@@ -325,10 +320,7 @@ export class WebCatalogService {
     const row = this.db
       .prepare('SELECT filename FROM web_product_images WHERE id=?')
       .get(imageId) as { filename: string } | undefined
-    if (row) {
-      const filePath = path.join(imagesDir(), row.filename)
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
-    }
+    if (row) removeImage(row.filename)
     this.db.prepare('DELETE FROM web_product_images WHERE id=?').run(imageId)
   }
 
@@ -340,8 +332,9 @@ export class WebCatalogService {
     tx()
   }
 
+  /** Ruta local de la foto (con la base compartida la trae si a esta PC le falta). */
   getImagePath(filename: string): string {
-    return path.join(imagesDir(), filename)
+    return imagePath(filename)
   }
 
   // ── Productos del catálogo aún no publicados en web ───────────────────────

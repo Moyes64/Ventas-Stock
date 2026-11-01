@@ -3,7 +3,8 @@ import path from 'path'
 import { app } from 'electron'
 import type { Database } from 'better-sqlite3'
 import type { WebBanner, SaveWebBannerInput, WebBannersConfig } from './types'
-import { compressImage, compressImageBuffer, imagesDir } from './service'
+import { compressImage, compressImageBuffer } from './service'
+import { removeImage, writeImage } from './image-store'
 
 // Interruptor general de los banners (mismo esquema de archivo de config que
 // "Acceso remoto", ver web-catalog-server/service.ts).
@@ -210,7 +211,7 @@ export class WebBannersService {
     // Nombre nuevo en cada carga: el hosting lo trata como un archivo nuevo y
     // la web no muestra una versión cacheada de la imagen anterior.
     const filename = `banner_${id}_${Date.now()}.jpg`
-    fs.writeFileSync(path.join(imagesDir(), filename), jpeg)
+    writeImage(filename, jpeg)
     this.db.prepare(`UPDATE web_banners SET image_filename=?, updated_at=datetime('now','localtime') WHERE id=?`)
       .run(filename, id)
     return this.get(id)!
@@ -232,7 +233,6 @@ export class WebBannersService {
     const row = this.db.prepare('SELECT image_filename FROM web_banners WHERE id=?').get(id) as
       { image_filename: string | null } | undefined
     if (!row?.image_filename) return
-    const filePath = path.join(imagesDir(), row.image_filename)
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
+    removeImage(row.image_filename)
   }
 }
