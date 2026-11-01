@@ -38,9 +38,17 @@ export class UserRepository {
 
   findByUsername(username: string): (User & { passwordHash: string }) | undefined {
     const row = this.db
-      .prepare('SELECT * FROM users WHERE username = ? AND active = 1')
+      // El usuario no distingue mayúsculas ("anabella" = "Anabella"); la clave sí.
+      .prepare('SELECT * FROM users WHERE username = ? COLLATE NOCASE AND active = 1')
       .get(username) as UserRow | undefined
     return row ? this.mapRow(row) : undefined
+  }
+
+  /** ¿Ya hay un usuario (activo o no) con ese nombre, sin distinguir mayúsculas? */
+  usernameExists(username: string): boolean {
+    return !!this.db
+      .prepare('SELECT 1 FROM users WHERE username = ? COLLATE NOCASE')
+      .get(username)
   }
 
   list(): User[] {

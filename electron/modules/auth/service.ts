@@ -150,8 +150,13 @@ export class AuthService {
     name: string
     roleId: number
   }): number {
+    const username = data.username.trim()
+    if (!username) throw new Error('El usuario no puede estar vacío')
+    if (this.userRepo.usernameExists(username)) {
+      throw new Error(`Ya existe un usuario "${username}" (no se distinguen mayúsculas)`)
+    }
     return this.userRepo.create({
-      username: data.username,
+      username,
       passwordHash: hashPassword(data.password),
       name: data.name,
       roleId: data.roleId,
