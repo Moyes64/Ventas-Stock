@@ -50,6 +50,9 @@ jobs:
           USE_HARD_LINKS: 'false'
         run: pnpm package:win
 
+      - name: Verify packaged native modules
+        run: node scripts/verify-packaged-modules.cjs release/win-unpacked/resources/app.asar
+
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
