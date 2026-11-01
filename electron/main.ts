@@ -24,6 +24,16 @@ const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
     console.debug(`[main] .env loaded from "${envPath}"`)
   }
 
+  // Configuración por equipo (p. ej. TURSO_DATABASE_URL / TURSO_AUTH_TOKEN) que
+  // no viaja en el instalador: <userData>/config.env. En Mac es
+  // ~/Library/Application Support/Ventas-Stock/config.env. No pisa variables
+  // ya definidas (el lanzador o el .env de arriba tienen prioridad).
+  {
+    const userEnvPath = path.join(app.getPath('userData'), 'config.env')
+    const { error: userEnvError } = dotenvConfig({ path: userEnvPath })
+    if (!userEnvError) console.debug(`[main] config.env loaded from "${userEnvPath}"`)
+  }
+
   // In production the app ships without a .env, so DB_PATH is unset.
   // Use the platform-appropriate user-data directory so the DB is always
   // written to a writable location (e.g. %APPDATA%\ventas-stock\ on Windows).

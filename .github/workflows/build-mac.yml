@@ -1,0 +1,64 @@
+name: Build Mac Installer
+
+# Arma el .dmg para la Mac del local (MacBook Air 2017, Intel → x64).
+# Electron 39 requiere macOS 12 (Monterey) o superior.
+# Sin firma de Apple: la primera vez se abre con clic derecho → Abrir.
+
+on:
+  push:
+    branches:
+      - feat/turso-poc
+    paths-ignore:
+      - 'hostinger/**'
+      - 'mobile/**'
+      - '**/*.md'
+  workflow_dispatch:
+
+jobs:
+  build-mac:
+    name: Build DMG (macOS Intel x64)
+    # Runner Intel: los módulos nativos (better-sqlite3, libsql) salen x64 sin
+    # compilación cruzada. macos-13 fue retirado; macos-15-intel es su reemplazo.
+    runs-on: macos-15-intel
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-x64-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-x64-pnpm-
+
+      - name: Install dependencies
+        # package.cjs corre electron-rebuild por su cuenta.
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Build Mac installer
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: node scripts/package.cjs --mac --x64
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ventas-stock-mac-installer
+          path: release/*.dmg
+          if-no-files-found: error
+          retention-days: 30
