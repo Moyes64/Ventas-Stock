@@ -50,6 +50,21 @@ export class UserRepository {
     return rows.map(r => this.mapRow(r))
   }
 
+  countActive(): number {
+    return (this.db.prepare('SELECT count(*) AS n FROM users WHERE active = 1').get() as { n: number }).n
+  }
+
+  /** Usuarios activos con el rol indicado, sin contar `excludeId`. */
+  countActiveWithRole(roleName: string, excludeId?: number): number {
+    const row = this.db
+      .prepare(
+        `SELECT count(*) AS n FROM users u JOIN roles r ON r.id = u.role_id
+         WHERE u.active = 1 AND r.name = ? AND u.id != ?`
+      )
+      .get(roleName, excludeId ?? 0) as { n: number }
+    return row.n
+  }
+
   create(data: {
     username: string
     passwordHash: string
@@ -120,6 +135,11 @@ export class RoleRepository {
       .all(id) as PermissionRow[]
 
     return this.mapRow(row, permissions)
+  }
+
+  findByName(name: string): Role | undefined {
+    const row = this.db.prepare('SELECT * FROM roles WHERE name = ?').get(name) as RoleRow | undefined
+    return row ? this.mapRow(row) : undefined
   }
 
   list(): Role[] {

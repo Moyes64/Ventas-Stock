@@ -122,6 +122,55 @@ html, body, #root {
   border-top: 1px solid rgba(255,255,255,0.1);
 }
 
+.sidebar-user {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.sidebar-user-name { color: #fff; font-size: 13px; font-weight: 600; }
+.sidebar-user-role { color: rgba(255,255,255,0.55); font-size: 11.5px; }
+.sidebar-logout {
+  align-self: flex-start;
+  padding: 4px 10px;
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: rgba(255,255,255,0.8);
+  font-size: 12px;
+  cursor: pointer;
+}
+.sidebar-logout:hover { background: rgba(255,255,255,0.08); color: #fff; }
+
+/* Login */
+.login-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--color-text);
+}
+.login-card {
+  width: 100%;
+  max-width: 360px;
+  padding: 28px;
+  background: var(--color-surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+}
+.login-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+.login-logo { font-size: 26px; }
+.login-title { font-size: 20px; font-weight: 700; color: var(--color-text); }
+.login-hint { font-size: 13px; color: var(--color-text-muted); margin-bottom: 16px; }
+.login-submit { width: 100%; justify-content: center; margin-top: 8px; padding: 11px 14px; font-size: 15px; }
+
 /* Page */
 .page {
   padding: 24px;

@@ -3,6 +3,8 @@ import type { Database } from 'better-sqlite3'
 import { UserRepository, RoleRepository } from './repository'
 import type { AuthenticatedUser, LoginRequest, LoginResult, Permission } from './types'
 
+const ADMIN_ROLE = 'admin'
+
 const SCRYPT_PARAMS = { N: 16384, r: 8, p: 1, dkLen: 64 } as const
 // N=16384 (CPU/memory cost), r=8 (block size), p=1 (parallelism), dkLen=64 bytes output
 // These are the RFC 7914 recommended values for interactive logins.
@@ -38,13 +40,11 @@ export class AuthService {
   }
 
   login(req: LoginRequest): LoginResult {
-    const user = this.userRepo.findByUsername(req.username)
-    if (!user) {
-      return { success: false, error: 'Usuario no encontrado' }
-    }
-
-    if (!verifyPassword(req.password, user.passwordHash)) {
-      return { success: false, error: 'Contraseña incorrecta' }
+    // Mismo mensaje para usuario inexistente y clave incorrecta: no revela qué
+    // usuarios existen.
+    const user = this.userRepo.findByUsername(req.username.trim())
+    if (!user || !verifyPassword(req.password, user.passwordHash)) {
+      return { success: false, error: 'Usuario o contraseña incorrectos' }
     }
 
     if (!user.active) {
@@ -67,6 +67,25 @@ export class AuthService {
     }
 
     return { success: true, user: authenticated }
+  }
+
+  /** Sin ningún usuario activo nadie podría entrar: la app ofrece crear el primer administrador. */
+  needsSetup(): boolean {
+    return this.userRepo.countActive() === 0
+  }
+
+  /** Crea el primer administrador e inicia su sesión. Solo funciona si no hay usuarios activos. */
+  setupFirstAdmin(data: { username: string; password: string; name: string }): LoginResult {
+    if (!this.needsSetup()) {
+      return { success: false, error: 'Ya hay usuarios activos: iniciá sesión con uno de ellos' }
+    }
+    if (!data.username.trim() || !data.name.trim() || !data.password) {
+      return { success: false, error: 'Completá usuario, nombre y contraseña' }
+    }
+    const adminRole = this.roleRepo.findByName(ADMIN_ROLE)
+    if (!adminRole) return { success: false, error: 'No existe el rol admin' }
+    this.createUser({ username: data.username.trim(), password: data.password, name: data.name.trim(), roleId: adminRole.id })
+    return this.login({ username: data.username, password: data.password })
   }
 
   hasPermission(permissions: Permission[], module: string, action: string): boolean {
@@ -97,6 +116,14 @@ export class AuthService {
     id: number,
     data: Partial<{ name: string; roleId: number; active: boolean; password: string }>
   ): void {
+    const current = this.userRepo.findById(id)
+    if (!current) throw new Error('Usuario no encontrado')
+    const adminRole = this.roleRepo.findByName(ADMIN_ROLE)
+    const losesAdmin =
+      current.active && current.roleId === adminRole?.id &&
+      (data.active === false || (data.roleId !== undefined && data.roleId !== current.roleId))
+    if (losesAdmin) this.assertAnotherActiveAdmin(id)
+
     const update: Parameters<UserRepository['update']>[1] = {}
     if (data.name !== undefined) update.name = data.name
     if (data.roleId !== undefined) update.roleId = data.roleId
@@ -105,8 +132,20 @@ export class AuthService {
     this.userRepo.update(id, update)
   }
 
-  deleteUser(id: number): void {
+  deleteUser(id: number, currentUserId?: number): void {
+    if (id === currentUserId) throw new Error('No podés eliminar tu propio usuario')
+    const current = this.userRepo.findById(id)
+    if (current?.active && current.roleId === this.roleRepo.findByName(ADMIN_ROLE)?.id) {
+      this.assertAnotherActiveAdmin(id)
+    }
     this.userRepo.delete(id)
+  }
+
+  /** Impide dejar el sistema sin ningún administrador activo (nadie podría gestionar usuarios). */
+  private assertAnotherActiveAdmin(userId: number): void {
+    if (this.userRepo.countActiveWithRole(ADMIN_ROLE, userId) === 0) {
+      throw new Error('Tiene que quedar al menos un administrador activo')
+    }
   }
 
   listRoles() {

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 
 interface NavItem {
   to: string
@@ -78,6 +79,7 @@ const navEntries: NavEntry[] = [
 
 export default function Sidebar() {
   const location = useLocation()
+  const { user, logout } = useAuth()
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {}
     for (const entry of navEntries) {
@@ -149,6 +151,15 @@ export default function Sidebar() {
         })}
       </nav>
       <div className="sidebar-footer">
+        {user && (
+          <div className="sidebar-user">
+            <span className="sidebar-user-name">👤 {user.name}</span>
+            <span className="sidebar-user-role">{user.username} · {user.role.name}</span>
+            <button type="button" className="sidebar-logout" onClick={() => void logout()}>
+              Cerrar sesión
+            </button>
+          </div>
+        )}
         <span className="sidebar-version">v1.0.0</span>
       </div>
     </aside>

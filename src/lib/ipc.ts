@@ -10,6 +10,7 @@ import type {
   ConnectionType,
   PedidoProduct,
   LoginResult,
+  AuthenticatedUser,
   User,
   Role,
   Product,
@@ -84,6 +85,11 @@ const electron = (window as any).electron as Record<string, Record<string, (...a
 export const auth = {
   login: (username: string, password: string) =>
     electron.auth.login(username, password) as Promise<LoginResult>,
+  logout: () => electron.auth.logout() as Promise<void>,
+  currentUser: () => electron.auth.currentUser() as Promise<AuthenticatedUser | null>,
+  needsSetup: () => electron.auth.needsSetup() as Promise<boolean>,
+  setupFirstAdmin: (data: { username: string; password: string; name: string }) =>
+    electron.auth.setupFirstAdmin(data) as Promise<LoginResult>,
   listUsers: () => electron.auth.listUsers() as Promise<User[]>,
   createUser: (data: Omit<User, 'id' | 'createdAt' | 'updatedAt'> & { password: string }) =>
     electron.auth.createUser(data) as Promise<number>,

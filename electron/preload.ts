@@ -16,6 +16,10 @@ const electronAPI = {
   auth: {
     login: (username: string, password: string) =>
       invoke('auth:login', username, password),
+    logout: () => invoke('auth:logout'),
+    currentUser: () => invoke('auth:currentUser'),
+    needsSetup: () => invoke('auth:needsSetup'),
+    setupFirstAdmin: (data: unknown) => invoke('auth:setupFirstAdmin', data),
     listUsers: () => invoke('auth:listUsers'),
     createUser: (data: unknown) => invoke('auth:createUser', data),
     updateUser: (id: number, data: unknown) => invoke('auth:updateUser', id, data),

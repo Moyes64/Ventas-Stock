@@ -42,63 +42,67 @@ import HolidaysPage from './pages/finance/HolidaysPage'
 import FiservFeeRatesPage from './pages/finance/FiservFeeRatesPage'
 import MpReconciliationPage from './pages/finance/MpReconciliationPage'
 import { HiddenOptionsProvider } from './context/HiddenOptionsContext'
+import { AuthProvider } from './context/AuthContext'
+import LoginPage from './pages/auth/LoginPage'
 
 export default function App() {
   return (
-    <HiddenOptionsProvider>
-      <HashRouter>
-        <Routes>
-          <Route path="/" element={<Layout />}>
-            <Route index element={<Navigate to="/dashboard" replace />} />
-            <Route path="dashboard" element={<Dashboard />} />
-            <Route path="sales" element={<SalesPage />} />
-            <Route path="sales/new" element={<NewSalePage />} />
-            <Route path="catalog" element={<ProductsPage />} />
-            <Route path="catalog/markup" element={<MarkupPage />} />
-            <Route path="customers" element={<CustomersPage />} />
-            <Route path="suppliers" element={<SuppliersPage />} />
-            <Route path="stock" element={<StockPage />} />
-            <Route path="invoicing" element={<InvoicingPage />} />
-            <Route path="reporting" element={<ReportingPage />} />
-            <Route path="pricing" element={<PricingPage />} />
-            <Route path="backup" element={<BackupPage />} />
-            <Route path="users" element={<UsersPage />} />
-            <Route path="parameters" element={<ParametersPage />} />
-            <Route path="caja" element={<CajaLayout />}>
-              <Route index element={<Navigate to="/caja/apertura" replace />} />
-              <Route path="apertura" element={<AperturaPage />} />
-              <Route path="cierre" element={<CierrePage />} />
+    <AuthProvider renderLogin={() => <LoginPage />} renderSetup={() => <LoginPage setup />}>
+      <HiddenOptionsProvider>
+        <HashRouter>
+          <Routes>
+            <Route path="/" element={<Layout />}>
+              <Route index element={<Navigate to="/dashboard" replace />} />
+              <Route path="dashboard" element={<Dashboard />} />
+              <Route path="sales" element={<SalesPage />} />
+              <Route path="sales/new" element={<NewSalePage />} />
+              <Route path="catalog" element={<ProductsPage />} />
+              <Route path="catalog/markup" element={<MarkupPage />} />
+              <Route path="customers" element={<CustomersPage />} />
+              <Route path="suppliers" element={<SuppliersPage />} />
+              <Route path="stock" element={<StockPage />} />
+              <Route path="invoicing" element={<InvoicingPage />} />
+              <Route path="reporting" element={<ReportingPage />} />
+              <Route path="pricing" element={<PricingPage />} />
+              <Route path="backup" element={<BackupPage />} />
+              <Route path="users" element={<UsersPage />} />
+              <Route path="parameters" element={<ParametersPage />} />
+              <Route path="caja" element={<CajaLayout />}>
+                <Route index element={<Navigate to="/caja/apertura" replace />} />
+                <Route path="apertura" element={<AperturaPage />} />
+                <Route path="cierre" element={<CierrePage />} />
+              </Route>
+              <Route path="sync" element={<SyncPage />} />
+              <Route path="system-params" element={<SystemParamsPage />} />
+              <Route path="stock/pedido" element={<PedidoReposicionPage />} />
+              <Route path="stock/remito-scanner" element={<RemitoScannerPage />} />
+              <Route path="stock/precios" element={<PriceUpdatePage />} />
+              <Route path="stock/movimientos-producto" element={<ProductMovementsReportPage />} />
+              <Route path="stock/conteo" element={<StockCountPage />} />
+              <Route path="stock/conteo/:sessionId" element={<StockCountReconcilePage />} />
+              <Route path="printer-settings" element={<PrinterSettingsPage />} />
+              <Route path="labels" element={<LabelsPage />} />
+              <Route path="web-catalog" element={<WebCatalogPage />} />
+              <Route path="web-orders" element={<WebOrdersPage />} />
+              <Route path="web-catalog/product/:productId" element={<WebProductEditorPage />} />
+              <Route path="web-catalog/categories" element={<WebCategoriesPage />} />
+              <Route path="web-catalog/remoto" element={<WebCatalogRemotePage />} />
+              <Route path="web-catalog/banners" element={<WebBannersPage />} />
+              <Route path="cambios" element={<CambiosPage />} />
+              <Route path="finance" element={<FinanceLayout />}>
+                <Route index element={<Navigate to="/finance/movimientos" replace />} />
+                <Route path="movimientos" element={<MovementsPage />} />
+                <Route path="dashboard" element={<FinanceDashboardPage />} />
+                <Route path="comisiones-mp" element={<MpFeeRatesPage />} />
+                <Route path="feriados" element={<HolidaysPage />} />
+                <Route path="comisiones-fiserv" element={<FiservFeeRatesPage />} />
+                <Route path="conciliacion-mp" element={<MpReconciliationPage />} />
+              </Route>
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Route>
-            <Route path="sync" element={<SyncPage />} />
-            <Route path="system-params" element={<SystemParamsPage />} />
-            <Route path="stock/pedido" element={<PedidoReposicionPage />} />
-            <Route path="stock/remito-scanner" element={<RemitoScannerPage />} />
-            <Route path="stock/precios" element={<PriceUpdatePage />} />
-            <Route path="stock/movimientos-producto" element={<ProductMovementsReportPage />} />
-            <Route path="stock/conteo" element={<StockCountPage />} />
-            <Route path="stock/conteo/:sessionId" element={<StockCountReconcilePage />} />
-            <Route path="printer-settings" element={<PrinterSettingsPage />} />
-            <Route path="labels" element={<LabelsPage />} />
-            <Route path="web-catalog" element={<WebCatalogPage />} />
-            <Route path="web-orders" element={<WebOrdersPage />} />
-            <Route path="web-catalog/product/:productId" element={<WebProductEditorPage />} />
-            <Route path="web-catalog/categories" element={<WebCategoriesPage />} />
-            <Route path="web-catalog/remoto" element={<WebCatalogRemotePage />} />
-            <Route path="web-catalog/banners" element={<WebBannersPage />} />
-            <Route path="cambios" element={<CambiosPage />} />
-            <Route path="finance" element={<FinanceLayout />}>
-              <Route index element={<Navigate to="/finance/movimientos" replace />} />
-              <Route path="movimientos" element={<MovementsPage />} />
-              <Route path="dashboard" element={<FinanceDashboardPage />} />
-              <Route path="comisiones-mp" element={<MpFeeRatesPage />} />
-              <Route path="feriados" element={<HolidaysPage />} />
-              <Route path="comisiones-fiserv" element={<FiservFeeRatesPage />} />
-              <Route path="conciliacion-mp" element={<MpReconciliationPage />} />
-            </Route>
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
-          </Route>
-        </Routes>
-      </HashRouter>
-    </HiddenOptionsProvider>
+          </Routes>
+        </HashRouter>
+      </HiddenOptionsProvider>
+    </AuthProvider>
   )
 }

@@ -3,6 +3,7 @@ import { auth as authApi } from '../../lib/ipc'
 import type { User, Role } from '../../types/ipc'
 import { useConfirm } from '../../hooks/useConfirm'
 import { formatDate } from '../../lib/date'
+import { useAuth } from '../../context/AuthContext'
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([])
@@ -12,6 +13,7 @@ export default function UsersPage() {
   const [showForm, setShowForm] = useState(false)
   const [editUser, setEditUser] = useState<User | null>(null)
   const { confirm, dialog: confirmDialog } = useConfirm()
+  const { user: currentUser } = useAuth()
 
   async function loadData() {
     setLoading(true)
@@ -33,7 +35,7 @@ export default function UsersPage() {
       await authApi.updateUser(user.id, { active: !user.active } as Partial<User>)
       await loadData()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al actualizar')
+      setError(err instanceof Error ? err.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : 'Error al actualizar')
     }
   }
 
@@ -43,7 +45,7 @@ export default function UsersPage() {
       await authApi.deleteUser(id)
       await loadData()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al eliminar')
+      setError(err instanceof Error ? err.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : 'Error al eliminar')
     }
   }
 
@@ -92,16 +94,21 @@ export default function UsersPage() {
                       className="btn btn-secondary btn-sm"
                       onClick={() => { setEditUser(u); setShowForm(true) }}
                     >Editar</button>
-                    <button
-                      className={`btn btn-sm ${u.active ? 'btn-warning' : 'btn-secondary'}`}
-                      onClick={() => { void handleToggleActive(u) }}
-                    >
-                      {u.active ? 'Desactivar' : 'Activar'}
-                    </button>
-                    <button
-                      className="btn btn-danger btn-sm"
-                      onClick={() => { void handleDelete(u.id) }}
-                    >Eliminar</button>
+                    {/* El usuario de la sesión no puede desactivarse ni eliminarse a sí mismo. */}
+                    {u.id !== currentUser?.id && (
+                      <>
+                        <button
+                          className={`btn btn-sm ${u.active ? 'btn-warning' : 'btn-secondary'}`}
+                          onClick={() => { void handleToggleActive(u) }}
+                        >
+                          {u.active ? 'Desactivar' : 'Activar'}
+                        </button>
+                        <button
+                          className="btn btn-danger btn-sm"
+                          onClick={() => { void handleDelete(u.id) }}
+                        >Eliminar</button>
+                      </>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -177,7 +184,7 @@ function UserForm({
       onSaved()
       onClose()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al guardar')
+      setError(err instanceof Error ? err.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : 'Error al guardar')
     } finally {
       setSaving(false)
     }
