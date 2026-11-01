@@ -4,6 +4,7 @@ import { SystemParamsService } from '../modules/system-params/service'
 import { StockService } from '../modules/stock/service'
 import { FinanceService } from '../modules/finance/service'
 import { localToday } from '../lib/date'
+import { currentActorId } from '../modules/auth/actor'
 
 const REFUND_CATEGORIA = 'Devolución a Cliente'
 
@@ -213,9 +214,9 @@ export function registerCambiosHandlers(db: Database): void {
         const exRes = db.prepare(`
           INSERT INTO exchanges (
             sale_id, product_id, customer_id, quantity, amount, notes,
-            new_product_id, new_quantity, new_unit_price, new_total, difference, settlement_method
+            new_product_id, new_quantity, new_unit_price, new_total, difference, settlement_method, user_id
           )
-          VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
         `).run(
           payload.saleId,
           payload.productId,
@@ -229,6 +230,7 @@ export function registerCambiosHandlers(db: Database): void {
           newItem ? newTotal : null,
           newItem ? difference : 0,
           newItem && Math.abs(difference) > 0.009 ? input.settlementMethod ?? null : null,
+          currentActorId(),
         )
         const exchangeId = exRes.lastInsertRowid as number
 
@@ -238,13 +240,14 @@ export function registerCambiosHandlers(db: Database): void {
         `).run(payload.qty, payload.productId)
 
         db.prepare(`
-          INSERT INTO stock_movements (product_id, type, quantity, reference_type, reference_id, notes)
-          VALUES (?,'IN',?,'CAMBIO',?,?)
+          INSERT INTO stock_movements (product_id, type, quantity, reference_type, reference_id, notes, user_id)
+          VALUES (?,'IN',?,'CAMBIO',?,?,?)
         `).run(
           payload.productId,
           payload.qty,
           payload.saleId,
           `Cambio/devolución de venta #${payload.saleId}`,
+          currentActorId(),
         )
 
         // Entregar el producto de reemplazo, si lo hay
@@ -263,13 +266,14 @@ export function registerCambiosHandlers(db: Database): void {
           // Sin reemplazo: comportamiento histórico — crédito al cliente si está identificado.
           if (payload.customerId) {
             const crRes = db.prepare(`
-              INSERT INTO customer_credits (customer_id, amount, type, reference_id, notes)
-              VALUES (?,?,'CAMBIO',?,?)
+              INSERT INTO customer_credits (customer_id, amount, type, reference_id, notes, user_id)
+              VALUES (?,?,'CAMBIO',?,?,?)
             `).run(
               payload.customerId,
               payload.amount,
               exchangeId,
               `Crédito por cambio venta #${payload.saleId}`,
+              currentActorId(),
             )
             creditId = crRes.lastInsertRowid as number
           }
@@ -292,9 +296,9 @@ export function registerCambiosHandlers(db: Database): void {
           // Con reemplazo, diferencia a favor del comercio.
           if (input.settlementMethod === 'credito_cliente') {
             const crRes = db.prepare(`
-              INSERT INTO customer_credits (customer_id, amount, type, reference_id, notes)
-              VALUES (?, ?, 'USO', ?, ?)
-            `).run(payload.customerId, -difference, exchangeId, `Uso de crédito - cambio con ticket #${exchangeId}`)
+              INSERT INTO customer_credits (customer_id, amount, type, reference_id, notes, user_id)
+              VALUES (?, ?, 'USO', ?, ?, ?)
+            `).run(payload.customerId, -difference, exchangeId, `Uso de crédito - cambio con ticket #${exchangeId}`, currentActorId())
             creditId = crRes.lastInsertRowid as number
           } else {
             const movement = financeService.registerExchangeDifferenceIncome({

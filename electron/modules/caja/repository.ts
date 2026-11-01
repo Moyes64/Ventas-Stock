@@ -1,5 +1,6 @@
 import type { Database } from 'better-sqlite3'
 import type { CashSession, CreateSessionInput } from './types'
+import { currentActorId } from '../auth/actor'
 
 interface SessionRow {
   id: number
@@ -9,6 +10,8 @@ interface SessionRow {
   status: string
   created_at: string
   updated_at: string
+  opened_by_user_id: number | null
+  closed_by_user_id: number | null
 }
 
 export class CajaRepository {
@@ -59,10 +62,10 @@ export class CajaRepository {
   createSession(data: CreateSessionInput): number {
     const result = this.db
       .prepare(
-        `INSERT INTO cash_register_sessions (session_date, apertura_amount)
-         VALUES (@sessionDate, @aperturaAmount)`
+        `INSERT INTO cash_register_sessions (session_date, apertura_amount, opened_by_user_id)
+         VALUES (@sessionDate, @aperturaAmount, @userId)`
       )
-      .run({ sessionDate: data.sessionDate, aperturaAmount: data.aperturaAmount })
+      .run({ sessionDate: data.sessionDate, aperturaAmount: data.aperturaAmount, userId: currentActorId() })
     return result.lastInsertRowid as number
   }
 
@@ -70,17 +73,17 @@ export class CajaRepository {
     this.db
       .prepare(
         `UPDATE cash_register_sessions
-         SET status = 'closed', cierre_amount = @cierreAmount, updated_at = datetime('now')
+         SET status = 'closed', cierre_amount = @cierreAmount, closed_by_user_id = @userId, updated_at = datetime('now')
          WHERE id = @id`
       )
-      .run({ id, cierreAmount })
+      .run({ id, cierreAmount, userId: currentActorId() })
   }
 
   reopenSession(id: number): void {
     this.db
       .prepare(
         `UPDATE cash_register_sessions
-         SET status = 'open', cierre_amount = NULL, updated_at = datetime('now')
+         SET status = 'open', cierre_amount = NULL, closed_by_user_id = NULL, updated_at = datetime('now')
          WHERE id = @id`
       )
       .run({ id })
@@ -166,6 +169,14 @@ export class CajaRepository {
       status: row.status as 'open' | 'closed',
       createdAt: row.created_at,
       updatedAt: row.updated_at,
+      openedBy: this.userName(row.opened_by_user_id),
+      closedBy: this.userName(row.closed_by_user_id),
     }
+  }
+
+  private userName(userId: number | null): string | null {
+    if (userId === null) return null
+    const row = this.db.prepare('SELECT name FROM users WHERE id = ?').get(userId) as { name: string } | undefined
+    return row?.name ?? null
   }
 }

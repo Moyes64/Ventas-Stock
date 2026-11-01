@@ -55,6 +55,8 @@ export interface Sale {
   customerId: number | null
   customerName?: string
   userId: number | null
+  /** Quién la cargó (null: la generó el sistema o es anterior al login). */
+  userName: string | null
   status: SaleStatus
   subtotal: number        // Adjusted subtotal without IVA (after parameters)
   taxAmount: number       // IVA on adjusted subtotal

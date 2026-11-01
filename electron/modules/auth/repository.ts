@@ -50,6 +50,24 @@ export class UserRepository {
     return rows.map(r => this.mapRow(r))
   }
 
+  /** Operaciones registradas a nombre del usuario (ventas, stock, finanzas, caja, cambios). */
+  countOperations(userId: number): number {
+    const row = this.db
+      .prepare(
+        `SELECT
+           (SELECT count(*) FROM sales WHERE user_id = @id) +
+           (SELECT count(*) FROM stock_movements WHERE user_id = @id) +
+           (SELECT count(*) FROM finance_movements WHERE user_id = @id) +
+           (SELECT count(*) FROM finance_transfers WHERE user_id = @id) +
+           (SELECT count(*) FROM cash_register_sessions WHERE opened_by_user_id = @id OR closed_by_user_id = @id) +
+           (SELECT count(*) FROM exchanges WHERE user_id = @id) +
+           (SELECT count(*) FROM free_exchanges WHERE user_id = @id) +
+           (SELECT count(*) FROM customer_credits WHERE user_id = @id) AS n`
+      )
+      .get({ id: userId }) as { n: number }
+    return row.n
+  }
+
   countActive(): number {
     return (this.db.prepare('SELECT count(*) AS n FROM users WHERE active = 1').get() as { n: number }).n
   }

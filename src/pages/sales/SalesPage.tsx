@@ -213,6 +213,7 @@ export default function SalesPage() {
                   <th>Total</th>
                   <th>Estado</th>
                   <th>CAE</th>
+                  <th>Usuario</th>
                   <th>Acciones</th>
                 </tr>
               </thead>
@@ -237,6 +238,7 @@ export default function SalesPage() {
                         <span className="text-muted">—</span>
                       )}
                     </td>
+                    <td>{sale.userName ?? <span className="text-muted">—</span>}</td>
                     <td style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
                       <button
                         className="btn btn-secondary btn-sm"
@@ -279,7 +281,7 @@ export default function SalesPage() {
                 ))}
                 {saleList.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="empty-row">No hay ventas para el período seleccionado</td>
+                    <td colSpan={8} className="empty-row">No hay ventas para el período seleccionado</td>
                   </tr>
                 )}
               </tbody>

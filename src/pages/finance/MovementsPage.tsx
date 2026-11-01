@@ -1195,6 +1195,7 @@ export default function MovementsPage() {
                     <th className="sortable-th" onClick={() => handleSort('descripcion')} title="Ordenar por Venta # (agrupa venta y comisión/ajuste asociados)">Descripción{sortIndicator('descripcion')}</th>
                     <th className="sortable-th" onClick={() => handleSort('monto')} title="Ordenar por monto">Monto{sortIndicator('monto')}</th>
                     <th className="sortable-th" onClick={() => handleSort('acreditacion')} title="Ordenar por acreditación">Acreditación{sortIndicator('acreditacion')}</th>
+                    <th>Usuario</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -1224,6 +1225,7 @@ export default function MovementsPage() {
                           </span>
                         ) : '—'}
                       </td>
+                      <td>{m.userName ?? '—'}</td>
                       <td>
                         {m.saleId ? (
                           <span
@@ -1250,6 +1252,7 @@ export default function MovementsPage() {
                       <div>+{currency(totalIngresos)}</div>
                       <div className="text-danger">−{currency(totalEgresos)}</div>
                     </td>
+                    <td></td>
                     <td></td>
                     <td></td>
                   </tr>

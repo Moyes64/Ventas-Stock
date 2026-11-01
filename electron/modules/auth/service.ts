@@ -180,6 +180,10 @@ export class AuthService {
 
   deleteUser(id: number, currentUserId?: number): void {
     if (id === currentUserId) throw new Error('No podés eliminar tu propio usuario')
+    // Se perdería quién hizo esas operaciones: el usuario se desactiva, no se borra.
+    if (this.userRepo.countOperations(id) > 0) {
+      throw new Error('Este usuario tiene operaciones registradas: desactivalo en vez de eliminarlo')
+    }
     const current = this.userRepo.findById(id)
     if (current?.active && current.roleId === this.roleRepo.findByName(ADMIN_ROLE)?.id) {
       this.assertAnotherActiveAdmin(id)

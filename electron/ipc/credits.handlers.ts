@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import type { Database } from 'better-sqlite3'
+import { currentActorId } from '../modules/auth/actor'
 
 export function registerCreditsHandlers(db: Database): void {
 
@@ -35,9 +36,9 @@ export function registerCreditsHandlers(db: Database): void {
       }
 
       db.prepare(`
-        INSERT INTO customer_credits (customer_id, amount, type, reference_id, notes)
-        VALUES (?, ?, 'USO', ?, ?)
-      `).run(customerId, -amount, saleId, `Uso de crédito en venta #${saleId}`)
+        INSERT INTO customer_credits (customer_id, amount, type, reference_id, notes, user_id)
+        VALUES (?, ?, 'USO', ?, ?, ?)
+      `).run(customerId, -amount, saleId, `Uso de crédito en venta #${saleId}`, currentActorId())
 
       const newBalanceRow = db.prepare(
         `SELECT COALESCE(SUM(amount), 0) AS balance FROM customer_credits WHERE customer_id = ?`
@@ -53,9 +54,9 @@ export function registerCreditsHandlers(db: Database): void {
   ipcMain.handle('credits:adjust', (_event, customerId: number, amount: number, notes: string): { ok: boolean; error?: string } => {
     try {
       db.prepare(`
-        INSERT INTO customer_credits (customer_id, amount, type, notes)
-        VALUES (?, ?, 'AJUSTE', ?)
-      `).run(customerId, amount, notes)
+        INSERT INTO customer_credits (customer_id, amount, type, notes, user_id)
+        VALUES (?, ?, 'AJUSTE', ?, ?)
+      `).run(customerId, amount, notes, currentActorId())
       return { ok: true }
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }

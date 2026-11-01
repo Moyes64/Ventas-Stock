@@ -1,5 +1,6 @@
 import type { Database } from 'better-sqlite3'
 import { localToday } from '../../lib/date'
+import { currentActorId } from '../auth/actor'
 import type {
   FinancePartner,
   FinanceAccount,
@@ -65,6 +66,8 @@ interface MovementRow {
   related_movement_id: number | null
   pair_movement_id: number | null
   created_at: string
+  user_id?: number | null
+  user_name?: string | null
 }
 
 interface TransferRow {
@@ -317,7 +320,10 @@ export class FinanceRepository {
 
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
     const rows = this.db
-      .prepare(`SELECT * FROM finance_movements ${where} ORDER BY fecha DESC, created_at DESC`)
+      .prepare(
+        `SELECT *, (SELECT name FROM users WHERE id = finance_movements.user_id) AS user_name
+         FROM finance_movements ${where} ORDER BY fecha DESC, created_at DESC`
+      )
       .all(params) as MovementRow[]
     return rows.map(r => this.mapMovement(r))
   }
@@ -326,9 +332,9 @@ export class FinanceRepository {
     const result = this.db
       .prepare(
         `INSERT INTO finance_movements
-           (account_id, tipo, categoria_id, monto, descripcion, fecha, fecha_acreditacion, partner_id, supplier_id, sale_id, sale_payment_id, related_movement_id)
+           (account_id, tipo, categoria_id, monto, descripcion, fecha, fecha_acreditacion, partner_id, supplier_id, sale_id, sale_payment_id, related_movement_id, user_id)
          VALUES
-           (@accountId, @tipo, @categoriaId, @monto, @descripcion, @fecha, @fechaAcreditacion, @partnerId, @supplierId, @saleId, @salePaymentId, @relatedMovementId)`
+           (@accountId, @tipo, @categoriaId, @monto, @descripcion, @fecha, @fechaAcreditacion, @partnerId, @supplierId, @saleId, @salePaymentId, @relatedMovementId, @userId)`
       )
       .run({
         accountId: input.accountId,
@@ -343,6 +349,7 @@ export class FinanceRepository {
         saleId: input.saleId ?? null,
         salePaymentId: input.salePaymentId ?? null,
         relatedMovementId: input.relatedMovementId ?? null,
+        userId: currentActorId(),
       })
     return result.lastInsertRowid as number
   }
@@ -550,8 +557,8 @@ export class FinanceRepository {
   createTransfer(input: CreateTransferInput): number {
     const result = this.db
       .prepare(
-        `INSERT INTO finance_transfers (from_account_id, to_account_id, monto, descripcion, fecha)
-         VALUES (@fromAccountId, @toAccountId, @monto, @descripcion, @fecha)`
+        `INSERT INTO finance_transfers (from_account_id, to_account_id, monto, descripcion, fecha, user_id)
+         VALUES (@fromAccountId, @toAccountId, @monto, @descripcion, @fecha, @userId)`
       )
       .run({
         fromAccountId: input.fromAccountId,
@@ -559,6 +566,7 @@ export class FinanceRepository {
         monto: input.monto,
         descripcion: input.descripcion ?? null,
         fecha: input.fecha ?? localToday(),
+        userId: currentActorId(),
       })
     return result.lastInsertRowid as number
   }
@@ -979,6 +987,8 @@ export class FinanceRepository {
       relatedMovementId: row.related_movement_id,
       pairMovementId: row.pair_movement_id,
       createdAt: row.created_at,
+      userId: row.user_id ?? null,
+      userName: row.user_name ?? null,
     }
   }
 

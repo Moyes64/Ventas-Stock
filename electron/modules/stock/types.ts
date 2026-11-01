@@ -4,6 +4,8 @@ export interface StockMovement {
   id: number
   productId: number
   productName?: string
+  /** Quién lo registró (null: el sistema o anterior al login). */
+  userName: string | null
   type: MovementType
   /** Positive = entry, Negative = exit */
   quantity: number

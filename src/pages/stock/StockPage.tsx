@@ -1008,6 +1008,7 @@ export default function StockPage() {
                 <th>Proveedor</th>
                 <th>Cantidad</th>
                 <th>Notas</th>
+                <th>Usuario</th>
                 <th>Acciones</th>
               </tr>
             </thead>
@@ -1030,6 +1031,7 @@ export default function StockPage() {
                     {m.quantity > 0 ? `+${m.quantity}` : m.quantity}
                   </td>
                   <td>{m.notes || '—'}</td>
+                  <td>{m.userName ?? '—'}</td>
                   <td>
                     <div className="action-group">
                       <button
@@ -1051,7 +1053,7 @@ export default function StockPage() {
                 </tr>
               ))}
               {movements.length === 0 && (
-                <tr><td colSpan={9} className="empty-row">Sin movimientos</td></tr>
+                <tr><td colSpan={10} className="empty-row">Sin movimientos</td></tr>
               )}
             </tbody>
           </table>

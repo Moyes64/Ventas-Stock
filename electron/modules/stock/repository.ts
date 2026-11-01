@@ -1,5 +1,6 @@
 import type { Database } from 'better-sqlite3'
 import type { StockMovement, StockItem, CreateMovementInput, UpdateMovementInput } from './types'
+import { currentActorId } from '../auth/actor'
 
 interface MovementRow {
   id: number
@@ -17,6 +18,7 @@ interface MovementRow {
   voucher_date: string | null
   supplier_id: number | null
   supplier_name: string | null
+  user_name?: string | null
 }
 
 export class StockRepository {
@@ -77,7 +79,7 @@ export class StockRepository {
         referenceType: data.referenceType ?? null,
         referenceId: data.referenceId ?? null,
         notes: data.notes ?? '',
-        userId: data.userId ?? null,
+        userId: currentActorId() ?? data.userId ?? null,
         voucherType: data.voucherType ?? null,
         voucherNumber: data.voucherNumber ?? null,
         voucherDate: data.voucherDate ?? null,
@@ -115,7 +117,7 @@ export class StockRepository {
         productId,
         quantity: delta,
         notes: `Ajuste manual: ${current} → ${newQuantity}`,
-        userId: userId ?? null,
+        userId: currentActorId() ?? userId ?? null,
       })
       updateStock.run({ newQuantity, productId })
       return r.lastInsertRowid as number
@@ -159,10 +161,11 @@ export class StockRepository {
     const rows = this.db
       .prepare(
         `SELECT sm.*, p.name AS product_name,
-                s.name AS supplier_name
+                s.name AS supplier_name, u.name AS user_name
          FROM stock_movements sm
          JOIN products p ON p.id = sm.product_id
          LEFT JOIN suppliers s ON s.id = sm.supplier_id
+         LEFT JOIN users u ON u.id = sm.user_id
          ${where}
          ORDER BY sm.created_at DESC
          LIMIT ${limit}`
@@ -179,6 +182,7 @@ export class StockRepository {
       referenceId: r.reference_id,
       notes: r.notes,
       userId: r.user_id,
+      userName: r.user_name ?? null,
       createdAt: r.created_at,
       voucherType: r.voucher_type,
       voucherNumber: r.voucher_number,

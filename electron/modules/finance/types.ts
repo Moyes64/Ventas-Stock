@@ -29,6 +29,9 @@ export interface FinanceCategory {
 
 export interface FinanceMovement {
   id: number
+  /** Quién lo registró (null: el sistema o anterior al login). */
+  userId?: number | null
+  userName?: string | null
   accountId: number
   tipo: FinanceMovementTipo
   categoriaId: number | null

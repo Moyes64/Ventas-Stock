@@ -13,6 +13,9 @@ export interface CashSession {
   status: SessionStatus
   createdAt: string
   updatedAt: string
+  /** Nombre de quien abrió / cerró la caja (null: anterior al login). */
+  openedBy: string | null
+  closedBy: string | null
 }
 
 export interface CierreSummary {

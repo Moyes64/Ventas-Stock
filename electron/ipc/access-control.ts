@@ -2,6 +2,7 @@ import { ipcMain } from 'electron'
 import type { Database } from 'better-sqlite3'
 import { RoleRepository } from '../modules/auth/repository'
 import { PUBLIC_CHANNELS, areasForChannel, canAccess } from '../modules/auth/permissions'
+import { runAsActor } from '../modules/auth/actor'
 import { getCurrentUser } from './auth.handlers'
 
 let installed = false
@@ -11,6 +12,7 @@ let installed = false
  * según el canal, acceso a alguna sección (ver permissions.ts). Se instala
  * antes de registrar los handlers. Los permisos del rol se leen en cada
  * llamada, así un cambio en Roles y permisos rige sin volver a iniciar sesión.
+ * Además deja registrado qué usuario originó lo que el pedido grabe.
  */
 export function installAccessControl(db: Database): void {
   if (installed) return
@@ -20,14 +22,14 @@ export function installAccessControl(db: Database): void {
 
   ipcMain.handle = (channel, listener) =>
     originalHandle(channel, (event, ...args) => {
-      if (!PUBLIC_CHANNELS.has(channel)) {
-        const user = getCurrentUser()
-        if (!user) throw new Error('Tenés que iniciar sesión')
-        const areas = areasForChannel(channel)
-        if (areas.length > 0 && !canAccess(user.role.name, roleRepo.getPermissions(user.role.id), areas)) {
-          throw new Error('Tu usuario no tiene permiso para esta operación')
-        }
+      if (PUBLIC_CHANNELS.has(channel)) return listener(event, ...args)
+      const user = getCurrentUser()
+      if (!user) throw new Error('Tenés que iniciar sesión')
+      const areas = areasForChannel(channel)
+      if (areas.length > 0 && !canAccess(user.role.name, roleRepo.getPermissions(user.role.id), areas)) {
+        throw new Error('Tu usuario no tiene permiso para esta operación')
       }
-      return listener(event, ...args)
+      // Todo lo que grabe este pedido queda a nombre del usuario (ver auth/actor.ts).
+      return runAsActor(user.id, () => listener(event, ...args))
     })
 }

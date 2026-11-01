@@ -128,6 +128,13 @@ export default function CierrePage() {
                 {summary.session.status === 'open' ? '🔓 Abierta' : '🔒 Cerrada'}
               </strong>
             </p>
+            {(summary.session.openedBy || summary.session.closedBy) && (
+              <p className="text-muted">
+                {summary.session.openedBy && <>Abrió: {summary.session.openedBy}</>}
+                {summary.session.openedBy && summary.session.closedBy && ' · '}
+                {summary.session.closedBy && <>Cerró: {summary.session.closedBy}</>}
+              </p>
+            )}
           </div>
 
           <div className="caja-summary">

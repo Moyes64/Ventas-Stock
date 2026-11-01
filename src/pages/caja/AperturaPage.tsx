@@ -94,6 +94,8 @@ export default function AperturaPage() {
           {existingSession.cierreAmount !== null && (
             <p>Monto cierre: <strong>{currency(existingSession.cierreAmount)}</strong></p>
           )}
+          {existingSession.openedBy && <p className="text-muted">Abrió: {existingSession.openedBy}</p>}
+          {existingSession.closedBy && <p className="text-muted">Cerró: {existingSession.closedBy}</p>}
         </div>
       )}
 

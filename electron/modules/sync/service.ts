@@ -23,6 +23,7 @@ import type { FinanceAccount } from '../finance/types'
 import { SystemParamsService } from '../system-params/service'
 import { FinanceService } from '../finance/service'
 import { WebBannersService } from '../web-catalog/banners'
+import { runAsSystem } from '../auth/actor'
 
 const CONFIG_FILENAME = 'sync-config.json'
 const DEFAULT_CONFIG: SyncConfig = {
@@ -485,7 +486,8 @@ export class SyncService {
 
       for (const order of orders) {
         try {
-          this.processWebOrder(order)
+          // La venta la generó la web: no queda a nombre de quien apretó "Sincronizar".
+          runAsSystem(() => this.processWebOrder(order))
           await this.markOrderProcessed(config, baseUrl, order.externalId)
           result.ordersProcessed++
         } catch (err) {

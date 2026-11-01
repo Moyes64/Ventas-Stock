@@ -1,5 +1,6 @@
 import type { Database } from 'better-sqlite3'
 import { localToday, localNow } from '../../lib/date'
+import { currentActorId } from '../auth/actor'
 import type { Sale, SaleItem, AppliedParameter, CreateSaleInput, SalePayment } from './types'
 
 interface SaleRow {
@@ -26,6 +27,7 @@ interface SaleRow {
   updated_at: string
   customer_name?: string
   customer_email?: string
+  user_name?: string | null
   last_email_to?: string | null
   last_email_status?: string | null
   last_email_sent_at?: string | null
@@ -65,10 +67,11 @@ export class SaleRepository {
   findById(id: number): Sale | undefined {
     const row = this.db
       .prepare(
-        `SELECT s.*, c.name AS customer_name, c.email AS customer_email,
+        `SELECT s.*, c.name AS customer_name, c.email AS customer_email, u.name AS user_name,
                 el.to_email AS last_email_to, el.status AS last_email_status, el.sent_at AS last_email_sent_at
          FROM sales s
          LEFT JOIN customers c ON c.id = s.customer_id
+         LEFT JOIN users u ON u.id = s.user_id
          LEFT JOIN sale_email_log el ON el.id = (
            SELECT id FROM sale_email_log WHERE sale_id = s.id ORDER BY sent_at DESC, id DESC LIMIT 1
          )
@@ -125,10 +128,11 @@ export class SaleRepository {
 
     const rows = this.db
       .prepare(
-        `SELECT s.*, c.name AS customer_name, c.email AS customer_email,
+        `SELECT s.*, c.name AS customer_name, c.email AS customer_email, u.name AS user_name,
                 el.to_email AS last_email_to, el.status AS last_email_status, el.sent_at AS last_email_sent_at
          FROM sales s
          LEFT JOIN customers c ON c.id = s.customer_id
+         LEFT JOIN users u ON u.id = s.user_id
          LEFT JOIN sale_email_log el ON el.id = (
            SELECT id FROM sale_email_log WHERE sale_id = s.id ORDER BY sent_at DESC, id DESC LIMIT 1
          )
@@ -195,7 +199,7 @@ export class SaleRepository {
     const saleId = this.db.transaction(() => {
       const r = insertSale.run({
         customerId: data.customerId ?? null,
-        userId: data.userId ?? null,
+        userId: currentActorId() ?? data.userId ?? null,
         invoiceType: data.invoiceType ?? 11,
         subtotal: data.subtotal,
         taxAmount: data.taxAmount,
@@ -366,6 +370,7 @@ export class SaleRepository {
       customerName: row.customer_name,
       customerEmail: row.customer_email,
       userId: row.user_id,
+      userName: row.user_name ?? null,
       status: row.status as Sale['status'],
       subtotal: row.subtotal,
       taxAmount: row.tax_amount,

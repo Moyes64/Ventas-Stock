@@ -163,6 +163,8 @@ export interface StockMovement {
   id: number
   productId: number
   productName?: string
+  /** Quién lo registró (null: el sistema o anterior al login). */
+  userName: string | null
   type: string
   quantity: number
   referenceType: string | null
@@ -235,6 +237,8 @@ export interface Sale {
   customerName?: string
   customerEmail?: string
   userId: number | null
+  /** Quién la cargó (null: la generó el sistema o es anterior al login). */
+  userName: string | null
   status: SaleStatus
   subtotal: number        // Adjusted subtotal without IVA (after parameters)
   taxAmount: number       // IVA on adjusted subtotal
@@ -403,6 +407,9 @@ export interface CashSession {
   status: SessionStatus
   createdAt: string
   updatedAt: string
+  /** Nombre de quien abrió / cerró la caja (null: anterior al login). */
+  openedBy: string | null
+  closedBy: string | null
 }
 
 // ── System Params ─────────────────────────────────────────────────────────
@@ -836,6 +843,9 @@ export interface FinanceCategory {
 
 export interface FinanceMovement {
   id: number
+  /** Quién lo registró (null: el sistema o anterior al login). */
+  userId?: number | null
+  userName?: string | null
   accountId: number
   tipo: FinanceMovementTipo
   categoriaId: number | null
