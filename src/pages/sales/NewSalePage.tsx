@@ -92,6 +92,13 @@ export default function NewSalePage() {
     if (!isHiddenOptionsVisible) setIsBlackSale(false)
   }, [isHiddenOptionsVisible])
 
+  // Con la caja cerrada solo se permite Venta N (ej. ventas de Mercado Libre
+  // que carga Ariel fuera del horario del local): se fuerza el modo.
+  const soloVentaN = cajaChecked && !cajaAbierta && isHiddenOptionsVisible
+  useEffect(() => {
+    if (soloVentaN) setIsBlackSale(true)
+  }, [soloVentaN])
+
   // El precio editable es solo para remitos: al volver a factura, todo el
   // carrito vuelve al precio de catálogo.
   useEffect(() => {
@@ -330,6 +337,19 @@ export default function NewSalePage() {
       setError('Hay productos con precio en cero. Cargá el precio de venta de cada producto.')
       return
     }
+    if (!cajaAbierta) {
+      if (!isBlackSale) {
+        setError('Con la caja cerrada solo se puede registrar una Venta N')
+        return
+      }
+      const usesCash = isSplitPayment
+        ? splitMethod1 === 'contado_efectivo' || splitMethod2 === 'contado_efectivo'
+        : paymentMethod === 'contado_efectivo'
+      if (usesCash) {
+        setError('Con la caja cerrada no se puede cobrar en efectivo: elegí otro medio de pago')
+        return
+      }
+    }
     if (isSplitPayment) {
       if (splitSameMethod) {
         setError('Elegí dos medios de pago distintos para combinar')
@@ -476,7 +496,7 @@ export default function NewSalePage() {
     )
   }
 
-  if (!cajaAbierta) {
+  if (!cajaAbierta && !isHiddenOptionsVisible) {
     return (
       <div className="page">
         <div className="caja-bloqueada-card">
@@ -850,10 +870,16 @@ export default function NewSalePage() {
                 <input
                   type="checkbox"
                   checked={isBlackSale}
+                  disabled={soloVentaN}
                   onChange={e => setIsBlackSale(e.target.checked)}
                 />
                 <span className="black-sale-toggle__label">🅽 Venta N (sin CAE)</span>
               </label>
+            )}
+            {soloVentaN && (
+              <p className="caja-cerrada-aviso">
+                🔒 Caja cerrada: solo Venta N y sin efectivo
+              </p>
             )}
           </div>
           {cart.length === 0 ? (

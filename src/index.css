@@ -724,6 +724,17 @@ code {
 .black-sale-toggle input[type="checkbox"] { cursor: pointer; }
 .black-sale-toggle__label { white-space: nowrap; }
 
+/* Nueva Venta con la caja cerrada: solo Venta N */
+.caja-cerrada-aviso {
+  margin: 0.25rem 0 0;
+  padding: 0.35rem 0.6rem;
+  border-radius: 6px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
 /* Cart: black sale total row */
 .cart-total-row--black {
   color: #1e293b;
