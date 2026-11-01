@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { systemParams as systemParamsApi } from '../../lib/ipc'
 import type { SystemParams } from '../../types/ipc'
+import PrincipalPcSection from './PrincipalPcSection'
 
 const electron = (window as Window & { electron?: {
   csr?: {
@@ -123,6 +124,8 @@ export default function SystemParamsPage() {
       <div className="page-header">
         <h1 className="page-title">⚙️ Parámetros del Sistema</h1>
       </div>
+
+      <PrincipalPcSection />
 
       <form onSubmit={e => { void handleSave(e) }} className="sysparam-form">
 

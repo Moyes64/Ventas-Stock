@@ -20,8 +20,8 @@ export function getSyncService(): SyncService | null {
 }
 
 export function registerSyncHandlers(db: Database): void {
+  // El timer lo arranca el control de PC principal (electron/principal-jobs.ts).
   syncService = new SyncService(db)
-  syncService.startTimer()
 
   ipcMain.handle('sync:getConfig', () => {
     return syncService!.getConfig()

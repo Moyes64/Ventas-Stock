@@ -111,6 +111,7 @@ export const CHANNEL_OVERRIDES: Record<string, PermissionArea[]> = {
   'parameters:delete': ['parameters'],
   'priceUpdate:applyUpdates': ['stock', 'catalog'],
   'systemParams:save': ['system'],
+  'principal:setThisAsPrincipal': ['system'],
   'auth:listUsers': ['users'],
   'auth:createUser': ['users'],
   'auth:updateUser': ['users'],

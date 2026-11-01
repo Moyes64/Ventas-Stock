@@ -24,6 +24,7 @@ import { SystemParamsService } from '../system-params/service'
 import { FinanceService } from '../finance/service'
 import { WebBannersService } from '../web-catalog/banners'
 import { runAsSystem } from '../auth/actor'
+import { isPrincipalPc, principalName } from '../principal/service'
 
 const CONFIG_FILENAME = 'sync-config.json'
 const DEFAULT_CONFIG: SyncConfig = {
@@ -45,6 +46,7 @@ export class SyncService {
   private configPath: string
   private lastResult: SyncResult | null = null
   private timer: ReturnType<typeof setInterval> | null = null
+  private timerActive = false
   // Una subida de imágenes completa tarda varios minutos (re-sube todas las de
   // productos); sin esto cada sync arrancaba otra tanda encima de la anterior.
   private imagesSyncRunning = false
@@ -86,13 +88,28 @@ export class SyncService {
   // (detectado 2026-10-23). Para probar contra producción a propósito:
   // SYNC_IN_DEV=1 en .env.
   private devBlockReason(): string | null {
+    // Con la base compartida, una sola PC sincroniza: dos a la vez se pisarían
+    // el stock de la web y competirían por las mismas órdenes.
+    if (!isPrincipalPc()) {
+      const principal = principalName()
+      return principal
+        ? `La sincronización con la web la hace la PC principal (${principal})`
+        : 'No hay PC principal: elegila en Parámetros del sistema para sincronizar con la web'
+    }
     if (app.isPackaged || process.env.SYNC_IN_DEV === '1') return null
     return 'Sincronización desactivada en la app de desarrollo (usa otra base que la real). Para habilitarla: SYNC_IN_DEV=1 en .env'
   }
 
   // ── Timer ─────────────────────────────────────────────────────────────────
 
+  /** Lo llama el control de PC principal: el timer solo corre en esa PC. */
   startTimer(): void {
+    this.timerActive = true
+    this.restartTimer()
+  }
+
+  stopTimer(): void {
+    this.timerActive = false
     this.restartTimer()
   }
 
@@ -101,11 +118,13 @@ export class SyncService {
       clearInterval(this.timer)
       this.timer = null
     }
+    if (!this.timerActive) return
 
     const config = this.getConfig()
     if (!config.enabled || !config.apiUrl || !config.apiKey) return
-    if (this.devBlockReason()) {
-      console.log('[sync] Timer no iniciado: app de desarrollo sin SYNC_IN_DEV=1')
+    const blocked = this.devBlockReason()
+    if (blocked) {
+      console.log(`[sync] Timer no iniciado: ${blocked}`)
       return
     }
 

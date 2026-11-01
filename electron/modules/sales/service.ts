@@ -3,7 +3,8 @@ import { SaleRepository } from './repository'
 import { StockService } from '../stock/service'
 import { ParameterRepository } from '../parameters/repository'
 import { FinanceService } from '../finance/service'
-import type { InvoicingService } from '../invoicing-afip/service'
+import { notPrincipalInvoicingMessage, type InvoicingService } from '../invoicing-afip/service'
+import { isPrincipalPc } from '../principal/service'
 import type { Sale, AppliedParameter, CreateSaleInput } from './types'
 
 export class SaleService {
@@ -104,6 +105,10 @@ export class SaleService {
     if (input.paymentMethod === 'mp_ariel' && !input.isBlackSale) {
       throw new Error('Las ventas por Mercado Libre (MP Ariel) se cargan como Venta N')
     }
+
+    // Una venta con factura en una PC que no factura quedaría como comprobante
+    // interno con error: se rechaza antes de grabarla.
+    if (!input.isBlackSale && !isPrincipalPc()) throw new Error(notPrincipalInvoicingMessage())
 
     // Step 1: Validate stock
     this.stockService.validateAvailability(

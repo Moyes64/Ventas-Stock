@@ -4,6 +4,8 @@ import { config as dotenvConfig } from 'dotenv'
 import { getDb, closeDb } from '../database/db'
 import { runMigrations } from '../database/migrate'
 import { registerAllIpcHandlers } from './ipc/index'
+import { initPrincipalService } from './modules/principal/service'
+import { startPrincipalJobs } from './principal-jobs'
 
 // Handle app lifecycle
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
@@ -96,33 +98,17 @@ async function bootstrap(): Promise<void> {
   try {
     const db = getDb()
     runMigrations()
+    initPrincipalService(db)
     const { stockCountService, webCatalogServerService } = registerAllIpcHandlers(db)
 
-    // Retoma los servidores locales (conteo de stock / catálogo web LAN) si
-    // habían quedado activados en la sesión anterior. Debe ser la MISMA
-    // instancia que ya usan los handlers IPC (no `new ...Service(...)` acá)
-    // — el servidor HTTP que arranca vive como estado en memoria de esa
-    // instancia puntual; con dos instancias separadas, la UI (que consulta
-    // la de los handlers IPC) nunca se entera de que la otra ya está
-    // escuchando el puerto, y termina reportando "Inactivo" mientras el
-    // puerto sigue tomado por la primera.
-    await stockCountService.autoStartIfEnabled()
-    await webCatalogServerService.autoStartIfEnabled()
-
-    // One-time fix: ventas marcadas como REJECTED por bug en updateAfipError
-    // (la función sobreescribía el status a REJECTED después de setearlo a INTERNAL_RECEIPT).
-    // Las ventas rechazadas realmente por AFIP aún no existen en este sistema,
-    // así que es seguro convertir todos los REJECTED → INTERNAL_RECEIPT.
-    try {
-      const fixed = db
-        .prepare(`UPDATE sales SET status = 'INTERNAL_RECEIPT' WHERE status = 'REJECTED'`)
-        .run()
-      if (fixed.changes > 0) {
-        console.log(`[main] Corregidas ${fixed.changes} ventas de REJECTED → INTERNAL_RECEIPT`)
-      }
-    } catch (fixErr) {
-      console.warn('[main] No se pudo corregir ventas REJECTED:', fixErr)
-    }
+    // Sync periódico y servidores locales (conteo de stock / catálogo web LAN)
+    // solo en la PC principal. Deben ser las MISMAS instancias que ya usan los
+    // handlers IPC (no `new ...Service(...)` acá) — el servidor HTTP que
+    // arranca vive como estado en memoria de esa instancia puntual; con dos
+    // instancias separadas, la UI (que consulta la de los handlers IPC) nunca
+    // se entera de que la otra ya está escuchando el puerto, y termina
+    // reportando "Inactivo" mientras el puerto sigue tomado por la primera.
+    startPrincipalJobs(db, { stockCountService, webCatalogServerService })
 
     console.log('[main] Database initialized and IPC handlers registered')
   } catch (err) {

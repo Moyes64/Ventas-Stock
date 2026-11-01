@@ -67,6 +67,11 @@ export class StockCountService {
     if (config.enabled) await this.startServer(config)
   }
 
+  /** Apaga el servidor sin destildar "Activado": esta PC dejó de ser la principal. */
+  suspend(): Promise<void> {
+    return this.stopServer()
+  }
+
   async setEnabled(enabled: boolean): Promise<StockCountServerStatus> {
     const config = this.getConfig()
     config.enabled = enabled

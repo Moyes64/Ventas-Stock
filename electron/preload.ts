@@ -32,6 +32,11 @@ const electronAPI = {
     deleteRole: (id: number) => invoke('auth:deleteRole', id),
   },
 
+  principal: {
+    getStatus: () => invoke('principal:getStatus'),
+    setThisAsPrincipal: () => invoke('principal:setThisAsPrincipal'),
+  },
+
   // Catalog
   catalog: {
     listProducts: (activeOnly?: boolean) => invoke('catalog:listProducts', activeOnly),

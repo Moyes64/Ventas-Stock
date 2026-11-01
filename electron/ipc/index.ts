@@ -1,6 +1,7 @@
 import type { Database } from 'better-sqlite3'
 import { installAccessControl } from './access-control'
 import { registerAuthHandlers } from './auth.handlers'
+import { registerPrincipalHandlers } from './principal.handlers'
 import { registerCatalogHandlers } from './catalog.handlers'
 import { registerCustomerHandlers } from './customers.handlers'
 import { registerSupplierHandlers } from './suppliers.handlers'
@@ -38,6 +39,7 @@ export function registerAllIpcHandlers(
   // Antes que cualquier handler: todos quedan detrás del control de sesión y permisos.
   installAccessControl(db)
   registerAuthHandlers(db)
+  registerPrincipalHandlers(db)
   registerCatalogHandlers(db)
   registerCustomerHandlers(db)
   registerSupplierHandlers(db)

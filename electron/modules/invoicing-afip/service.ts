@@ -5,6 +5,15 @@ import type { Sale } from '../sales/types'
 import type { CAEResponse, FacturaDetalle } from './types'
 import { DOC_TYPE_AFIP_CODE } from '../customers/types'
 import type { Database } from 'better-sqlite3'
+import { isPrincipalPc, principalName } from '../principal/service'
+
+/** Mensaje para cuando se intenta facturar desde una PC que no es la principal. */
+export function notPrincipalInvoicingMessage(): string {
+  const principal = principalName()
+  return principal
+    ? `La facturación con AFIP se hace solo desde la PC principal (${principal}). Desde esta PC podés cargarla como Venta N.`
+    : 'No hay PC principal: elegila en Parámetros del sistema para poder facturar con AFIP.'
+}
 
 const MAX_RETRY_ATTEMPTS = 2
 const RETRY_DELAY_MS = 1000
@@ -22,6 +31,10 @@ export class InvoicingService {
    * Returns a CAEResponse — never throws (errors are captured in the response).
    */
   async solicitarCAE(sale: Sale): Promise<CAEResponse> {
+    // Los certificados de AFIP viven en la PC principal, y una sola PC numera
+    // los comprobantes: desde otra se rechaza antes de tocar AFIP.
+    if (!isPrincipalPc()) return { success: false, error: notPrincipalInvoicingMessage() }
+
     const config = loadAfipConfig()
 
     const invoiceType = sale.invoiceType ?? 11 // Default: Factura C

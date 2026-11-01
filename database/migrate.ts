@@ -75,9 +75,23 @@ export function runMigrations(): void {
     .filter(f => f.endsWith('.sql'))
     .sort()
 
+  // Base compartida (Turso): si otra PC ya la actualizó con una versión más
+  // nueva de la app, esta versión no conoce el esquema y no debe arrancar.
+  if (process.env.TURSO_DATABASE_URL) {
+    const known = new Set(files)
+    const unknown = [...applied].filter(f => !known.has(f)).sort()
+    if (unknown.length > 0) {
+      throw new Error(
+        `La base fue actualizada por una versión más nueva de la app (${unknown[unknown.length - 1]}). ` +
+          'Instalá la última versión en esta PC.'
+      )
+    }
+  }
+
   const insertMigration = db.prepare(
     'INSERT INTO schema_migrations (filename) VALUES (?)'
   )
+  const isApplied = db.prepare('SELECT 1 FROM schema_migrations WHERE filename = ?')
 
   for (const file of files) {
     if (applied.has(file)) {
@@ -92,12 +106,16 @@ export function runMigrations(): void {
     // (DROP TABLE + RENAME) work correctly. SQLite ignores PRAGMA inside transactions.
     db.pragma('foreign_keys = OFF')
     const applyMigration = db.transaction(() => {
+      // Con la base compartida otra PC pudo aplicarla recién: se vuelve a
+      // mirar dentro de la transacción para no correrla dos veces.
+      if (isApplied.get(file)) return false
       db.exec(sql)
       insertMigration.run(file)
+      return true
     })
-    applyMigration()
+    const ran = applyMigration()
     db.pragma('foreign_keys = ON')
-    console.log(`[migrate] ✓ Applied: ${file}`)
+    console.log(ran ? `[migrate] ✓ Applied: ${file}` : `[migrate] Already applied by another PC: ${file}`)
   }
 
   console.log('[migrate] All migrations complete.')

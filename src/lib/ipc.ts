@@ -14,6 +14,7 @@ import type {
   PermissionAreaInfo,
   RoleWithPermissions,
   RoleInput,
+  PrincipalStatus,
   User,
   Role,
   Product,
@@ -105,6 +106,12 @@ export const auth = {
   createRole: (data: RoleInput) => electron.auth.createRole(data) as Promise<number>,
   updateRole: (id: number, data: RoleInput) => electron.auth.updateRole(id, data) as Promise<void>,
   deleteRole: (id: number) => electron.auth.deleteRole(id) as Promise<void>,
+}
+
+// PC principal
+export const principal = {
+  getStatus: () => electron.principal.getStatus() as Promise<PrincipalStatus>,
+  setThisAsPrincipal: () => electron.principal.setThisAsPrincipal() as Promise<PrincipalStatus>,
 }
 
 // Catalog

@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { canAccessPath } from '../lib/permissions'
+import { principal as principalApi } from '../lib/ipc'
+import type { PrincipalStatus } from '../types/ipc'
 
 interface NavItem {
   to: string
@@ -81,6 +83,15 @@ const navEntries: NavEntry[] = [
 export default function Sidebar() {
   const location = useLocation()
   const { user, logout } = useAuth()
+  const [pc, setPc] = useState<PrincipalStatus | null>(null)
+
+  // Con la base compartida, cada PC muestra si es la principal o un puesto.
+  useEffect(() => {
+    const load = () => { principalApi.getStatus().then(setPc).catch(() => undefined) }
+    load()
+    const timer = setInterval(load, 60 * 1000)
+    return () => clearInterval(timer)
+  }, [])
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {}
     for (const entry of navEntries) {
@@ -163,6 +174,11 @@ export default function Sidebar() {
           <div className="sidebar-user">
             <span className="sidebar-user-name">👤 {user.name}</span>
             <span className="sidebar-user-role">{user.username} · {user.role.name}</span>
+            {pc?.sharedDb && (
+              <span className="sidebar-user-role" title={pc.principalName ? `PC principal: ${pc.principalName}` : 'Sin PC principal'}>
+                🖥️ {pc.isPrincipal ? 'PC principal' : `Puesto · ${pc.machineName}`}
+              </span>
+            )}
             <button type="button" className="sidebar-logout" onClick={() => void logout()}>
               Cerrar sesión
             </button>
