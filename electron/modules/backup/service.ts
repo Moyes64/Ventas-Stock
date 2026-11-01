@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { closeDb, getDb } from '../../../database/db'
 import { localNow } from '../../lib/date'
+import { usesSharedDb } from '../principal/service'
 import type { BackupInfo, BackupResult, RestoreResult } from './types'
 
 export class BackupService {
@@ -80,6 +81,16 @@ export class BackupService {
    * The app must be restarted after a restore.
    */
   restoreBackup(backupFilename: string): RestoreResult {
+    // Con la base compartida (Turso) el archivo local es solo una réplica:
+    // pisarlo no restaura la base de todos y deja a esta PC desincronizada.
+    if (usesSharedDb()) {
+      return {
+        success: false,
+        error:
+          'Con la base compartida no se puede restaurar desde esta pantalla: pisaría solo la copia de esta PC. ' +
+          'Para volver a un respaldo hay que restaurar la base en la nube (pedíselo al administrador).',
+      }
+    }
     try {
       const backupPath = path.join(this.backupDir, backupFilename)
 

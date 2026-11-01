@@ -11,6 +11,15 @@ import { imagePath } from './modules/web-catalog/image-store'
 // Handle app lifecycle
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 
+// La app de desarrollo usa su propia carpeta de datos. Si compartiera la de la
+// app instalada (%APPDATA%\ventas-stock), cambiar el ambiente de AFIP en
+// Parámetros del sistema desde desarrollo lo cambiaba también en producción, y
+// el config.env de producción (base Turso real) conectaría desarrollo a esa base.
+// Debe correr antes de cualquier app.getPath('userData').
+if (!app.isPackaged) {
+  app.setPath('userData', path.join(app.getPath('appData'), 'ventas-stock-dev'))
+}
+
 // Load .env explicitly so that process.env.VITE_EMPRESA_* is available in the
 // Electron main process (e.g. for printing/company header in remito interno).
 // Must run before any module reads process.env.
