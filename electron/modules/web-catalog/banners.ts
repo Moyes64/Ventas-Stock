@@ -6,6 +6,7 @@ import type { WebBanner, SaveWebBannerInput, WebBannersConfig } from './types'
 import { compressImage, compressImageBuffer } from './service'
 import { removeImage, writeImage } from './image-store'
 import { usesSharedDb } from '../principal/service'
+import { sqlLocalNow } from '../../lib/date'
 
 // Interruptor general de los banners (mismo esquema de archivo de config que
 // "Acceso remoto", ver web-catalog-server/service.ts).
@@ -185,7 +186,7 @@ export class WebBannersService {
         // La oferta vence junto con el banner: se copia su vigencia al producto.
         this.db.prepare(`
           UPDATE web_products SET offer_price=?, compare_at_price=?, offer_from=?, offer_to=?,
-            updated_at=datetime('now','localtime')
+            updated_at=${sqlLocalNow()}
           WHERE product_id=?
         `).run(offer.offerPrice, offer.compareAtPrice, input.dateFrom || null, input.dateTo || null, input.linkProductId)
       }
@@ -205,7 +206,7 @@ export class WebBannersService {
           title=?, subtitle=?, badge=?, fine_print=?, theme=?,
           link_type=?, link_product_id=?, link_category_id=?, link_url=?, button_text=?,
           date_from=?, date_to=?, active=?, sort_order=?,
-          updated_at=datetime('now','localtime')
+          updated_at=${sqlLocalNow()}
         WHERE id=?
       `).run(...values, id)
       return id
@@ -214,8 +215,8 @@ export class WebBannersService {
       INSERT INTO web_banners (
         title, subtitle, badge, fine_print, theme,
         link_type, link_product_id, link_category_id, link_url, button_text,
-        date_from, date_to, active, sort_order
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        date_from, date_to, active, sort_order, created_at, updated_at
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,${sqlLocalNow()},${sqlLocalNow()})
     `).run(...values)
     return Number(result.lastInsertRowid)
   }
@@ -241,14 +242,14 @@ export class WebBannersService {
     // la web no muestra una versión cacheada de la imagen anterior.
     const filename = `banner_${id}_${Date.now()}.jpg`
     writeImage(filename, jpeg)
-    this.db.prepare(`UPDATE web_banners SET image_filename=?, updated_at=datetime('now','localtime') WHERE id=?`)
+    this.db.prepare(`UPDATE web_banners SET image_filename=?, updated_at=${sqlLocalNow()} WHERE id=?`)
       .run(filename, id)
     return this.get(id)!
   }
 
   removeImage(id: number): WebBanner {
     this.removeImageFile(id)
-    this.db.prepare(`UPDATE web_banners SET image_filename=NULL, updated_at=datetime('now','localtime') WHERE id=?`)
+    this.db.prepare(`UPDATE web_banners SET image_filename=NULL, updated_at=${sqlLocalNow()} WHERE id=?`)
       .run(id)
     return this.get(id)!
   }

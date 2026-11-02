@@ -2,7 +2,7 @@ import { ipcMain } from 'electron'
 import type { Database } from 'better-sqlite3'
 import { StockService } from '../modules/stock/service'
 import { FinanceService } from '../modules/finance/service'
-import { localToday } from '../lib/date'
+import { localToday, sqlLocalNow } from '../lib/date'
 import { currentActorId } from '../modules/auth/actor'
 
 const REFERENCE_TYPE = 'DEVOLUCION_SIN_TICKET'
@@ -104,8 +104,8 @@ export function registerFreeExchangeHandlers(db: Database): void {
         db.transaction(() => {
           // 1. Cabecera (placeholder de settlement_method, se actualiza abajo si aplica)
           const headerRes = db.prepare(`
-            INSERT INTO free_exchanges (customer_id, returned_total, new_total, difference, settlement_method, notes, user_id)
-            VALUES (?,?,?,?,?,?,?)
+            INSERT INTO free_exchanges (customer_id, returned_total, new_total, difference, settlement_method, notes, user_id, created_at)
+            VALUES (?,?,?,?,?,?,?,${sqlLocalNow()})
           `).run(
             input.customerId ?? null,
             returnedTotal,
@@ -151,8 +151,8 @@ export function registerFreeExchangeHandlers(db: Database): void {
           if (difference > 0.009) {
             if (input.settlementMethod === 'credito_cliente') {
               const crRes = db.prepare(`
-                INSERT INTO customer_credits (customer_id, amount, type, reference_id, notes, user_id)
-                VALUES (?, ?, 'USO', ?, ?, ?)
+                INSERT INTO customer_credits (customer_id, amount, type, reference_id, notes, user_id, created_at)
+                VALUES (?, ?, 'USO', ?, ?, ?, ${sqlLocalNow()})
               `).run(input.customerId, -difference, freeExchangeId, `Uso de crédito - cambio sin ticket #${freeExchangeId}`, currentActorId())
               creditId = crRes.lastInsertRowid as number
             } else {

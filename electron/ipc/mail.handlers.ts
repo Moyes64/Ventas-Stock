@@ -5,6 +5,7 @@ import { PrintingService } from '../modules/printing/service'
 import { buildInvoiceHtml } from '../modules/printing/invoice-html'
 import { SaleRepository } from '../modules/sales/repository'
 import type { Database } from 'better-sqlite3'
+import { localNow } from '../lib/date'
 
 export interface MailConfig {
   host: string
@@ -52,8 +53,8 @@ export function registerMailHandlers(db: Database): void {
   // lo hace el cliente de correo vía IMAP APPEND, no el protocolo SMTP). Este
   // log es el único registro de qué se mandó, a quién y si falló.
   const insertLog = db.prepare(`
-    INSERT INTO sale_email_log (sale_id, to_email, bcc_email, subject, status, error)
-    VALUES (@saleId, @toEmail, @bccEmail, @subject, @status, @error)
+    INSERT INTO sale_email_log (sale_id, to_email, bcc_email, subject, status, error, sent_at)
+    VALUES (@saleId, @toEmail, @bccEmail, @subject, @status, @error, @sentAt)
   `)
 
   function logSend(entry: {
@@ -61,7 +62,7 @@ export function registerMailHandlers(db: Database): void {
     status: 'sent' | 'error'; error: string | null
   }): void {
     try {
-      insertLog.run(entry)
+      insertLog.run({ ...entry, sentAt: localNow() })
     } catch (err) {
       console.error('[mail] Error registrando el log de envío:', err)
     }

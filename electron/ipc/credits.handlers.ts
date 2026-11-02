@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import type { Database } from 'better-sqlite3'
 import { currentActorId } from '../modules/auth/actor'
+import { sqlLocalNow } from '../lib/date'
 
 export function registerCreditsHandlers(db: Database): void {
 
@@ -36,8 +37,8 @@ export function registerCreditsHandlers(db: Database): void {
       }
 
       db.prepare(`
-        INSERT INTO customer_credits (customer_id, amount, type, reference_id, notes, user_id)
-        VALUES (?, ?, 'USO', ?, ?, ?)
+        INSERT INTO customer_credits (customer_id, amount, type, reference_id, notes, user_id, created_at)
+        VALUES (?, ?, 'USO', ?, ?, ?, ${sqlLocalNow()})
       `).run(customerId, -amount, saleId, `Uso de crédito en venta #${saleId}`, currentActorId())
 
       const newBalanceRow = db.prepare(
@@ -54,8 +55,8 @@ export function registerCreditsHandlers(db: Database): void {
   ipcMain.handle('credits:adjust', (_event, customerId: number, amount: number, notes: string): { ok: boolean; error?: string } => {
     try {
       db.prepare(`
-        INSERT INTO customer_credits (customer_id, amount, type, notes, user_id)
-        VALUES (?, ?, 'AJUSTE', ?, ?)
+        INSERT INTO customer_credits (customer_id, amount, type, notes, user_id, created_at)
+        VALUES (?, ?, 'AJUSTE', ?, ?, ${sqlLocalNow()})
       `).run(customerId, amount, notes, currentActorId())
       return { ok: true }
     } catch (err) {

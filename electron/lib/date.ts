@@ -20,6 +20,17 @@ export function localNow(): string {
 }
 
 /**
+ * localNow() como literal SQL ('YYYY-MM-DD HH:MM:SS'), para poner la hora local
+ * dentro del texto de una sentencia. Reemplaza a datetime('now','localtime') y
+ * a los DEFAULT (datetime('now','localtime')) de las tablas: con la base en
+ * Turso esos se calculan en el servidor, que está en UTC, y quedaban 3 horas
+ * adelantados. Seguro de interpolar: solo dígitos, guiones, espacio y dos puntos.
+ */
+export function sqlLocalNow(): string {
+  return `'${localNow()}'`
+}
+
+/**
  * Convierte un timestamp UTC (ISO 8601 con 'Z', o un DATETIME crudo de MySQL sin
  * timezone tipo "YYYY-MM-DD HH:MM:SS" — se asume UTC en ese caso) a la fecha
  * LOCAL en formato YYYY-MM-DD.

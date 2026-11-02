@@ -3,7 +3,7 @@ import type { Database } from 'better-sqlite3'
 import { SystemParamsService } from '../modules/system-params/service'
 import { StockService } from '../modules/stock/service'
 import { FinanceService } from '../modules/finance/service'
-import { localToday } from '../lib/date'
+import { localToday, sqlLocalNow } from '../lib/date'
 import { currentActorId } from '../modules/auth/actor'
 
 const REFUND_CATEGORIA = 'Devolución a Cliente'
@@ -214,9 +214,10 @@ export function registerCambiosHandlers(db: Database): void {
         const exRes = db.prepare(`
           INSERT INTO exchanges (
             sale_id, product_id, customer_id, quantity, amount, notes,
-            new_product_id, new_quantity, new_unit_price, new_total, difference, settlement_method, user_id
+            new_product_id, new_quantity, new_unit_price, new_total, difference, settlement_method, user_id,
+            created_at
           )
-          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,${sqlLocalNow()})
         `).run(
           payload.saleId,
           payload.productId,
@@ -266,8 +267,8 @@ export function registerCambiosHandlers(db: Database): void {
           // Sin reemplazo: comportamiento histórico — crédito al cliente si está identificado.
           if (payload.customerId) {
             const crRes = db.prepare(`
-              INSERT INTO customer_credits (customer_id, amount, type, reference_id, notes, user_id)
-              VALUES (?,?,'CAMBIO',?,?,?)
+              INSERT INTO customer_credits (customer_id, amount, type, reference_id, notes, user_id, created_at)
+              VALUES (?,?,'CAMBIO',?,?,?,${sqlLocalNow()})
             `).run(
               payload.customerId,
               payload.amount,
@@ -296,8 +297,8 @@ export function registerCambiosHandlers(db: Database): void {
           // Con reemplazo, diferencia a favor del comercio.
           if (input.settlementMethod === 'credito_cliente') {
             const crRes = db.prepare(`
-              INSERT INTO customer_credits (customer_id, amount, type, reference_id, notes, user_id)
-              VALUES (?, ?, 'USO', ?, ?, ?)
+              INSERT INTO customer_credits (customer_id, amount, type, reference_id, notes, user_id, created_at)
+              VALUES (?, ?, 'USO', ?, ?, ?, ${sqlLocalNow()})
             `).run(payload.customerId, -difference, exchangeId, `Uso de crédito - cambio con ticket #${exchangeId}`, currentActorId())
             creditId = crRes.lastInsertRowid as number
           } else {

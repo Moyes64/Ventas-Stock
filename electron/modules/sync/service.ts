@@ -13,7 +13,7 @@ const httpsAgent = new https.Agent({ rejectUnauthorized: false })
 const UPLOADED_IMAGES_FILENAME = 'web-images-uploaded.json'
 import type { Database } from 'better-sqlite3'
 import { app } from 'electron'
-import { localToday, utcToLocalDate } from '../../lib/date'
+import { localToday, sqlLocalNow, utcToLocalDate } from '../../lib/date'
 import type {
   SyncConfig, SyncPayload, SyncResult, SyncStockItem, SyncVentasHoy, SyncSaleHistory, SyncCaja,
   SyncWebCategory, SyncWebProduct, SyncWebImage, SyncWebBanner, WebOrder, PullResult, SyncFinance,
@@ -720,7 +720,7 @@ export class SyncService {
 
       const saleRes = this.db.prepare(`
         INSERT INTO sales (customer_id, sale_date, status, payment_method, total, other_charges_amount, other_charges_label, is_black_sale, created_at)
-        VALUES (?,?,'WEB_ORDER',?,?,?,?,0,datetime('now','localtime'))
+        VALUES (?,?,'WEB_ORDER',?,?,?,?,0,${sqlLocalNow()})
       `).run(customerId, saleDate, localPaymentMethod, order.total, otherChargesAmount, otherChargesLabel)
       const saleId = saleRes.lastInsertRowid as number
 
@@ -753,7 +753,7 @@ export class SyncService {
       // Guardar el external_id para no reprocesar
       this.db.prepare(`
         INSERT OR IGNORE INTO web_orders_processed (external_id, sale_id, processed_at)
-        VALUES (?,?,datetime('now','localtime'))
+        VALUES (?,?,${sqlLocalNow()})
       `).run(order.externalId, saleId)
 
       // Auto-registrar el ingreso a MP-Anabella si corresponde (no bloquea la importación si falla)

@@ -10,6 +10,7 @@ import type {
 } from './types'
 import { parseGiftCategories, serializeGiftCategories } from './giftCategories'
 import { imagePath, removeImage, writeImage } from './image-store'
+import { sqlLocalNow } from '../../lib/date'
 
 // Las imágenes se suben tal cual a Hostinger y de ahí las optimiza Vercel
 // (facturado por uso); si entran sin comprimir agotan esa cuota rápido.
@@ -169,14 +170,14 @@ export class WebCatalogService {
     if (id) {
       this.db.prepare(`
         UPDATE web_categories SET name=?, slug=?, description=?, sort_order=?, active=?,
-          updated_at=datetime('now','localtime')
+          updated_at=${sqlLocalNow()}
         WHERE id=?
       `).run(input.name, slug, input.description, input.sortOrder, input.active ? 1 : 0, id)
       return mapCategory(this.db.prepare('SELECT * FROM web_categories WHERE id=?').get(id) as WebCategoryRow)
     }
     const result = this.db.prepare(`
-      INSERT INTO web_categories (name, slug, description, sort_order, active)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO web_categories (name, slug, description, sort_order, active, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ${sqlLocalNow()}, ${sqlLocalNow()})
     `).run(input.name, slug, input.description, input.sortOrder, input.active ? 1 : 0)
     return mapCategory(this.db.prepare('SELECT * FROM web_categories WHERE id=?').get(result.lastInsertRowid) as WebCategoryRow)
   }
@@ -242,7 +243,7 @@ export class WebCatalogService {
           web_category_id=?, visible=?, featured=?, featured_order=?, gift_categories=?, web_price=?,
           compare_at_price=?, short_description=?, long_description=?, age_min=?, players_min=?,
           players_max=?, play_time_min=?, difficulty=?, video_url=?, tags=?,
-          sort_order=?, updated_at=datetime('now','localtime')
+          sort_order=?, updated_at=${sqlLocalNow()}
         WHERE product_id=?
       `).run(
         input.webCategoryId, input.visible ? 1 : 0, input.featured ? 1 : 0, input.featuredOrder,
@@ -256,8 +257,8 @@ export class WebCatalogService {
         INSERT INTO web_products (
           product_id, web_category_id, visible, featured, featured_order, gift_categories, web_price,
           compare_at_price, short_description, long_description, age_min, players_min,
-          players_max, play_time_min, difficulty, video_url, tags, sort_order
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+          players_max, play_time_min, difficulty, video_url, tags, sort_order, created_at, updated_at
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,${sqlLocalNow()},${sqlLocalNow()})
       `).run(
         input.productId, input.webCategoryId, input.visible ? 1 : 0, input.featured ? 1 : 0, input.featuredOrder,
         giftCategories, input.webPrice, compareAtPrice, input.shortDescription, input.longDescription,
@@ -267,7 +268,7 @@ export class WebCatalogService {
     }
     if (input.offer !== undefined) {
       this.db.prepare(`
-        UPDATE web_products SET offer_price=?, offer_from=?, offer_to=?, updated_at=datetime('now','localtime')
+        UPDATE web_products SET offer_price=?, offer_from=?, offer_to=?, updated_at=${sqlLocalNow()}
         WHERE product_id=?
       `).run(input.offer.price, input.offer.from || null, input.offer.to || null, input.productId)
     }
@@ -304,7 +305,7 @@ export class WebCatalogService {
     writeImage(filename, jpeg)
 
     const result = this.db.prepare(`
-      INSERT INTO web_product_images (product_id, filename, sort_order) VALUES (?,?,?)
+      INSERT INTO web_product_images (product_id, filename, sort_order, created_at) VALUES (?,?,?,${sqlLocalNow()})
     `).run(productId, filename, sortOrder)
 
     return {

@@ -69,14 +69,15 @@ export class PricingRepository {
   createFixedCost(input: CreateFixedCostInput): number {
     const result = this.db
       .prepare(
-        `INSERT INTO pricing_fixed_costs (nombre, monto_mensual, activo, notas)
-         VALUES (@nombre, @montoMensual, @activo, @notas)`
+        `INSERT INTO pricing_fixed_costs (nombre, monto_mensual, activo, notas, created_at, updated_at)
+         VALUES (@nombre, @montoMensual, @activo, @notas, @now, @now)`
       )
       .run({
         nombre: input.nombre,
         montoMensual: input.montoMensual,
         activo: input.activo === false ? 0 : 1,
         notas: input.notas ?? '',
+        now: localNow(),
       })
     return result.lastInsertRowid as number
   }
