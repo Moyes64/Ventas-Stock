@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { sync as syncApi } from '../../lib/ipc'
-import type { SyncConfig, SyncResult } from '../../types/ipc'
+import { sync as syncApi, principal as principalApi } from '../../lib/ipc'
+import type { PrincipalStatus, SyncConfig, SyncResult } from '../../types/ipc'
 import { formatDateTime } from '../../lib/date'
 
 const DEFAULT_CONFIG: SyncConfig = {
@@ -13,6 +13,7 @@ const DEFAULT_CONFIG: SyncConfig = {
 export default function SyncPage() {
   const [config, setConfig] = useState<SyncConfig>(DEFAULT_CONFIG)
   const [lastResult, setLastResult] = useState<SyncResult | null>(null)
+  const [pc, setPc] = useState<PrincipalStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [syncing, setSyncing] = useState(false)
@@ -22,9 +23,12 @@ export default function SyncPage() {
   async function load() {
     setLoading(true)
     try {
-      const [cfg, result] = await Promise.all([syncApi.getConfig(), syncApi.getLastResult()])
+      const [cfg, result, status] = await Promise.all([
+        syncApi.getConfig(), syncApi.getLastResult(), principalApi.getStatus().catch(() => null),
+      ])
       setConfig(cfg)
       setLastResult(result)
+      setPc(status)
     } finally {
       setLoading(false)
     }
@@ -114,6 +118,15 @@ export default function SyncPage() {
           >
             {syncing ? 'Sincronizando...' : '🔄 Sincronizar ahora'}
           </button>
+
+          {pc?.sharedDb && !pc.isPrincipal && (
+            <div className="sync-info-box">
+              Este equipo sube a la web sus cambios de catálogo, catálogo web, precios y stock
+              (solo, unos segundos después de guardarlos) y con este botón. La sincronización
+              periódica y las órdenes web las hace la PC principal
+              {pc.principalName ? ` (${pc.principalName})` : ''}.
+            </div>
+          )}
 
           <div className="sync-info-box">
             <strong>¿Qué se sincroniza?</strong>

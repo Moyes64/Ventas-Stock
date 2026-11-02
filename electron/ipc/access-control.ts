@@ -4,6 +4,7 @@ import { RoleRepository } from '../modules/auth/repository'
 import { PUBLIC_CHANNELS, areasForChannel, canAccess } from '../modules/auth/permissions'
 import { runAsActor } from '../modules/auth/actor'
 import { getCurrentUser } from './auth.handlers'
+import { afterChannel } from './web-auto-push'
 
 let installed = false
 
@@ -30,6 +31,8 @@ export function installAccessControl(db: Database): void {
         throw new Error('Tu usuario no tiene permiso para esta operación')
       }
       // Todo lo que grabe este pedido queda a nombre del usuario (ver auth/actor.ts).
-      return runAsActor(user.id, () => listener(event, ...args))
+      const result = runAsActor(user.id, () => listener(event, ...args))
+      afterChannel(channel, result)
+      return result
     })
 }

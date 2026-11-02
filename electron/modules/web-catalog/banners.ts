@@ -5,10 +5,12 @@ import type { Database } from 'better-sqlite3'
 import type { WebBanner, SaveWebBannerInput, WebBannersConfig } from './types'
 import { compressImage, compressImageBuffer } from './service'
 import { removeImage, writeImage } from './image-store'
+import { usesSharedDb } from '../principal/service'
 
 // Interruptor general de los banners (mismo esquema de archivo de config que
 // "Acceso remoto", ver web-catalog-server/service.ts).
 const CONFIG_FILENAME = 'web-banners-config.json'
+const KEY_BANNERS_ENABLED = 'web_banners_enabled'
 
 interface WebBannerRow {
   id: number
@@ -93,6 +95,15 @@ export class WebBannersService {
   }
 
   getConfig(): WebBannersConfig {
+    // Con la base compartida el interruptor vale para todas las PCs (cualquiera
+    // puede subir a la web). Hasta que alguien lo cambie, rige el archivo de
+    // esta PC.
+    if (usesSharedDb()) {
+      const row = this.db.prepare('SELECT value FROM system_settings WHERE key = ?').get(KEY_BANNERS_ENABLED) as
+        | { value: string }
+        | undefined
+      if (row) return { enabled: row.value === '1' }
+    }
     try {
       if (fs.existsSync(this.configPath)) {
         return { enabled: true, ...(JSON.parse(fs.readFileSync(this.configPath, 'utf-8')) as Partial<WebBannersConfig>) }
@@ -103,7 +114,20 @@ export class WebBannersService {
     return { enabled: true }
   }
 
+  /** La PC principal deja su interruptor en la base compartida si todavía no está. */
+  seedSharedConfig(): void {
+    if (!usesSharedDb()) return
+    const exists = this.db.prepare('SELECT 1 FROM system_settings WHERE key = ?').get(KEY_BANNERS_ENABLED)
+    if (!exists) this.setEnabled(this.getConfig().enabled)
+  }
+
   setEnabled(enabled: boolean): WebBannersConfig {
+    if (usesSharedDb()) {
+      this.db.prepare(
+        `INSERT INTO system_settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
+      ).run(KEY_BANNERS_ENABLED, enabled ? '1' : '0')
+    }
     const config = { ...this.getConfig(), enabled }
     fs.writeFileSync(this.configPath, JSON.stringify(config, null, 2), 'utf-8')
     return config
@@ -156,7 +180,7 @@ export class WebBannersService {
       }
     }
 
-    return this.db.transaction(() => {
+    const savedId = this.db.transaction(() => {
       if (offer) {
         // La oferta vence junto con el banner: se copia su vigencia al producto.
         this.db.prepare(`
@@ -167,9 +191,14 @@ export class WebBannersService {
       }
       return this.saveRow(id, values)
     })()
+    // Se lee después del COMMIT (con la base compartida, recién ahí la copia
+    // local de esta PC tiene el banner grabado).
+    const banner = this.get(savedId)
+    if (!banner) throw new Error('El banner se grabó, pero no se pudo volver a leer. Cerrá y abrí Banners web.')
+    return banner
   }
 
-  private saveRow(id: number | null, values: unknown[]): WebBanner {
+  private saveRow(id: number | null, values: unknown[]): number {
     if (id) {
       this.db.prepare(`
         UPDATE web_banners SET
@@ -179,7 +208,7 @@ export class WebBannersService {
           updated_at=datetime('now','localtime')
         WHERE id=?
       `).run(...values, id)
-      return this.get(id)!
+      return id
     }
     const result = this.db.prepare(`
       INSERT INTO web_banners (
@@ -188,7 +217,7 @@ export class WebBannersService {
         date_from, date_to, active, sort_order
       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `).run(...values)
-    return this.get(result.lastInsertRowid as number)!
+    return Number(result.lastInsertRowid)
   }
 
   delete(id: number): void {

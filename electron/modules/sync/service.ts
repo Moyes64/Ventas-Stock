@@ -24,10 +24,20 @@ import { SystemParamsService } from '../system-params/service'
 import { FinanceService } from '../finance/service'
 import { WebBannersService } from '../web-catalog/banners'
 import { runAsSystem } from '../auth/actor'
-import { isPrincipalPc, principalName } from '../principal/service'
+import { isPrincipalPc, principalName, usesSharedDb } from '../principal/service'
 import { imagePath } from '../web-catalog/image-store'
 
 const CONFIG_FILENAME = 'sync-config.json'
+
+// Parámetros de la web que viven en el system-params.json de cada PC. Valen los
+// de la PC principal: los deja en la base compartida cada vez que sincroniza, y
+// las demás PCs los toman de ahí al subir a la web.
+const KEY_WEB_PARAMS = 'web_sync_params'
+
+// Después de un cambio en catálogo, catálogo web, precios o stock, la PC que lo
+// hizo sube la web sola pasados estos segundos (los cambios seguidos, como un
+// markup masivo, se juntan en una sola subida).
+const AUTO_PUSH_DELAY_MS = 20 * 1000
 const DEFAULT_CONFIG: SyncConfig = {
   enabled: false,
   apiUrl: '',
@@ -51,6 +61,9 @@ export class SyncService {
   // Una subida de imágenes completa tarda varios minutos (re-sube todas las de
   // productos); sin esto cada sync arrancaba otra tanda encima de la anterior.
   private imagesSyncRunning = false
+  private autoPushTimer: ReturnType<typeof setTimeout> | null = null
+  private pushQueue: Promise<void> = Promise.resolve()
+  private uploadsTableReady = false
   private readonly financeService: FinanceService
 
   constructor(private readonly db: Database) {
@@ -89,16 +102,27 @@ export class SyncService {
   // (detectado 2026-10-23). Para probar contra producción a propósito:
   // SYNC_IN_DEV=1 en .env.
   private devBlockReason(): string | null {
-    // Con la base compartida, una sola PC sincroniza: dos a la vez se pisarían
-    // el stock de la web y competirían por las mismas órdenes.
+    if (app.isPackaged || process.env.SYNC_IN_DEV === '1') return null
+    return 'Sincronización desactivada en la app de desarrollo (usa otra base que la real). Para habilitarla: SYNC_IN_DEV=1 en .env'
+  }
+
+  // Bajar órdenes web: una sola PC (la principal). Dos a la vez competirían
+  // por los mismos pedidos y podrían cargar una venta dos veces.
+  private pullBlockReason(): string | null {
     if (!isPrincipalPc()) {
       const principal = principalName()
       return principal
-        ? `La sincronización con la web la hace la PC principal (${principal})`
-        : 'No hay PC principal: elegila en Parámetros del sistema para sincronizar con la web'
+        ? `Las órdenes web las baja la PC principal (${principal})`
+        : 'No hay PC principal: elegila en Parámetros del sistema para bajar las órdenes web'
     }
-    if (app.isPackaged || process.env.SYNC_IN_DEV === '1') return null
-    return 'Sincronización desactivada en la app de desarrollo (usa otra base que la real). Para habilitarla: SYNC_IN_DEV=1 en .env'
+    return this.devBlockReason()
+  }
+
+  // Subir a la web lo puede hacer cualquier PC: con la base compartida todas
+  // mandan la misma foto de la base, así que no se pisan con datos distintos.
+  // (El timer periódico igual corre solo en la principal.)
+  private pushBlockReason(): string | null {
+    return this.devBlockReason()
   }
 
   // ── Timer ─────────────────────────────────────────────────────────────────
@@ -123,7 +147,7 @@ export class SyncService {
 
     const config = this.getConfig()
     if (!config.enabled || !config.apiUrl || !config.apiKey) return
-    const blocked = this.devBlockReason()
+    const blocked = this.pushBlockReason()
     if (blocked) {
       console.log(`[sync] Timer no iniciado: ${blocked}`)
       return
@@ -137,10 +161,35 @@ export class SyncService {
 
   // ── Sync ──────────────────────────────────────────────────────────────────
 
-  async sync(): Promise<SyncResult> {
+  /**
+   * Programa una subida a la web después de un cambio hecho en esta PC (ver
+   * electron/ipc/web-auto-push.ts). Si llegan más cambios antes de que salga,
+   * se vuelve a esperar y sale una sola.
+   */
+  scheduleAutoPush(): void {
+    const config = this.getConfig()
+    if (!config.enabled || !config.apiUrl || !config.apiKey) return
+    if (this.pushBlockReason()) return
+    if (this.autoPushTimer) clearTimeout(this.autoPushTimer)
+    this.autoPushTimer = setTimeout(() => {
+      this.autoPushTimer = null
+      void this.sync().then(r => {
+        console.log(r.success ? '[sync] Subida automática OK' : `[sync] Subida automática falló: ${r.error ?? ''}`)
+      })
+    }, AUTO_PUSH_DELAY_MS)
+  }
+
+  /** De a una subida por vez en esta PC (manual, timer o automática). */
+  sync(): Promise<SyncResult> {
+    const run = this.pushQueue.then(() => this.syncOnce())
+    this.pushQueue = run.then(() => undefined, () => undefined)
+    return run
+  }
+
+  private async syncOnce(): Promise<SyncResult> {
     const config = this.getConfig()
 
-    const blocked = this.devBlockReason()
+    const blocked = this.pushBlockReason()
     if (blocked) {
       const result: SyncResult = { success: false, timestamp: new Date().toISOString(), error: blocked }
       this.lastResult = result
@@ -158,6 +207,10 @@ export class SyncService {
     }
 
     try {
+      // Antes de armar la foto de la base, traer lo último de Turso (la réplica
+      // se actualiza sola cada pocos segundos; así sale también lo recién
+      // grabado en otra PC).
+      this.refreshReplica()
       const payload = this.buildPayload()
       await this.postPayload(config, payload)
       // Subir imágenes después del sync principal (en segundo plano, no bloquea el resultado)
@@ -185,9 +238,7 @@ export class SyncService {
     const today = localToday()
     const empresa = process.env.VITE_EMPRESA_RAZON_SOCIAL ?? 'Empresa'
 
-    const systemParams = new SystemParamsService().get()
-    const costoEnvioWeb = systemParams.costoEnvioWeb ?? 0
-    const recargoTarjetaCreditoWeb = systemParams.recargoTarjetaCreditoWeb ?? 0
+    const { costoEnvioWeb, recargoTarjetaCreditoWeb } = this.webParams()
 
     return {
       timestamp: new Date().toISOString(),
@@ -202,6 +253,53 @@ export class SyncService {
       webParams: { costoEnvioWeb, recargoTarjetaCreditoWeb },
       finance: this.buildFinance(today),
     }
+  }
+
+  private refreshReplica(): void {
+    const replica = this.db as unknown as { sync?: () => unknown }
+    if (typeof replica.sync !== 'function') return
+    try {
+      replica.sync()
+    } catch (err) {
+      console.warn('[sync] No se pudo actualizar la réplica antes de subir:', err)
+    }
+  }
+
+  /**
+   * Costo de envío y recargo con tarjeta de la web. Valen los de la PC
+   * principal: ella los lee de su system-params.json y los deja en la base
+   * compartida; las demás PCs los toman de ahí.
+   */
+  private webParams(): { costoEnvioWeb: number; recargoTarjetaCreditoWeb: number } {
+    const getShared = () =>
+      this.db.prepare('SELECT value FROM system_settings WHERE key = ?').get(KEY_WEB_PARAMS) as
+        | { value: string }
+        | undefined
+    if (!usesSharedDb() || isPrincipalPc()) {
+      const p = new SystemParamsService().get()
+      const params = {
+        costoEnvioWeb: p.costoEnvioWeb ?? 0,
+        recargoTarjetaCreditoWeb: p.recargoTarjetaCreditoWeb ?? 0,
+      }
+      if (usesSharedDb()) {
+        new WebBannersService(this.db).seedSharedConfig()
+        const value = JSON.stringify(params)
+        if (getShared()?.value !== value) {
+          this.db.prepare(
+            `INSERT INTO system_settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
+          ).run(KEY_WEB_PARAMS, value)
+        }
+      }
+      return params
+    }
+    const row = getShared()
+    if (!row) {
+      throw new Error(
+        `Falta que la PC principal (${principalName() ?? 'sin elegir'}) sincronice una vez con esta versión para que este equipo pueda subir a la web`
+      )
+    }
+    return JSON.parse(row.value) as { costoEnvioWeb: number; recargoTarjetaCreditoWeb: number }
   }
 
   // ── Finanzas builder ──────────────────────────────────────────────────────
@@ -489,7 +587,7 @@ export class SyncService {
     const config = this.getConfig()
     const result: PullResult = { success: false, ordersProcessed: 0, errors: [], timestamp: new Date().toISOString() }
 
-    const blocked = this.devBlockReason()
+    const blocked = this.pullBlockReason()
     if (blocked) {
       result.errors.push(blocked)
       return result
@@ -671,7 +769,7 @@ export class SyncService {
 
   async markWebOrderProcessed(externalId: string): Promise<void> {
     const config = this.getConfig()
-    const blocked = this.devBlockReason()
+    const blocked = this.pullBlockReason()
     if (blocked) throw new Error(blocked)
     if (!config.apiUrl || !config.apiKey) throw new Error('Sync no configurado')
     const baseUrl = config.apiUrl.replace(/\/api\/sync\.php$/, '').replace(/\/sync\/?$/, '')
@@ -954,7 +1052,7 @@ export class SyncService {
     return path.join(app.getPath('userData'), UPLOADED_IMAGES_FILENAME)
   }
 
-  private readUploadedImages(): Record<string, string> {
+  private readLocalUploadedImages(): Record<string, string> {
     try {
       return JSON.parse(fs.readFileSync(this.uploadedImagesPath(), 'utf-8')) as Record<string, string>
     } catch {
@@ -962,18 +1060,70 @@ export class SyncService {
     }
   }
 
+  /**
+   * Qué foto ya está subida en cada lugar de la web. Con la base compartida el
+   * registro está en web_image_uploads (lo comparten todas las PCs); la primera
+   * vez la PC principal lo carga con su registro local, que ya tenía todo.
+   * null: todavía no hay registro compartido y esta PC no es la que lo arma —
+   * no se sube nada, para no volver a subir las ~1000 fotos.
+   */
+  private readUploadedImages(): Record<string, string> | null {
+    if (!usesSharedDb()) return this.readLocalUploadedImages()
+    // Se crea acá y no en una migración: una migración nueva haría que las PCs
+    // con la versión anterior no arranquen hasta actualizarlas (ver migrate.ts),
+    // y esta tabla esas versiones ni la miran.
+    // key: "p:<productId>:<sortOrder>" / "b:<bannerId>"; signature: "<archivo>|<bytes>".
+    if (!this.uploadsTableReady) this.db.exec(`CREATE TABLE IF NOT EXISTS web_image_uploads (
+      key         TEXT PRIMARY KEY,
+      signature   TEXT NOT NULL,
+      uploaded_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`)
+    this.uploadsTableReady = true
+    const rows =this.db.prepare('SELECT key, signature FROM web_image_uploads').all() as
+      Array<{ key: string; signature: string }>
+    if (rows.length > 0) return Object.fromEntries(rows.map(r => [r.key, r.signature]))
+    if (!isPrincipalPc()) return null
+    const local = this.readLocalUploadedImages()
+    const entries = Object.entries(local)
+    if (entries.length > 0) {
+      const insert = this.db.prepare(
+        `INSERT INTO web_image_uploads (key, signature) VALUES (?, ?)
+         ON CONFLICT(key) DO UPDATE SET signature = excluded.signature, uploaded_at = datetime('now')`
+      )
+      this.db.transaction(() => { for (const [k, v] of entries) insert.run(k, v) })()
+      console.log(`[sync] Registro de fotos subidas pasado a la base compartida (${entries.length})`)
+    }
+    return local
+  }
+
+  private saveUploadedImages(uploaded: Record<string, string>, changedKeys: string[]): void {
+    if (!usesSharedDb()) {
+      fs.writeFileSync(this.uploadedImagesPath(), JSON.stringify(uploaded), 'utf-8')
+      return
+    }
+    const upsert = this.db.prepare(
+      `INSERT INTO web_image_uploads (key, signature) VALUES (?, ?)
+       ON CONFLICT(key) DO UPDATE SET signature = excluded.signature, uploaded_at = datetime('now')`
+    )
+    this.db.transaction(() => { for (const k of changedKeys) upsert.run(k, uploaded[k]) })()
+  }
+
   private async uploadAllImages(config: SyncConfig): Promise<void> {
     const baseUrl = config.apiUrl.replace(/\/api\/sync\.php$/, '')
     const uploadUrl = new URL(`${baseUrl}/api/upload-image.php`)
     const uploaded = this.readUploadedImages()
-    let dirty = false
+    if (!uploaded) {
+      console.log('[sync] Fotos sin subir: falta que la PC principal sincronice una vez con esta versión')
+      return
+    }
+    let changed: string[] = []
     let pending = 0
 
     const save = () => {
-      if (!dirty) return
+      if (changed.length === 0) return
       try {
-        fs.writeFileSync(this.uploadedImagesPath(), JSON.stringify(uploaded), 'utf-8')
-        dirty = false
+        this.saveUploadedImages(uploaded, changed)
+        changed = []
       } catch {
         // si no se puede guardar, en el próximo sync se vuelven a subir
       }
@@ -994,7 +1144,7 @@ export class SyncService {
       if (uploaded[key] === signature) return
       if (await this.postImage(config, uploadUrl, filePath, target)) {
         uploaded[key] = signature
-        dirty = true
+        changed.push(key)
         pending++
       }
     }

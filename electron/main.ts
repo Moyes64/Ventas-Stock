@@ -7,6 +7,7 @@ import { registerAllIpcHandlers } from './ipc/index'
 import { initPrincipalService } from './modules/principal/service'
 import { startPrincipalJobs } from './principal-jobs'
 import { imagePath } from './modules/web-catalog/image-store'
+import { installCrashLog } from './crash-log'
 
 // Handle app lifecycle
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
@@ -19,6 +20,7 @@ const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 if (!app.isPackaged) {
   app.setPath('userData', path.join(app.getPath('appData'), 'ventas-stock-dev'))
 }
+installCrashLog()
 
 // Load .env explicitly so that process.env.VITE_EMPRESA_* is available in the
 // Electron main process (e.g. for printing/company header in remito interno).
