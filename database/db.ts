@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3'
 import path from 'path'
 import fs from 'fs'
+import { watchTurso } from './turso-watchdog'
 
 let _db: Database.Database | null = null
 
@@ -73,18 +74,25 @@ function openLibsql(resolvedPath: string): Database.Database {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const Libsql = require('libsql')
   const syncUrl = process.env.TURSO_DATABASE_URL
+  // Al abrir, la réplica se baja de Turso lo que le falte (la primera vez, toda la base).
   const db = syncUrl
-    ? new Libsql(resolvedPath, {
+    ? watchTurso('abrir base', () => new Libsql(resolvedPath, {
         syncUrl,
         authToken: process.env.TURSO_AUTH_TOKEN ?? '',
         syncPeriod: Number(process.env.TURSO_SYNC_PERIOD ?? 2),
         // Sin readYourWrites cada escritura no espera traerse el cambio: se
         // sincroniza una sola vez al terminar la escritura suelta o el COMMIT.
         readYourWrites: process.env.TURSO_READ_YOUR_WRITES === '1',
-      })
+      }))
     : new Libsql(resolvedPath)
 
   if (syncUrl) {
+    // Cada viaje a Turso congela la ventana mientras dura: se mide y, si se
+    // traba, queda anotado en el registro (ver turso-watchdog.ts).
+    const rawSync = db.sync.bind(db)
+    db.sync = () => watchTurso('sincronizar réplica', rawSync)
+    const rawExec = db.exec.bind(db)
+    db.exec = (sql: string) => watchTurso(`exec: ${sqlLabel(sql)}`, () => rawExec(sql))
     db.sync()
   } else {
     db.pragma('journal_mode = WAL')
@@ -155,10 +163,14 @@ function openLibsql(resolvedPath: string): Database.Database {
     for (const method of ['run', 'all', 'iterate']) {
       const original = statementProto[method]
       statementProto[method] = function (this: CompatStatement, ...args: unknown[]) {
-        const result = original.apply(target(this), fixArgs(this, args))
         const ctx = this.__ctx
-        if (ctx && method === 'run' && !ctx.db.inTransaction) ctx.db.sync()
-        return result
+        const exec = () => {
+          const result = original.apply(target(this), fixArgs(this, args))
+          if (ctx && method === 'run' && !ctx.db.inTransaction) ctx.db.sync()
+          return result
+        }
+        // Una escritura en la réplica va a Turso (y después sincroniza).
+        return ctx && method === 'run' ? watchTurso(`escritura: ${sqlLabel(this.__sql ?? '')}`, exec) : exec()
       }
     }
     const originalGet = statementProto.get
@@ -221,6 +233,12 @@ function openLibsql(resolvedPath: string): Database.Database {
   }
 
   return db as Database.Database
+}
+
+/** Comienzo de una sentencia para el registro (sin valores: van como parámetros). */
+function sqlLabel(sql: string): string {
+  const flat = sql.replace(/\s+/g, ' ').trim()
+  return flat.length > 70 ? `${flat.slice(0, 70)}…` : flat
 }
 
 /**

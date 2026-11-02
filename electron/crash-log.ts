@@ -25,6 +25,8 @@ export function installCrashLog(): void {
   } catch {
     return
   }
+  // El vigilante de Turso (database/turso-watchdog.ts) escribe acá desde otro hilo.
+  process.env.VS_LOG_FILE = file
 
   const write = (level: string, args: unknown[]) => {
     try {
