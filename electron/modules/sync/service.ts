@@ -536,8 +536,9 @@ export class SyncService {
              s.invoice_number, s.punto_venta,
              c.name AS customer_name, c.email AS customer_email, c.phone AS customer_phone,
              c.doc_type AS customer_doc_type, c.cuit_dni AS customer_doc_number,
-             c.address AS delivery_address,
-             w.external_id, w.processed_at
+             c.address AS customer_address,
+             w.external_id, w.processed_at, w.delivery_type, w.delivery_address,
+             w.fulfillment_status, w.notified_at, w.delivered_at
       FROM sales s
       LEFT JOIN customers c ON c.id = s.customer_id
       LEFT JOIN web_orders_processed w ON w.sale_id = s.id
@@ -562,8 +563,13 @@ export class SyncService {
         customerPhone: r['customer_phone'] ?? '',
         customerDocType: r['customer_doc_type'] ?? undefined,
         customerDocNumber: r['customer_doc_number'] !== '0' ? r['customer_doc_number'] ?? undefined : undefined,
-        deliveryType: r['delivery_address'] ? 'shipping' : 'pickup',
-        deliveryAddress: r['delivery_address'] ?? '',
+        // Pedidos importados antes de la migración 049 no tienen delivery_type:
+        // se deduce de la dirección del cliente, como se hacía antes.
+        deliveryType: r['delivery_type'] ?? (r['customer_address'] ? 'shipping' : 'pickup'),
+        deliveryAddress: (r['delivery_type'] ? r['delivery_address'] : r['customer_address']) ?? '',
+        fulfillmentStatus: r['fulfillment_status'] ?? 'pending',
+        notifiedAt: r['notified_at'] ?? null,
+        deliveredAt: r['delivered_at'] ?? null,
         total: r['total'],
         paymentMethod: r['payment_method'],
         status: r['status'],
@@ -752,9 +758,9 @@ export class SyncService {
 
       // Guardar el external_id para no reprocesar
       this.db.prepare(`
-        INSERT OR IGNORE INTO web_orders_processed (external_id, sale_id, processed_at)
-        VALUES (?,?,${sqlLocalNow()})
-      `).run(order.externalId, saleId)
+        INSERT OR IGNORE INTO web_orders_processed (external_id, sale_id, processed_at, delivery_type, delivery_address, fulfillment_status)
+        VALUES (?,?,${sqlLocalNow()},?,?,'pending')
+      `).run(order.externalId, saleId, order.deliveryType === 'shipping' ? 'shipping' : 'pickup', order.deliveryAddress ?? '')
 
       // Auto-registrar el ingreso a MP-Anabella si corresponde (no bloquea la importación si falla)
       try {

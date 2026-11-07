@@ -10,6 +10,7 @@
 
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/telegram.php';
+require_once __DIR__ . '/order-emails.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -120,7 +121,7 @@ try {
     if ($newStatus === 'paid' && $row['status'] !== 'paid') {
         $orderDetail = $pdo->prepare("
             SELECT o.customer_name, o.customer_phone, o.delivery_type, o.total,
-                   GROUP_CONCAT(oi.quantity || 'x ' || oi.product_name SEPARATOR ', ') AS items
+                   GROUP_CONCAT(CONCAT(oi.quantity, 'x ', oi.product_name) SEPARATOR ', ') AS items
             FROM web_orders o
             JOIN web_order_items oi ON oi.order_id = o.id
             WHERE o.external_id = ?
@@ -148,6 +149,13 @@ try {
                  . "🔖 <b>Ref:</b> {$externalRef}";
             telegramNotify($msg);
         }
+    }
+
+    // Mail "Recibimos tu compra" al cliente. Fuera del if anterior a propósito:
+    // si un envío falló, el próximo reenvío de MP (ya en 'paid') lo reintenta.
+    // Tiene su propia marca de "ya enviado", así que nunca sale dos veces.
+    if ($newStatus === 'paid') {
+        sendOrderConfirmationEmail($pdo, $externalRef);
     }
 
     error_log("[webhook] order={$externalRef} mp_status={$mpStatus} new_status={$newStatus} mp_payment_type={$mpPaymentTypeId}");

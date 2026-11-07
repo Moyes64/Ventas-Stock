@@ -176,6 +176,8 @@ const electronAPI = {
     pullOrders: () => invoke('sync:pullOrders'),
     listWebOrders: () => invoke('sync:listWebOrders'),
     markOrderProcessed: (externalId: string) => invoke('sync:markOrderProcessed', externalId),
+    notifyWebOrder: (externalId: string, kind: 'ready' | 'shipped', note: string) => invoke('sync:notifyWebOrder', externalId, kind, note),
+    markWebOrderDelivered: (externalId: string) => invoke('sync:markWebOrderDelivered', externalId),
     printShippingLabel: (order: { customerName: string; deliveryAddress: string; externalId: string }) => invoke('sync:printShippingLabel', order),
   },
 

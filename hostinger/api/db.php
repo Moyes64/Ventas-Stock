@@ -440,6 +440,10 @@ function initSchema(): void {
     try { $pdo->exec("ALTER TABLE web_orders ADD COLUMN surcharge_amount DECIMAL(10,2) NOT NULL DEFAULT 0"); } catch (\Exception $e) {}
     try { $pdo->exec("ALTER TABLE web_orders ADD COLUMN surcharge_pct DECIMAL(5,2) NOT NULL DEFAULT 0"); } catch (\Exception $e) {}
 
+    // Mail "Recibimos tu compra" (ver order-emails.php) — migración no destructiva
+    try { $pdo->exec("ALTER TABLE web_orders ADD COLUMN confirmation_email_sent_at DATETIME NULL"); } catch (\Exception $e) {}
+    try { $pdo->exec("ALTER TABLE web_orders ADD COLUMN confirmation_email_error VARCHAR(500) NULL"); } catch (\Exception $e) {}
+
     // Parámetros de la tienda (clave-valor, sincronizados desde Electron)
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS web_params (

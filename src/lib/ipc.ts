@@ -389,6 +389,9 @@ export const sync = {
   pullOrders: () => electron.sync.pullOrders() as Promise<import('../types/ipc').PullResult>,
   listWebOrders: () => electron.sync.listWebOrders() as Promise<unknown[]>,
   markOrderProcessed: (externalId: string) => electron.sync.markOrderProcessed(externalId) as Promise<void>,
+  notifyWebOrder: (externalId: string, kind: 'ready' | 'shipped', note: string) =>
+    electron.sync.notifyWebOrder(externalId, kind, note) as Promise<{ success: boolean; error?: string; invoiced?: boolean }>,
+  markWebOrderDelivered: (externalId: string) => electron.sync.markWebOrderDelivered(externalId) as Promise<void>,
   printShippingLabel: (order: { customerName: string; deliveryAddress: string; externalId: string }) =>
     electron.sync.printShippingLabel(order) as Promise<{ success: boolean; error?: string }>,
 }

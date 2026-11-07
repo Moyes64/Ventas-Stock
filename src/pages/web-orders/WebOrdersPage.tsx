@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { sync, invoicing } from '../../lib/ipc'
+import { sync } from '../../lib/ipc'
 import type { PullResult } from '../../types/ipc'
 import { formatDateTime } from '../../lib/date'
 
@@ -18,6 +18,9 @@ interface WebOrder {
   status: string
   invoiceNumber: number | null
   puntoVenta: number | null
+  fulfillmentStatus: 'pending' | 'ready' | 'shipped' | 'delivered'
+  notifiedAt: string | null
+  deliveredAt: string | null
   items: Array<{
     productId: number
     productName: string
@@ -27,7 +30,7 @@ interface WebOrder {
   createdAt: string
 }
 
-type TabType = 'pending' | 'processed'
+type TabType = 'pending' | 'notified' | 'delivered'
 
 export default function WebOrdersPage() {
   const [pulling, setPulling] = useState(false)
@@ -36,9 +39,10 @@ export default function WebOrdersPage() {
   const [tab, setTab] = useState<TabType>('pending')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [allOrders, setAllOrders] = useState<WebOrder[]>([])
-  const [markingId, setMarkingId] = useState<string | null>(null)
+  const [busyId, setBusyId] = useState<string | null>(null)
   const [printingId, setPrintingId] = useState<string | null>(null)
-  const [invoicingId, setInvoicingId] = useState<string | null>(null)
+  // Texto opcional que se agrega al aviso (p. ej. cómo se envió y cuándo llega)
+  const [notes, setNotes] = useState<Record<string, string>>({})
 
   const loadOrders = useCallback(async () => {
     setLoading(true)
@@ -88,46 +92,55 @@ export default function WebOrdersPage() {
     }
   }
 
-  async function handleMarkProcessed(externalId: string) {
-    setMarkingId(externalId)
-    try {
-      await sync.markOrderProcessed(externalId)
-      await loadOrders()
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error al marcar como procesada')
-    } finally {
-      setMarkingId(null)
-    }
-  }
-
-  async function handleGenerateInvoice(order: WebOrder) {
+  async function handleNotify(order: WebOrder) {
+    const kind = order.deliveryType === 'shipping' ? 'shipped' : 'ready'
+    const yaFacturada = order.status === 'AUTHORIZED'
+    const accion = kind === 'ready' ? 'que el pedido está listo para retirar' : 'que el pedido fue despachado'
     if (!window.confirm(
-      `¿Generar la factura AFIP de este pedido por ${fmt(order.total)}?\n\n` +
-      'Esta acción emite un comprobante fiscal real (ambiente de producción) y no se puede deshacer.'
-    )) {
-      return
-    }
-    setInvoicingId(order.externalId)
+      (yaFacturada
+        ? `Se le va a avisar a ${order.customerEmail} ${accion}, con la factura adjunta.`
+        : `Se va a emitir la factura AFIP por ${fmt(order.total)} (comprobante fiscal real, no se puede deshacer) ` +
+          `y avisarle a ${order.customerEmail} ${accion}, con la factura adjunta.`) +
+      '\n\n¿Continuar?'
+    )) return
+    setBusyId(order.externalId)
     try {
-      const res = await invoicing.retryCAE(order.id)
-      if (!res.success) {
-        alert(`Error al facturar: ${res.error ?? 'Error desconocido'}`)
-        return
-      }
-      // Una vez facturado, el pedido pasa a formar parte de "Facturación" como
-      // cualquier otra venta y deja de listarse acá (ver electron/modules/sync/service.ts
-      // listWebOrders, que solo trae ventas en estado WEB_ORDER/PROCESSED).
+      const res = await sync.notifyWebOrder(order.externalId, kind, notes[order.externalId] ?? '')
+      if (!res.success) alert(res.error ?? 'Error desconocido')
       await loadOrders()
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error al generar la factura')
+      alert(err instanceof Error ? err.message : 'Error al avisar al cliente')
     } finally {
-      setInvoicingId(null)
+      setBusyId(null)
     }
   }
 
-  const pendingOrders = allOrders.filter(o => o.status === 'WEB_ORDER')
-  const processedOrders = allOrders.filter(o => o.status !== 'WEB_ORDER')
-  const orders = tab === 'pending' ? pendingOrders : processedOrders
+  async function handleDelivered(order: WebOrder) {
+    if (!window.confirm(`¿Marcar el pedido de ${order.customerName} como entregado? No se manda mail.`)) return
+    setBusyId(order.externalId)
+    try {
+      await sync.markWebOrderDelivered(order.externalId)
+      await loadOrders()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Error al marcar como entregado')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const pendingOrders = allOrders.filter(o => o.fulfillmentStatus === 'pending')
+  const notifiedOrders = allOrders.filter(o => o.fulfillmentStatus === 'ready' || o.fulfillmentStatus === 'shipped')
+  const deliveredOrders = allOrders.filter(o => o.fulfillmentStatus === 'delivered')
+  const orders = tab === 'pending' ? pendingOrders : tab === 'notified' ? notifiedOrders : deliveredOrders
+
+  function badge(o: WebOrder): { text: string; bg: string; fg: string } {
+    switch (o.fulfillmentStatus) {
+      case 'ready':     return { text: 'LISTO PARA RETIRAR', bg: '#dbeafe', fg: '#1e40af' }
+      case 'shipped':   return { text: 'DESPACHADO', bg: '#dbeafe', fg: '#1e40af' }
+      case 'delivered': return { text: 'ENTREGADO', bg: '#dcfce7', fg: '#166534' }
+      default:          return { text: 'PENDIENTE', bg: '#fef3c7', fg: '#92400e' }
+    }
+  }
 
   function fmt(n: number) {
     return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(n)
@@ -182,7 +195,8 @@ export default function WebOrdersPage() {
       <div style={{ display: 'flex', gap: '4px', marginBottom: '16px', borderBottom: '2px solid #e5e7eb' }}>
         {([
           { key: 'pending',   label: 'Pendientes', count: pendingOrders.length },
-          { key: 'processed', label: 'Procesadas',  count: processedOrders.length },
+          { key: 'notified',  label: 'Avisadas',   count: notifiedOrders.length },
+          { key: 'delivered', label: 'Entregadas', count: deliveredOrders.length },
         ] as const).map(t => (
           <button
             key={t.key}
@@ -229,7 +243,7 @@ export default function WebOrdersPage() {
           <p style={{ fontSize: '15px', marginBottom: '8px' }}>
             {tab === 'pending'
               ? 'No hay órdenes pendientes'
-              : 'No hay órdenes procesadas'}
+              : tab === 'notified' ? 'No hay pedidos esperando entrega' : 'No hay pedidos entregados'}
           </p>
           {tab === 'pending' && (
             <p style={{ fontSize: '13px' }}>
@@ -276,15 +290,20 @@ export default function WebOrdersPage() {
                     <div style={{ fontWeight: 700, fontSize: '15px' }}>{fmt(order.total)}</div>
                     <div style={{ fontSize: '11px', color: '#9ca3af' }}>{formatDateTime(order.createdAt)}</div>
                   </div>
+                  {order.status === 'AUTHORIZED' && (
+                    <span style={{ fontSize: '10px', fontWeight: 700, padding: '3px 8px', borderRadius: '9999px', backgroundColor: '#ede9fe', color: '#5b21b6' }}>
+                      🧾 FACTURADA
+                    </span>
+                  )}
                   <span style={{
                     fontSize: '10px',
                     fontWeight: 700,
                     padding: '3px 8px',
                     borderRadius: '9999px',
-                    backgroundColor: order.status === 'WEB_ORDER' ? '#fef3c7' : order.status === 'AUTHORIZED' ? '#dbeafe' : '#dcfce7',
-                    color: order.status === 'WEB_ORDER' ? '#92400e' : order.status === 'AUTHORIZED' ? '#1e40af' : '#166534',
+                    backgroundColor: badge(order).bg,
+                    color: badge(order).fg,
                   }}>
-                    {order.status === 'WEB_ORDER' ? 'PENDIENTE' : order.status === 'AUTHORIZED' ? '✅ FACTURADA' : 'PROCESADA'}
+                    {badge(order).text}
                   </span>
                   <span style={{ color: '#9ca3af' }}>{expandedId === order.externalId ? '▾' : '▸'}</span>
                 </div>
@@ -355,6 +374,34 @@ export default function WebOrdersPage() {
                     </tfoot>
                   </table>
 
+                  {order.fulfillmentStatus === 'pending' && (
+                    <div style={{ marginTop: '12px' }}>
+                      <div style={{ fontSize: '11px', fontWeight: 600, color: '#6b7280', marginBottom: '4px', textTransform: 'uppercase' }}>
+                        Nota para el cliente (opcional, va en el aviso)
+                      </div>
+                      <textarea
+                        value={notes[order.externalId] ?? ''}
+                        onChange={e => setNotes(n => ({ ...n, [order.externalId]: e.target.value }))}
+                        rows={2}
+                        placeholder={order.deliveryType === 'shipping'
+                          ? 'Ej.: Lo enviamos por moto, llega hoy entre las 16 y las 19 hs.'
+                          : 'Ej.: Te lo dejamos separado hasta el sábado.'}
+                        style={{ width: '100%', fontSize: '13px', padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: '6px', resize: 'vertical', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                  )}
+                  {(order.status === 'AUTHORIZED' || order.notifiedAt || order.deliveredAt) && (
+                    <div style={{ marginTop: '10px', fontSize: '12px', color: '#4b5563', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+                      {order.status === 'AUTHORIZED' && (
+                        <span>🧾 Factura {order.puntoVenta && order.invoiceNumber
+                          ? `${String(order.puntoVenta).padStart(5, '0')}-${String(order.invoiceNumber).padStart(8, '0')}`
+                          : `venta #${order.id}`}</span>
+                      )}
+                      {order.notifiedAt && <span>📧 Avisado el {formatDateTime(order.notifiedAt)}</span>}
+                      {order.deliveredAt && <span>📦 Entregado el {formatDateTime(order.deliveredAt)}</span>}
+                    </div>
+                  )}
+
                   <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
                     <div style={{ fontSize: '11px', color: '#9ca3af' }}>Ref: {order.externalId}</div>
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -376,48 +423,44 @@ export default function WebOrdersPage() {
                           {printingId === order.externalId ? '⏳ Imprimiendo...' : '🏷️ Imprimir etiqueta'}
                         </button>
                       )}
-                      {order.status === 'WEB_ORDER' && (
+                      {order.fulfillmentStatus === 'pending' && (
                         <button
-                          onClick={() => { void handleMarkProcessed(order.externalId) }}
-                          disabled={markingId === order.externalId}
+                          onClick={() => { void handleNotify(order) }}
+                          disabled={busyId === order.externalId}
                           style={{
                             padding: '6px 14px',
                             fontSize: '13px',
                             fontWeight: 600,
-                            backgroundColor: markingId === order.externalId ? '#9ca3af' : '#16a34a',
+                            backgroundColor: busyId === order.externalId ? '#9ca3af' : '#7c3aed',
                             color: 'white',
                             border: 'none',
                             borderRadius: '6px',
-                            cursor: markingId === order.externalId ? 'not-allowed' : 'pointer',
+                            cursor: busyId === order.externalId ? 'not-allowed' : 'pointer',
                           }}
                         >
-                          {markingId === order.externalId ? '⏳ Procesando...' : '✅ Marcar como procesada'}
+                          {busyId === order.externalId
+                            ? '⏳ Facturando y enviando...'
+                            : (order.status === 'AUTHORIZED' ? '📧 Avisar: ' : '🧾 Facturar y avisar: ') +
+                              (order.deliveryType === 'shipping' ? 'despachado' : 'listo para retirar')}
                         </button>
                       )}
-                      {order.status === 'PROCESSED' && (
+                      {(order.fulfillmentStatus === 'ready' || order.fulfillmentStatus === 'shipped') && (
                         <button
-                          onClick={() => { void handleGenerateInvoice(order) }}
-                          disabled={invoicingId === order.externalId}
+                          onClick={() => { void handleDelivered(order) }}
+                          disabled={busyId === order.externalId}
                           style={{
                             padding: '6px 14px',
                             fontSize: '13px',
                             fontWeight: 600,
-                            backgroundColor: invoicingId === order.externalId ? '#9ca3af' : '#7c3aed',
+                            backgroundColor: busyId === order.externalId ? '#9ca3af' : '#16a34a',
                             color: 'white',
                             border: 'none',
                             borderRadius: '6px',
-                            cursor: invoicingId === order.externalId ? 'not-allowed' : 'pointer',
+                            cursor: busyId === order.externalId ? 'not-allowed' : 'pointer',
                           }}
                         >
-                          {invoicingId === order.externalId ? '⏳ Facturando...' : '🧾 Generar factura'}
+                          📦 Marcar {order.deliveryType === 'shipping' ? 'entregado' : 'retirado'}
                         </button>
-                      )}
-                      {order.status === 'AUTHORIZED' && (
-                        <span style={{ fontSize: '13px', fontWeight: 600, color: '#166534' }}>
-                          ✅ Facturada — {order.puntoVenta && order.invoiceNumber
-                            ? `${String(order.puntoVenta).padStart(5, '0')}-${String(order.invoiceNumber).padStart(8, '0')}`
-                            : `Venta #${order.id}`} (buscala en Facturación)
-                        </span>
                       )}
                     </div>
                   </div>

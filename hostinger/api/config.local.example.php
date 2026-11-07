@@ -20,3 +20,8 @@ putenv('DASHBOARD_PASSWORD=una_password_para_el_dashboard');
 putenv('TELEGRAM_BOT_TOKEN=tu_token_de_bot_de_telegram');
 // Chat IDs que reciben las notificaciones de venta (separados por coma si son varios).
 putenv('TELEGRAM_CHAT_IDS=tu_chat_id,otro_chat_id');
+// Mails al cliente de la tienda web (ver mailer.php / order-emails.php).
+putenv('SMTP_USER=ventas@pandorabox-juegosdeingenio.com.ar');
+putenv('SMTP_PASS=la_password_de_la_casilla_ventas');
+// Opcionales: SMTP_HOST (smtp.hostinger.com), SMTP_PORT (465), SMTP_FROM_NAME,
+// MAIL_BCC (copia oculta y Reply-To, por defecto ventas@).

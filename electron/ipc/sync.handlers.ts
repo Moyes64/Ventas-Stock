@@ -6,6 +6,7 @@ import { buildLabelBuffer } from '../modules/printing/escpos-label'
 import { PrinterConfigService, sendEscPos } from '../modules/printer-config/service'
 import { SystemParamsService } from '../modules/system-params/service'
 import type { LabelConfig } from '../modules/label-config/types'
+import { WebOrderNotifyService, type NotifyKind } from '../modules/web-orders/notify'
 
 /** Convierte caracteres con tilde/acento a su equivalente ASCII puro.
  *  Necesario porque txt() usa Buffer 'ascii' y bytes > 0x7F se corrompen. */
@@ -49,6 +50,17 @@ export function registerSyncHandlers(db: Database): void {
 
   ipcMain.handle('sync:markOrderProcessed', (_event, externalId: string) => {
     return syncService!.markWebOrderProcessed(externalId)
+  })
+
+  // Circuito de mails del pedido web (ver modules/web-orders/notify.ts)
+  const notifyService = new WebOrderNotifyService(db)
+  ipcMain.handle('sync:notifyWebOrder', (_event, externalId: string, kind: NotifyKind, note: string) => {
+    if (kind !== 'ready' && kind !== 'shipped') return { success: false, error: 'Tipo de aviso inválido' }
+    return notifyService.notify(externalId, kind, note ?? '')
+  })
+
+  ipcMain.handle('sync:markWebOrderDelivered', (_event, externalId: string) => {
+    notifyService.markDelivered(externalId)
   })
 
   ipcMain.handle('sync:printShippingLabel', async (_event, order: {
