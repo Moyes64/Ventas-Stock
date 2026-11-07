@@ -385,7 +385,7 @@ export default function WebOrdersPage() {
                         rows={2}
                         placeholder={order.deliveryType === 'shipping'
                           ? 'Ej.: Lo enviamos por moto, llega hoy entre las 16 y las 19 hs.'
-                          : 'Ej.: Te lo dejamos separado hasta el sábado.'}
+                          : 'Ej.: Si no podés venir en estos horarios, escribinos y lo coordinamos.'}
                         style={{ width: '100%', fontSize: '13px', padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: '6px', resize: 'vertical', boxSizing: 'border-box' }}
                       />
                     </div>
