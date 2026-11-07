@@ -7,7 +7,7 @@ name: Build Mac Installer
 on:
   push:
     branches:
-      - feat/turso-poc
+      - main
     paths-ignore:
       - 'hostinger/**'
       - 'mobile/**'
