@@ -80,6 +80,16 @@ function bin (name) {
 }
 
 // ---------------------------------------------------------------------------
+// 0. Versión del empaquetado: 1.1.<cantidad de commits>
+//    Sube sola con cada commit nuevo, así el número instalado identifica el
+//    código (Windows "Aplicaciones instaladas", nombre del instalador,
+//    logs/main.log). El mismo commit armado acá o en GitHub da el mismo número.
+//    Con cambios sin commitear se agrega "-sin-commit" para que se note.
+// ---------------------------------------------------------------------------
+const appVersion = computeVersion()
+console.log(`\n[package] Versión: ${appVersion}\n`)
+
+// ---------------------------------------------------------------------------
 // 1. Build renderer + main + preload bundles
 // ---------------------------------------------------------------------------
 run(bin('electron-vite'), ['build'])
@@ -116,7 +126,33 @@ if (process.platform === 'win32' && !extraArgs.some(a => platformFlags.includes(
 if (!extraArgs.includes('--publish')) {
   extraArgs.push('--publish', 'never')
 }
+extraArgs.push(`-c.extraMetadata.version=${appVersion}`)
 run(bin('electron-builder'), extraArgs)
+
+// ---------------------------------------------------------------------------
+// Versión a partir de git
+// ---------------------------------------------------------------------------
+function computeVersion () {
+  const git = (args) => {
+    const r = spawnSync('git', args, { cwd: root, encoding: 'utf8' })
+    if (r.status !== 0) {
+      console.error(`[package] git ${args.join(' ')} falló: ${r.stderr}`)
+      process.exit(1)
+    }
+    return r.stdout.trim()
+  }
+  // Un clon "shallow" (actions/checkout sin fetch-depth: 0) contaría 1 commit.
+  if (git(['rev-parse', '--is-shallow-repository']) === 'true') {
+    console.error('[package] El repo es un clon parcial: la versión saldría mal. Usar fetch-depth: 0.')
+    process.exit(1)
+  }
+  const count = git(['rev-list', '--count', 'HEAD'])
+  const dirty = git(['status', '--porcelain', '--untracked-files=no']) !== ''
+  if (dirty) {
+    console.warn('[package] ATENCIÓN: hay cambios sin commitear; la versión lleva "-sin-commit".')
+  }
+  return `1.1.${count}${dirty ? '-sin-commit' : ''}`
+}
 
 // ---------------------------------------------------------------------------
 // winCodeSign cache pre-seeder
