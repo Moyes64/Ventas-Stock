@@ -136,7 +136,8 @@ run(bin('electron-builder'), extraArgs)
 // ---------------------------------------------------------------------------
 const winAsar = path.join(root, 'release', 'win-unpacked', 'resources', 'app.asar')
 if (extraArgs.some(a => a === '--win' || a === '-w') && fs.existsSync(winAsar)) {
-  run(process.execPath, [path.join(root, 'scripts', 'verify-packaged-modules.cjs'), winAsar])
+  // 'node' y no process.execPath: con shell en Windows, "C:\Program Files\..." se corta en el espacio.
+  run('node', [path.join('scripts', 'verify-packaged-modules.cjs'), path.relative(root, winAsar)])
 }
 
 // ---------------------------------------------------------------------------
