@@ -130,6 +130,16 @@ extraArgs.push(`-c.extraMetadata.version=${appVersion}`)
 run(bin('electron-builder'), extraArgs)
 
 // ---------------------------------------------------------------------------
+// 5. Verificar que el paquete Windows lleve los módulos nativos (libsql para
+//    Turso incluido). Un node_modules instalado antes del .npmrc actual arma
+//    un instalador que no conecta a la base; mejor frenar acá.
+// ---------------------------------------------------------------------------
+const winAsar = path.join(root, 'release', 'win-unpacked', 'resources', 'app.asar')
+if (extraArgs.some(a => a === '--win' || a === '-w') && fs.existsSync(winAsar)) {
+  run(process.execPath, [path.join(root, 'scripts', 'verify-packaged-modules.cjs'), winAsar])
+}
+
+// ---------------------------------------------------------------------------
 // Versión a partir de git
 // ---------------------------------------------------------------------------
 function computeVersion () {
