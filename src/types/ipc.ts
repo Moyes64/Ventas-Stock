@@ -50,6 +50,8 @@ export interface PrincipalStatus {
   /** Nombre de la PC principal (null: todavía no se eligió ninguna). */
   principalName: string | null
   principalSince: string | null
+  /** Versión instalada de la app (la pone el empaquetado: 1.1.<commits>). */
+  appVersion?: string
 }
 
 export interface RoleInput {

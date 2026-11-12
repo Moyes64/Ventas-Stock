@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { app, ipcMain } from 'electron'
 import type { Database } from 'better-sqlite3'
 import { PrincipalService } from '../modules/principal/service'
 import { recheckPrincipalJobs } from '../principal-jobs'
@@ -7,7 +7,7 @@ export function registerPrincipalHandlers(db: Database): void {
   const principalService = new PrincipalService(db)
 
   ipcMain.handle('principal:getStatus', () => {
-    return principalService.status()
+    return { ...principalService.status(), appVersion: app.getVersion() }
   })
 
   // Esta PC arranca sus tareas ya; la que deja de ser principal las frena en

@@ -184,7 +184,7 @@ export default function Sidebar() {
             </button>
           </div>
         )}
-        <span className="sidebar-version">v1.0.0</span>
+        {pc?.appVersion && <span className="sidebar-version">v{pc.appVersion}</span>}
       </div>
     </aside>
   )
