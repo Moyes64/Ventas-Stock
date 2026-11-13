@@ -1,4 +1,5 @@
 import type { Database } from 'better-sqlite3'
+import { localToday } from '../../lib/date'
 import { SaleRepository } from './repository'
 import { StockService } from '../stock/service'
 import { ParameterRepository } from '../parameters/repository'
@@ -257,22 +258,77 @@ export class SaleService {
       )
     }
 
+    this.reverseSale(sale, `Reversión por cancelación de venta #${id}`)
+
+    const updated = this.saleRepo.findById(id)
+    if (!updated) throw new Error(`Venta no encontrada: ${id}`)
+    return updated
+  }
+
+  /**
+   * Anula la factura de una venta con una nota de crédito electrónica por el
+   * total (AFIP). Con el CAE de la NC: la registra, repone el stock, cancela la
+   * venta y revierte el ingreso — igual que cancelSale.
+   * Una venta ya CANCELLED que tenía CAE (se canceló a mano antes de existir
+   * esta función) solo emite la NC: stock y plata ya estaban revertidos.
+   */
+  async issueCreditNote(id: number, reason: string): Promise<Sale> {
+    const sale = this.saleRepo.findById(id)
+    if (!sale) throw new Error(`Venta no encontrada: ${id}`)
+    if (sale.creditNote) throw new Error(`La venta #${id} ya tiene una nota de crédito.`)
+    if (!sale.cae || !sale.invoiceNumber || sale.isBlackSale) {
+      throw new Error('La venta no tiene una factura autorizada (CAE). Si hace falta, usá "Cancelar venta".')
+    }
+    if (sale.status !== 'AUTHORIZED' && sale.status !== 'CANCELLED') {
+      throw new Error(`No se puede anular una venta en estado ${sale.status}.`)
+    }
+    if (sale.status === 'AUTHORIZED' && this.saleRepo.countExchanges(id) > 0) {
+      throw new Error(
+        'La venta tiene cambios o devoluciones registrados: la nota de crédito por el total dejaría el stock y la caja mal. Revisalo antes de anularla.'
+      )
+    }
+
+    const result = await this.invoicingService.solicitarNotaCredito(sale)
+    if (!result.success || !result.cae || !result.invoiceNumber) {
+      throw new Error(result.error ?? 'AFIP no autorizó la nota de crédito.')
+    }
+
+    // Lo primero es dejar registrada la NC: ya existe en AFIP aunque falle lo que sigue.
+    this.saleRepo.insertCreditNote({
+      saleId: id,
+      invoiceType: result.tipoComprobante ?? 13,
+      puntoVenta: result.puntoVenta ?? 0,
+      number: result.invoiceNumber,
+      cae: result.cae,
+      caeVto: result.caeVto ?? null,
+      total: sale.total,
+      issueDate: localToday(),
+      reason: reason.trim(),
+    })
+
+    if (sale.status === 'AUTHORIZED') {
+      this.reverseSale(sale, `Reversión por nota de crédito de la venta #${id}`)
+    }
+
+    const updated = this.saleRepo.findById(id)
+    if (!updated) throw new Error(`Venta no encontrada: ${id}`)
+    return updated
+  }
+
+  /** Repone el stock vendido, cancela la venta y revierte su ingreso financiero. */
+  private reverseSale(sale: Sale, notes: string): void {
     for (const item of sale.items ?? []) {
       this.stockService.addManualMovement({
         productId: item.productId,
         type: 'ENTRY',
         quantity: item.quantity,
         referenceType: 'SALE_CANCEL',
-        referenceId: id,
-        notes: `Reversión por cancelación de venta #${id}`,
+        referenceId: sale.id,
+        notes,
       })
     }
 
-    this.saleRepo.updateStatus(id, 'CANCELLED')
-    this.financeService.reverseSaleIncome(id)
-
-    const updated = this.saleRepo.findById(id)
-    if (!updated) throw new Error(`Venta no encontrada: ${id}`)
-    return updated
+    this.saleRepo.updateStatus(sale.id, 'CANCELLED')
+    this.financeService.reverseSaleIncome(sale.id)
   }
 }

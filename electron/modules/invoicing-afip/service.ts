@@ -2,7 +2,7 @@ import { solicitarCAE, getUltimoComprobante } from './wsfev1'
 import { loadAfipConfig } from './config'
 import { SaleRepository } from '../sales/repository'
 import type { Sale } from '../sales/types'
-import type { CAEResponse, FacturaDetalle } from './types'
+import type { CAEResponse, ComprobanteAsociado, FacturaDetalle } from './types'
 import { DOC_TYPE_AFIP_CODE } from '../customers/types'
 import type { Database } from 'better-sqlite3'
 import { isPrincipalPc, principalName } from '../principal/service'
@@ -14,6 +14,9 @@ export function notPrincipalInvoicingMessage(): string {
     ? `La facturación con AFIP se hace solo desde la PC principal (${principal}). Desde esta PC podés cargarla como Venta N.`
     : 'No hay PC principal: elegila en Parámetros del sistema para poder facturar con AFIP.'
 }
+
+/** Factura → nota de crédito de la misma letra (A: 1→3, B: 6→8, C: 11→13). */
+export const CREDIT_NOTE_TYPE: Record<number, number> = { 1: 3, 6: 8, 11: 13 }
 
 const MAX_RETRY_ATTEMPTS = 2
 const RETRY_DELAY_MS = 1000
@@ -31,13 +34,44 @@ export class InvoicingService {
    * Returns a CAEResponse — never throws (errors are captured in the response).
    */
   async solicitarCAE(sale: Sale): Promise<CAEResponse> {
+    return this.requestCAE(sale, sale.invoiceType ?? 11) // Default: Factura C
+  }
+
+  /**
+   * Pide a AFIP el CAE de una nota de crédito que anula por completo la
+   * factura de la venta (mismo receptor e importes, con la factura como
+   * comprobante asociado). Devuelve el número/punto de venta/tipo de la NC.
+   */
+  async solicitarNotaCredito(sale: Sale): Promise<CAEResponse & { tipoComprobante?: number }> {
+    if (!sale.cae || !sale.invoiceNumber) {
+      return { success: false, error: 'La venta no tiene una factura autorizada (CAE) para anular.' }
+    }
+    const invoiceType = sale.invoiceType ?? 11
+    const creditNoteType = CREDIT_NOTE_TYPE[invoiceType]
+    if (!creditNoteType) {
+      return { success: false, error: `No hay nota de crédito para el tipo de comprobante ${invoiceType}.` }
+    }
+    const config = loadAfipConfig()
+    const result = await this.requestCAE(sale, creditNoteType, [{
+      tipo: invoiceType,
+      puntoVenta: sale.puntoVenta || config.puntoVenta,
+      numero: sale.invoiceNumber,
+      cuit: config.cuit,
+      fecha: sale.saleDate.replace(/-/g, ''),
+    }])
+    return { ...result, tipoComprobante: creditNoteType }
+  }
+
+  private async requestCAE(
+    sale: Sale,
+    invoiceType: number,
+    cbtesAsoc?: ComprobanteAsociado[]
+  ): Promise<CAEResponse> {
     // Los certificados de AFIP viven en la PC principal, y una sola PC numera
     // los comprobantes: desde otra se rechaza antes de tocar AFIP.
     if (!isPrincipalPc()) return { success: false, error: notPrincipalInvoicingMessage() }
 
     const config = loadAfipConfig()
-
-    const invoiceType = sale.invoiceType ?? 11 // Default: Factura C
 
     // Consultar el último número autorizado en AFIP y usar último + 1
     // Esto garantiza sincronía aunque haya habido ventas fallidas o reintentos
@@ -45,15 +79,19 @@ export class InvoicingService {
     try {
       const ultimoAfip = await getUltimoComprobante(config.puntoVenta, invoiceType)
       nextNumber = ultimoAfip + 1
-      console.log(`[InvoicingService] Próximo comprobante AFIP: ${nextNumber} (último autorizado: ${ultimoAfip})`)
+      console.log(`[InvoicingService] Próximo comprobante AFIP tipo ${invoiceType}: ${nextNumber} (último autorizado: ${ultimoAfip})`)
     } catch (err) {
+      // Las notas de crédito no tienen contador local: sin AFIP no se emiten.
+      if (cbtesAsoc) {
+        return { success: false, error: `No se pudo consultar el último comprobante en AFIP: ${err instanceof Error ? err.message : String(err)}` }
+      }
       // Si no se puede consultar AFIP, usar el contador local como fallback
       nextNumber = this.saleRepo.getNextInvoiceNumber(config.puntoVenta, invoiceType)
       console.warn(`[InvoicingService] No se pudo consultar FECompUltimoAutorizado, usando local: ${nextNumber}. Error: ${err instanceof Error ? err.message : String(err)}`)
     }
 
     // Build AFIP request details
-    const factura = this.buildFacturaDetalle(sale, nextNumber, config.puntoVenta)
+    const factura = { ...this.buildFacturaDetalle(sale, nextNumber, config.puntoVenta), tipoComprobante: invoiceType, cbtesAsoc }
 
     let lastError = ''
 
@@ -65,7 +103,8 @@ export class InvoicingService {
           facturas: [factura],
         })
 
-        return result
+        // La respuesta de AFIP no trae el punto de venta: es el que se usó.
+        return { ...result, puntoVenta: config.puntoVenta }
       } catch (err) {
         lastError = err instanceof Error ? err.message : String(err)
         console.error(`[InvoicingService] Attempt ${attempt}/${MAX_RETRY_ATTEMPTS} failed: ${lastError}`)

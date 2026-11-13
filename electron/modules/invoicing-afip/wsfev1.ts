@@ -173,6 +173,16 @@ export function buildSoapEnvelope(
       : ''
   }
 
+  // Notas de crédito/débito: el comprobante que anulan. Va después de
+  // CondicionIVAReceptorId y antes de Iva (orden del esquema de WSFEv1).
+  const cbtesAsocBlock = factura.cbtesAsoc && factura.cbtesAsoc.length > 0
+    ? '<CbtesAsoc>' +
+      factura.cbtesAsoc.map(c =>
+        `<CbteAsoc><Tipo>${c.tipo}</Tipo><PtoVta>${c.puntoVenta}</PtoVta><Nro>${c.numero}</Nro><Cuit>${c.cuit}</Cuit><CbteFch>${c.fecha}</CbteFch></CbteAsoc>`
+      ).join('') +
+      '</CbtesAsoc>'
+    : ''
+
   return [
     '<?xml version="1.0" encoding="utf-8"?>',
     '<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">',
@@ -206,6 +216,7 @@ export function buildSoapEnvelope(
     `            <MonId>${factura.moneda}</MonId>`,
     `            <MonCotiz>${factura.monedaCtz}</MonCotiz>`,
     `            <CondicionIVAReceptorId>${condicionIvaReceptorId}</CondicionIVAReceptorId>`,
+    cbtesAsocBlock,
     ivaBlock,
     '          </FECAEDetRequest>',
     '        </FeDetReq>',

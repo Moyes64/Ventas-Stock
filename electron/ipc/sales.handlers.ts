@@ -40,4 +40,12 @@ export function registerSalesHandlers(db: Database): void {
   ipcMain.handle('sales:cancelSale', (_event, id: number) => {
     return saleService.cancelSale(id)
   })
+
+  ipcMain.handle('sales:issueCreditNote', async (_event, id: number, reason: string) => {
+    try {
+      return { success: true, sale: await saleService.issueCreditNote(id, reason ?? '') }
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
 }

@@ -31,6 +31,12 @@ interface SaleRow {
   last_email_to?: string | null
   last_email_status?: string | null
   last_email_sent_at?: string | null
+  cn_invoice_type?: number | null
+  cn_punto_venta?: number | null
+  cn_number?: number | null
+  cn_cae?: string | null
+  cn_cae_vto?: string | null
+  cn_issue_date?: string | null
 }
 
 interface SaleItemRow {
@@ -68,10 +74,13 @@ export class SaleRepository {
     const row = this.db
       .prepare(
         `SELECT s.*, c.name AS customer_name, c.email AS customer_email, u.name AS user_name,
-                el.to_email AS last_email_to, el.status AS last_email_status, el.sent_at AS last_email_sent_at
+                el.to_email AS last_email_to, el.status AS last_email_status, el.sent_at AS last_email_sent_at,
+                cn.invoice_type AS cn_invoice_type, cn.punto_venta AS cn_punto_venta, cn.number AS cn_number,
+                cn.cae AS cn_cae, cn.cae_vto AS cn_cae_vto, cn.issue_date AS cn_issue_date
          FROM sales s
          LEFT JOIN customers c ON c.id = s.customer_id
          LEFT JOIN users u ON u.id = s.user_id
+         LEFT JOIN credit_notes cn ON cn.sale_id = s.id
          LEFT JOIN sale_email_log el ON el.id = (
            SELECT id FROM sale_email_log WHERE sale_id = s.id ORDER BY sent_at DESC, id DESC LIMIT 1
          )
@@ -129,10 +138,13 @@ export class SaleRepository {
     const rows = this.db
       .prepare(
         `SELECT s.*, c.name AS customer_name, c.email AS customer_email, u.name AS user_name,
-                el.to_email AS last_email_to, el.status AS last_email_status, el.sent_at AS last_email_sent_at
+                el.to_email AS last_email_to, el.status AS last_email_status, el.sent_at AS last_email_sent_at,
+                cn.invoice_type AS cn_invoice_type, cn.punto_venta AS cn_punto_venta, cn.number AS cn_number,
+                cn.cae AS cn_cae, cn.cae_vto AS cn_cae_vto, cn.issue_date AS cn_issue_date
          FROM sales s
          LEFT JOIN customers c ON c.id = s.customer_id
          LEFT JOIN users u ON u.id = s.user_id
+         LEFT JOIN credit_notes cn ON cn.sale_id = s.id
          LEFT JOIN sale_email_log el ON el.id = (
            SELECT id FROM sale_email_log WHERE sale_id = s.id ORDER BY sent_at DESC, id DESC LIMIT 1
          )
@@ -267,6 +279,32 @@ export class SaleRepository {
     }
   }
 
+  insertCreditNote(data: {
+    saleId: number
+    invoiceType: number
+    puntoVenta: number
+    number: number
+    cae: string
+    caeVto: string | null
+    total: number
+    issueDate: string
+    reason: string
+  }): void {
+    this.db
+      .prepare(
+        `INSERT INTO credit_notes
+           (sale_id, invoice_type, punto_venta, number, cae, cae_vto, total, issue_date, reason, user_id, created_at)
+         VALUES
+           (@saleId, @invoiceType, @puntoVenta, @number, @cae, @caeVto, @total, @issueDate, @reason, @userId, @createdAt)`
+      )
+      .run({ ...data, userId: currentActorId() ?? null, createdAt: localNow() })
+  }
+
+  countExchanges(saleId: number): number {
+    const row = this.db.prepare('SELECT COUNT(*) AS n FROM exchanges WHERE sale_id = ?').get(saleId) as { n: number }
+    return row.n
+  }
+
   updatePaymentMethod(id: number, paymentMethod: Sale['paymentMethod']): void {
     // El caller (SaleService) garantiza que la venta no es 'mixto' -- tiene
     // una sola pierna en sale_payments, así que se actualiza junto con
@@ -392,6 +430,16 @@ export class SaleRepository {
       lastEmailTo: row.last_email_to ?? null,
       lastEmailStatus: (row.last_email_status as Sale['lastEmailStatus']) ?? null,
       lastEmailSentAt: row.last_email_sent_at ?? null,
+      creditNote: row.cn_cae
+        ? {
+            invoiceType: row.cn_invoice_type ?? 13,
+            puntoVenta: row.cn_punto_venta ?? 0,
+            number: row.cn_number ?? 0,
+            cae: row.cn_cae,
+            caeVto: row.cn_cae_vto ?? null,
+            issueDate: row.cn_issue_date ?? '',
+          }
+        : null,
     }
   }
 }

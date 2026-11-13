@@ -23,7 +23,8 @@ function generateTicketHTML(ticketData: TicketData, documentType: 'invoice' | 'd
 
   const docTitle = isDelivery
     ? `REMITO INTERNO Nº ${ticketData.internalReceiptNumber ?? ticketData.invoiceNumber}`
-    : `${escapeHtml(ticketData.invoiceType)}<br>Nº ${escapeHtml(ticketData.invoiceNumber)}`
+    : `${escapeHtml(ticketData.invoiceType)}<br>Nº ${escapeHtml(ticketData.invoiceNumber)}` +
+      (ticketData.associatedInvoice ? `<br><small>Anula ${escapeHtml(ticketData.associatedInvoice)}</small>` : '')
 
   const itemsRows = ticketData.items
     .map(

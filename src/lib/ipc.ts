@@ -222,6 +222,8 @@ export const sales = {
   updatePaymentMethod: (id: number, paymentMethod: PaymentMethod) =>
     electron.sales.updatePaymentMethod(id, paymentMethod) as Promise<Sale>,
   cancelSale: (id: number) => electron.sales.cancelSale(id) as Promise<Sale>,
+  issueCreditNote: (id: number, reason: string) =>
+    electron.sales.issueCreditNote(id, reason) as Promise<{ success: boolean; sale?: Sale; error?: string }>,
 }
 
 // Invoicing
@@ -244,6 +246,10 @@ export const printing = {
     electron.printing.printDeliveryNoteSystem(saleId) as Promise<{ success: boolean; error?: string }>,
   exportInvoicePdf: (saleId: number) =>
     electron.printing.exportInvoicePdf(saleId) as Promise<{ success: boolean; filePath?: string; canceled?: boolean; error?: string }>,
+  printCreditNoteSystem: (saleId: number) =>
+    electron.printing.printCreditNoteSystem(saleId) as Promise<{ success: boolean; error?: string }>,
+  exportCreditNotePdf: (saleId: number) =>
+    electron.printing.exportCreditNotePdf(saleId) as Promise<{ success: boolean; filePath?: string; canceled?: boolean; error?: string }>,
   printBatch: (saleIds: number[]) =>
     electron.printing.printBatch(saleIds) as Promise<{ success: boolean; printed: number; errors: string[] }>,
   listForReprint: (filters: {

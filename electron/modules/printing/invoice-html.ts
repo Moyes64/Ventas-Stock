@@ -41,6 +41,7 @@ export function buildInvoiceHtml(ticket: Awaited<ReturnType<PrintingService['bui
   <div style="text-align:center;margin:12px 0">
     <h3 style="margin:0">${ticket.isAuthorized ? ticket.invoiceType : 'COMPROBANTE INTERNO'} N° ${ticket.invoiceNumber}</h3>
     <p style="margin:4px 0;font-size:13px">Fecha: ${ticket.date}</p>
+    ${ticket.associatedInvoice ? `<p style="margin:4px 0;font-size:13px">Anula ${ticket.associatedInvoice}</p>` : ''}
   </div>
 
   <hr style="border:1px solid #ddd">

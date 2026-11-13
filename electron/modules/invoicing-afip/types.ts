@@ -42,6 +42,16 @@ export interface FacturaDetalle {
   fechaServHasta?: string
   fechaVtoPago?: string
   iva?: IvaAlicuota[]
+  /** Comprobante que anula/ajusta — obligatorio en notas de crédito y débito. */
+  cbtesAsoc?: ComprobanteAsociado[]
+}
+
+export interface ComprobanteAsociado {
+  tipo: number        // 11 = Factura C, 6 = Factura B, 1 = Factura A
+  puntoVenta: number
+  numero: number
+  cuit: number        // CUIT del emisor del comprobante asociado
+  fecha: string       // AAAAMMDD
 }
 
 export interface IvaAlicuota {

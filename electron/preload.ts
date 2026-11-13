@@ -93,6 +93,7 @@ const electronAPI = {
     updatePaymentMethod: (id: number, paymentMethod: string) =>
       invoke('sales:updatePaymentMethod', id, paymentMethod),
     cancelSale: (id: number) => invoke('sales:cancelSale', id),
+    issueCreditNote: (id: number, reason: string) => invoke('sales:issueCreditNote', id, reason),
   },
 
   // Invoicing
@@ -109,6 +110,8 @@ const electronAPI = {
       invoke('printing:printInvoiceSystem', saleId, includeChangeTicket),
     printDeliveryNoteSystem: (saleId: number) => invoke('printing:printDeliveryNoteSystem', saleId),
     exportInvoicePdf: (saleId: number) => invoke('printing:exportInvoicePdf', saleId),
+    printCreditNoteSystem: (saleId: number) => invoke('printing:printCreditNoteSystem', saleId),
+    exportCreditNotePdf: (saleId: number) => invoke('printing:exportCreditNotePdf', saleId),
     printBatch: (saleIds: number[]) => invoke('printing:printBatch', saleIds),
     listForReprint: (filters: unknown) => invoke('printing:listForReprint', filters),
     printChangeTicket: (saleId: number) => invoke('printing:printChangeTicket', saleId),

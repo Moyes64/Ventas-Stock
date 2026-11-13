@@ -127,6 +127,26 @@ export function registerPrintingHandlers(db: Database): void {
     }
   })
 
+  // Nota de crédito que anuló la factura de una venta: imprimir / exportar PDF
+  ipcMain.handle('printing:printCreditNoteSystem', async (_event, saleId: number) => {
+    try {
+      const ticketData = await printingService.buildCreditNoteTicketData(saleId)
+      await printSystemTicket(ticketData, 'invoice')
+      return { success: true }
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('printing:exportCreditNotePdf', async (_event, saleId: number) => {
+    try {
+      const ticketData = await printingService.buildCreditNoteTicketData(saleId)
+      return await exportInvoicePdf(ticketData)
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
   // Impresión en lote: imprime todas las facturas de una lista de IDs.
   // Es siempre reimpresión (nunca el cierre de una venta en el mostrador), así
   // que no dispara el ticket de cambio automático — ver printInvoiceSystem.

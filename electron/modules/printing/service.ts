@@ -195,6 +195,35 @@ export class PrintingService {
     }
   }
 
+  /**
+   * Comprobante de la nota de crédito que anuló la factura de la venta: mismos
+   * ítems y totales, con el número/CAE/fecha de la NC y la factura asociada.
+   */
+  async buildCreditNoteTicketData(saleId: number): Promise<TicketData> {
+    const sale = this.saleRepo.findById(saleId)
+    if (!sale) throw new Error(`Venta no encontrada: ${saleId}`)
+    const cn = sale.creditNote
+    if (!cn) throw new Error(`La venta #${saleId} no tiene nota de crédito.`)
+
+    const ticket = await this.buildTicketData({
+      ...sale,
+      status: 'AUTHORIZED',
+      invoiceType: cn.invoiceType,
+      invoiceNumber: cn.number,
+      puntoVenta: cn.puntoVenta || null,
+      cae: cn.cae,
+      caeVto: cn.caeVto,
+      saleDate: cn.issueDate,
+    })
+
+    const config = tryLoadAfipConfig()
+    const invoicePtoVta = String(sale.puntoVenta || config?.puntoVenta || 1).padStart(5, '0')
+    const invoiceLabel = INVOICE_TYPE_LABELS[sale.invoiceType ?? 11] ?? 'FACTURA'
+    ticket.associatedInvoice =
+      `${invoiceLabel} Nº ${invoicePtoVta}-${String(sale.invoiceNumber ?? 0).padStart(8, '0')} del ${formatDate(sale.saleDate)}`
+    return ticket
+  }
+
   async printAuthorizedTicket(saleId: number): Promise<void> {
     const sale = this.saleRepo.findById(saleId)
     if (!sale) throw new Error(`Venta no encontrada: ${saleId}`)

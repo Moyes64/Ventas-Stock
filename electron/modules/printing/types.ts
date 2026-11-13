@@ -24,6 +24,8 @@ export interface TicketData {
   // Invoice info
   invoiceType: string   // 'FACTURA C', 'FACTURA A', etc.
   invoiceNumber: string // '00001-00000001'
+  /** Notas de crédito: comprobante que anula, ej. 'FACTURA C Nº 00001-00000291 del 13/11/2026'. */
+  associatedInvoice?: string
   date: string
   // Customer
   customerName: string

@@ -37,6 +37,11 @@ const STATUS_CLASSES: Record<string, string> = {
   CANCELLED: 'badge badge--danger',
 }
 
+/** '00001-00000291' — sin punto de venta guardado se asume el 1. */
+function invoiceNumberLabel(puntoVenta: number | null, number: number): string {
+  return `${String(puntoVenta || 1).padStart(5, '0')}-${String(number).padStart(8, '0')}`
+}
+
 export default function SalesPage() {
   const [saleList, setSaleList] = useState<Sale[]>([])
   const [loading, setLoading] = useState(true)
@@ -53,6 +58,12 @@ export default function SalesPage() {
   const [printError, setPrintError] = useState<string | null>(null)
   const [cancelingId, setCancelingId] = useState<number | null>(null)
   const [cancelError, setCancelError] = useState<string | null>(null)
+  // Nota de crédito: venta cuya factura se está por anular (abre el modal)
+  const [creditNoteSale, setCreditNoteSale] = useState<Sale | null>(null)
+  const [creditNoteReason, setCreditNoteReason] = useState('')
+  const [creditNoteSaving, setCreditNoteSaving] = useState(false)
+  const [creditNoteError, setCreditNoteError] = useState<string | null>(null)
+  const [creditNoteDone, setCreditNoteDone] = useState<Sale | null>(null)
   const { confirm, dialog: confirmDialog } = useConfirm()
 
   async function loadSales() {
@@ -129,6 +140,55 @@ export default function SalesPage() {
       setCancelError(err instanceof Error ? err.message : 'Error al cancelar la venta')
     } finally {
       setCancelingId(null)
+    }
+  }
+
+  function openCreditNote(sale: Sale) {
+    setCreditNoteSale(sale)
+    setCreditNoteReason('')
+    setCreditNoteError(null)
+    setCreditNoteDone(null)
+  }
+
+  async function handleIssueCreditNote() {
+    if (!creditNoteSale) return
+    setCreditNoteSaving(true)
+    setCreditNoteError(null)
+    try {
+      const res = await sales.issueCreditNote(creditNoteSale.id, creditNoteReason)
+      if (!res.success || !res.sale) {
+        setCreditNoteError(res.error ?? 'No se pudo emitir la nota de crédito')
+        return
+      }
+      setCreditNoteDone(res.sale)
+      await loadSales()
+    } catch (err) {
+      setCreditNoteError(err instanceof Error ? err.message : 'No se pudo emitir la nota de crédito')
+    } finally {
+      setCreditNoteSaving(false)
+    }
+  }
+
+  async function handlePrintCreditNote(sale: Sale) {
+    setPrintingId(sale.id)
+    setPrintError(null)
+    try {
+      const res = await printing.printCreditNoteSystem(sale.id)
+      if (!res.success) setPrintError(res.error ?? 'Error al imprimir la nota de crédito')
+    } catch (err) {
+      setPrintError(err instanceof Error ? err.message : 'Error al imprimir la nota de crédito')
+    } finally {
+      setPrintingId(null)
+    }
+  }
+
+  async function handleExportCreditNotePdf(sale: Sale) {
+    setPrintError(null)
+    try {
+      const res = await printing.exportCreditNotePdf(sale.id)
+      if (!res.success && !res.canceled) setPrintError(res.error ?? 'Error al exportar la nota de crédito')
+    } catch (err) {
+      setPrintError(err instanceof Error ? err.message : 'Error al exportar la nota de crédito')
     }
   }
 
@@ -228,6 +288,16 @@ export default function SalesPage() {
                       <span className={STATUS_CLASSES[sale.status] ?? 'badge'}>
                         {STATUS_LABELS[sale.status] ?? sale.status}
                       </span>
+                      {sale.invoiceNumber && sale.cae && (
+                        <div className="text-muted" style={{ fontSize: '0.8em' }}>
+                          Factura {invoiceNumberLabel(sale.puntoVenta, sale.invoiceNumber)}
+                        </div>
+                      )}
+                      {sale.creditNote && (
+                        <div className="text-muted" style={{ fontSize: '0.8em' }} title={`CAE NC: ${sale.creditNote.cae}`}>
+                          Anulada con NC {invoiceNumberLabel(sale.creditNote.puntoVenta, sale.creditNote.number)} ({formatDate(sale.creditNote.issueDate)})
+                        </div>
+                      )}
                     </td>
                     <td>
                       {sale.cae ? (
@@ -264,6 +334,35 @@ export default function SalesPage() {
                           title={`Enviar por email a ${sale.customerEmail}`}
                         >
                           {mailingId === sale.id ? '⏳' : '📧'}
+                        </button>
+                      )}
+                      {sale.creditNote && (
+                        <>
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => void handlePrintCreditNote(sale)}
+                            disabled={printingId === sale.id}
+                            title="Imprimir Nota de Crédito"
+                          >
+                            🖨️ NC
+                          </button>
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => void handleExportCreditNotePdf(sale)}
+                            title="Guardar Nota de Crédito en PDF"
+                          >
+                            📄 NC
+                          </button>
+                        </>
+                      )}
+                      {sale.cae && sale.invoiceNumber && !sale.isBlackSale && !sale.creditNote &&
+                        (sale.status === 'AUTHORIZED' || sale.status === 'CANCELLED') && (
+                        <button
+                          className="btn btn-danger btn-sm"
+                          onClick={() => openCreditNote(sale)}
+                          title="Anular la factura con una Nota de Crédito (ARCA)"
+                        >
+                          🧾 Anular
                         </button>
                       )}
                       {sale.status !== 'AUTHORIZED' && sale.status !== 'CANCELLED' && (
@@ -324,6 +423,63 @@ export default function SalesPage() {
             </>
           )}
         </>
+      )}
+
+      {creditNoteSale && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <div className="modal-header">
+              <h2>Anular factura con Nota de Crédito</h2>
+              <button className="btn btn-ghost" onClick={() => setCreditNoteSale(null)} disabled={creditNoteSaving}>✕</button>
+            </div>
+            {creditNoteDone?.creditNote ? (
+              <div className="form">
+                <p>
+                  ✅ ARCA autorizó la <strong>Nota de Crédito {invoiceNumberLabel(creditNoteDone.creditNote.puntoVenta, creditNoteDone.creditNote.number)}</strong>
+                  {' '}(CAE {creditNoteDone.creditNote.cae}).
+                </p>
+                <p className="text-muted">La venta #{creditNoteDone.id} quedó cancelada.</p>
+                <div className="form-actions">
+                  <button className="btn btn-secondary" onClick={() => void handleExportCreditNotePdf(creditNoteDone)}>📄 Guardar PDF</button>
+                  <button className="btn btn-secondary" onClick={() => void handlePrintCreditNote(creditNoteDone)}>🖨️ Imprimir</button>
+                  <button className="btn btn-primary" onClick={() => setCreditNoteSale(null)}>Cerrar</button>
+                </div>
+              </div>
+            ) : (
+              <div className="form">
+                <p>
+                  Se va a emitir en ARCA una <strong>Nota de Crédito por {currency(creditNoteSale.total)}</strong> que anula la
+                  {' '}<strong>Factura {invoiceNumberLabel(creditNoteSale.puntoVenta, creditNoteSale.invoiceNumber ?? 0)}</strong>
+                  {' '}del {formatDate(creditNoteSale.saleDate)} (venta #{creditNoteSale.id}).
+                </p>
+                {creditNoteSale.status === 'AUTHORIZED' ? (
+                  <p>Además la venta queda <strong>cancelada</strong>: vuelve el stock vendido y se revierte el ingreso en Finanzas.</p>
+                ) : (
+                  <p>La venta ya estaba cancelada en el sistema: solo se emite la nota de crédito.</p>
+                )}
+                <p className="text-muted">Una nota de crédito autorizada no se puede deshacer.</p>
+                <div className="form-row">
+                  <label className="label">Motivo (opcional, queda registrado)</label>
+                  <input
+                    type="text"
+                    className="input"
+                    value={creditNoteReason}
+                    onChange={e => setCreditNoteReason(e.target.value)}
+                    placeholder="Ej: tarjeta rechazada, se facturó de nuevo"
+                    disabled={creditNoteSaving}
+                  />
+                </div>
+                {creditNoteError && <p className="error">{creditNoteError}</p>}
+                <div className="form-actions">
+                  <button className="btn btn-ghost" onClick={() => setCreditNoteSale(null)} disabled={creditNoteSaving}>Volver</button>
+                  <button className="btn btn-danger" onClick={() => void handleIssueCreditNote()} disabled={creditNoteSaving}>
+                    {creditNoteSaving ? 'Pidiendo CAE a ARCA...' : 'Emitir Nota de Crédito'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {confirmDialog}

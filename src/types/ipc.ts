@@ -276,6 +276,17 @@ export interface Sale {
   lastEmailTo: string | null
   lastEmailStatus: 'sent' | 'error' | null
   lastEmailSentAt: string | null
+  /** Nota de crédito que anuló la factura (null si no tiene). */
+  creditNote: SaleCreditNote | null
+}
+
+export interface SaleCreditNote {
+  invoiceType: number   // 13 = NC C
+  puntoVenta: number
+  number: number
+  cae: string
+  caeVto: string | null
+  issueDate: string     // YYYY-MM-DD
 }
 
 export interface SaleEmailLogEntry {
