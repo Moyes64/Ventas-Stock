@@ -33,8 +33,8 @@ export class ReportingService {
 
   /**
    * Total facturado por día. Cuenta AUTHORIZED + INTERNAL_RECEIPT + PROCESSED
-   * (pedidos web ya despachados), a diferencia de dailySummary() que no incluye
-   * PROCESSED — este método está pensado para el reporte "Ventas por día".
+   * (pedidos web ya despachados) — mismo criterio que dailySummary(). Este
+   * método está pensado para el reporte "Ventas por día".
    */
   salesByDateRange(filters: ReportFilters): SalesSummary[] {
     const params: Record<string, unknown> = {}
@@ -248,7 +248,9 @@ export class ReportingService {
 
   dailySummary(filters: ReportFilters): DailySummaryReport[] {
     const params: Record<string, unknown> = {}
-    const conditions: string[] = []
+    // Mismo criterio que salesByDateRange (totalizador de Ventas): sin canceladas
+    // (incluidas las anuladas con nota de crédito), rechazadas ni pedidos web pendientes.
+    const conditions: string[] = ["status IN ('AUTHORIZED', 'INTERNAL_RECEIPT', 'PROCESSED')"]
 
     if (filters.dateFrom) {
       conditions.push('sale_date >= @dateFrom')
@@ -259,7 +261,7 @@ export class ReportingService {
       params.dateTo = filters.dateTo
     }
 
-    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
+    const where = `WHERE ${conditions.join(' AND ')}`
 
     const rows = this.db
       .prepare(
